@@ -1,799 +1,180 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CheckPlant — KCM Waste Management</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<style>
-:root{--navy:#2E2E8F;--green:#2FAE4E;--green-dark:#268F40;--red:#dc2626;--amber:#d97706;--grey:#6b7280;--light:#f4f6f8;--dark:#1c1f26;--radius:14px;}
-*{box-sizing:border-box;}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial,sans-serif;background:var(--light);color:var(--dark);}
-header{background:var(--navy);color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:50;}
-header nav button{background:transparent;border:1px solid #ffffff40;color:#fff;padding:8px 14px;border-radius:10px;cursor:pointer;margin-left:6px;}
-header nav button.active{background:var(--green);border-color:var(--green);}
-main{max-width:900px;margin:0 auto;padding:20px 16px 80px;}
-.screen{display:none;}.screen.active{display:block;}
-.mode-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;margin-top:30px;}
-@media (max-width:640px){.mode-grid{grid-template-columns:1fr;}}
-.mode-card{background:#fff;border-radius:var(--radius);padding:28px 18px;text-align:center;cursor:pointer;border:2px solid #e5e7eb;}
-.mode-card.service{border-top:5px solid var(--navy);}.mode-card.check{border-top:5px solid var(--green);}.mode-card.defect{border-top:5px solid var(--red);}
-.card{background:#fff;border-radius:var(--radius);padding:20px;margin-bottom:16px;border:1px solid #eceef1;}
-label{font-weight:700;font-size:.85rem;display:block;margin-bottom:6px;}
-select,input,textarea{width:100%;padding:12px;border-radius:10px;border:1.5px solid #dde1e6;font-size:1rem;}
-textarea{min-height:90px;}
-.btn{padding:12px 20px;border-radius:10px;border:none;font-weight:700;cursor:pointer;}
-.btn-primary{background:var(--green);color:#fff;}.btn-secondary{background:#eceef1;}.btn-danger{background:var(--red);color:#fff;}
-.btn-block{width:100%;}.btn-sm{padding:7px 12px;font-size:.78rem;}
-.row{display:flex;gap:12px;flex-wrap:wrap;}.row>*{flex:1;min-width:180px;}
-.back-link{background:none;border:none;color:var(--grey);cursor:pointer;font-weight:600;margin-bottom:14px;}
-.checklist-item{display:flex;justify-content:space-between;padding:12px 10px;border-bottom:1px solid #eef0f2;gap:10px;}
-.check-pair{display:flex;gap:8px;}
-.check-box{width:68px;text-align:center;padding:9px 4px;border-radius:8px;border:1.5px solid #d8dbe0;cursor:pointer;font-size:.72rem;font-weight:700;color:var(--grey);}
-.check-box.serviceable.active{background:#e3f7e8;border-color:var(--green);color:var(--green-dark);}
-.check-box.replaced.active{background:#fee2e2;border-color:var(--red);color:var(--red);}
-.check-box.na.active{background:#f3f4f6;border-color:#9aa1ab;color:#6b7280;}
-.cat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
-@media (max-width:700px){.cat-grid{grid-template-columns:repeat(2,1fr);}}
-.cat-card{background:#fff;border:2px solid #e5e7eb;border-radius:12px;padding:16px 8px;text-align:center;cursor:pointer;}
-.cat-card .emoji{font-size:2rem;}.cat-card .label{font-weight:700;font-size:.8rem;margin-top:6px;}
-canvas.sigPad{width:100%;height:180px;border:1.5px dashed #c9ccd1;border-radius:10px;touch-action:none;}
-.section-title{font-size:1.05rem;font-weight:800;margin-bottom:10px;color:var(--navy);}
-.section-title.loler{color:var(--red);}
-.loler-panel{border:2px solid var(--red);border-radius:var(--radius);padding:18px;margin-bottom:16px;background:#fff5f5;}
-.badge{background:var(--green);color:#fff;border-radius:20px;padding:2px 10px;font-size:.7rem;font-weight:800;}
-.badge.grey{background:#9aa1ab;}.badge.red{background:var(--red);}.badge.amber{background:var(--amber);}.badge.navy{background:var(--navy);}.badge.green{background:var(--green);}
-table{width:100%;border-collapse:collapse;font-size:.85rem;}
-th,td{text-align:left;padding:8px;border-bottom:1px solid #eef0f2;}
-.pill{padding:3px 10px;border-radius:20px;font-size:.7rem;font-weight:700;}
-.pill.service{background:#e3e3fa;color:var(--navy);}.pill.check{background:#dcf5e3;color:var(--green-dark);}.pill.defect{background:#fee2e2;color:var(--red);}
-.pill.open{background:#fee2e2;color:var(--red);}.pill.resolved{background:#dcfce7;color:var(--green-dark);}
-.tabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;}
-.tabs button{padding:9px 14px;border-radius:9px;border:1px solid #e5e7eb;background:#fff;cursor:pointer;font-weight:700;font-size:.8rem;}
-.tabs button.active{background:var(--navy);color:#fff;}
-.item-row{display:flex;gap:8px;margin-bottom:8px;}.item-row input{flex:1;}
-.icon-btn{background:#f1f2f4;border:none;border-radius:8px;width:32px;height:32px;cursor:pointer;}
-.empty-state{text-align:center;color:var(--grey);padding:24px;}
-.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 20px;border-radius:10px;opacity:0;transition:opacity .25s;z-index:200;}
-.toast.show{opacity:1;}
-.required-star{color:var(--red);}
-.progress-note{font-size:.78rem;color:var(--grey);margin-top:4px;}
-footer{text-align:center;color:var(--grey);font-size:.75rem;padding:20px;}
-.switch{position:relative;display:inline-block;width:44px;height:24px;}
-.switch input{opacity:0;width:0;height:0;}
-.slider{position:absolute;inset:0;background:#d8dbe0;border-radius:24px;transition:.2s;cursor:pointer;}
-.slider:before{content:"";position:absolute;height:18px;width:18px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s;}
-input:checked+.slider{background:var(--green);}input:checked+.slider:before{transform:translateX(20px);}
-.machine-list-item{display:flex;justify-content:space-between;align-items:center;padding:14px;border:1.5px solid #e5e7eb;border-radius:12px;margin-bottom:10px;cursor:pointer;background:#fff;}
-.mname{font-weight:700;}.mlast{font-size:.78rem;color:var(--grey);}.mmeta{font-size:.72rem;color:var(--grey);}
-.conn-dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:6px;}
-.conn-dot.online{background:var(--green);}.conn-dot.offline{background:var(--red);}
-.sync-banner{font-size:.78rem;color:var(--grey);padding:6px 14px;}
-.history-item{padding:12px;border:1px solid #eef0f2;border-radius:10px;margin-bottom:8px;}
-.alert-panel{border-radius:var(--radius);padding:16px 18px;margin-bottom:16px;}
-.alert-panel.service-alert{background:#fff7ed;border:1.5px solid #fdba74;}
-.alert-panel.loler-alert{background:#fef2f2;border:1.5px solid #fca5a5;}
-.alert-row{display:flex;justify-content:space-between;padding:6px 0;font-size:.85rem;}
-.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:8px;}
-.cal-cell{border:1px solid #eceef1;border-radius:8px;min-height:56px;padding:4px;font-size:.7rem;}
-.cal-cell.today{background:#eef2ff;border-color:var(--navy);}
-.cal-booking{background:var(--navy);color:#fff;border-radius:5px;padding:1px 4px;margin-top:2px;font-size:.62rem;overflow:hidden;white-space:nowrap;cursor:pointer;}
-.cal-dow{font-size:.68rem;text-align:center;color:var(--grey);font-weight:700;}
-.branch-filter{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;}
-.branch-filter button{padding:7px 14px;border-radius:20px;border:1.5px solid #e5e7eb;background:#fff;cursor:pointer;font-size:.78rem;font-weight:700;}
-.branch-filter button.active{background:var(--navy);border-color:var(--navy);color:#fff;}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#2E2E8F">
+  <title>CheckGrease | KCM Waste Management</title>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <style>
+    :root{--navy:#2E2E8F;--green:#2FAE4E;--green-dark:#268F40;--red:#dc2626;--amber:#d97706;--grey:#6b7280;--light:#f4f6f8;--dark:#1c1f26;--line:#e5e7eb;--radius:14px}
+    *{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--light);color:var(--dark)}
+    header{background:var(--navy);color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;gap:10px;position:sticky;top:0;z-index:50}header b{font-size:1.05rem}header small{display:block;opacity:.8;font-size:.7rem;margin-top:2px}header nav{display:flex;gap:6px}header button{background:transparent;border:1px solid #ffffff55;color:#fff;padding:8px 12px;border-radius:10px;cursor:pointer;font-weight:700}header button.active{background:var(--green);border-color:var(--green)}
+    main{max-width:980px;margin:0 auto;padding:20px 16px 80px}.screen{display:none}.screen.active{display:block}.card{background:#fff;border:1px solid #eceef1;border-radius:var(--radius);padding:18px;margin-bottom:14px;box-shadow:0 1px 2px #1c1f2608}.section-title{font-size:1.05rem;font-weight:800;color:var(--navy);margin-bottom:10px}.subtle{color:var(--grey);font-size:.84rem;line-height:1.45}.row{display:flex;gap:12px;flex-wrap:wrap}.row>*{flex:1;min-width:180px}label{font-weight:700;font-size:.84rem;display:block;margin-bottom:6px}select,input,textarea{width:100%;padding:12px;border:1.5px solid #dde1e6;border-radius:10px;background:#fff;font:inherit;color:var(--dark)}textarea{min-height:95px;resize:vertical}.btn{padding:12px 18px;border:0;border-radius:10px;font-weight:800;cursor:pointer;font-size:.94rem}.btn-primary{background:var(--green);color:#fff}.btn-primary:hover{background:var(--green-dark)}.btn-secondary{background:#eceef1;color:var(--dark)}.btn-block{width:100%}.back-link{border:0;background:transparent;color:var(--grey);padding:4px 0 14px;cursor:pointer;font-weight:700}.mode-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:16px}.mode-card{background:#fff;border:2px solid var(--line);border-radius:var(--radius);padding:22px 16px;text-align:center;cursor:pointer}.mode-card.grease{border-top:5px solid var(--green)}.mode-card.history{border-top:5px solid var(--navy)}.mode-card h2{font-size:1rem;margin:4px 0 8px;color:var(--navy)}.mode-card p{font-size:.8rem;color:var(--grey);margin:0;line-height:1.35}.badge,.pill{display:inline-block;border-radius:20px;padding:3px 10px;font-size:.7rem;font-weight:800}.badge.green,.pill.completed{background:#dcfce7;color:var(--green-dark)}.badge.red,.pill.open{background:#fee2e2;color:var(--red)}.badge.amber,.pill.exception{background:#fef3c7;color:#92400e}.badge.grey{background:#f3f4f6;color:var(--grey)}.badge.navy{background:#e3e3fa;color:var(--navy)}.machine-list-item{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px;border:1.5px solid var(--line);border-radius:12px;background:#fff;margin-bottom:9px;cursor:pointer}.machine-list-item:hover{border-color:var(--navy)}.mname{font-weight:800}.mmeta,.mlast{font-size:.75rem;color:var(--grey);margin-top:3px}.filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.filter-row button{border:1.5px solid var(--line);border-radius:20px;background:#fff;padding:7px 11px;cursor:pointer;font-size:.75rem;font-weight:800}.filter-row button.active{background:var(--navy);border-color:var(--navy);color:#fff}.alert{border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:.86rem}.alert.amber{background:#fff7ed;border:1px solid #fdba74;color:#9a3412}.alert.red{background:#fef2f2;border:1px solid #fca5a5;color:#991b1b}.alert.green{background:#f0fdf4;border:1px solid #86efac;color:#166534}.point-card{border:1.5px solid var(--line);border-radius:12px;padding:14px;margin-bottom:10px}.point-card.exception{border-color:#f59e0b;background:#fffdf5}.point-title{font-weight:800}.point-meta{color:var(--grey);font-size:.77rem;line-height:1.4;margin-top:4px}.point-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:12px}.point-actions button{padding:9px 5px;border:1.5px solid #d8dbe0;background:#fff;border-radius:8px;cursor:pointer;font-size:.71rem;font-weight:800;color:var(--grey)}.point-actions button.selected.greased{background:#dcfce7;border-color:var(--green);color:var(--green-dark)}.point-actions button.selected.na{background:#f3f4f6;border-color:#9aa1ab;color:#4b5563}.point-actions button.selected.unable{background:#fef3c7;border-color:#f59e0b;color:#92400e}.point-actions button.selected.defect{background:#fee2e2;border-color:var(--red);color:var(--red)}.point-note{margin-top:10px;display:none}.point-card.exception .point-note{display:block}.checkbox-row{display:flex;align-items:flex-start;gap:10px;padding:11px;border:1.5px solid var(--line);border-radius:10px;margin-bottom:8px}.checkbox-row input{width:18px;height:18px;min-width:18px;margin-top:2px}.required{color:var(--red)}.summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0}.summary-box{border-radius:10px;padding:11px;text-align:center;background:#f7f8fa}.summary-box b{display:block;font-size:1.18rem;color:var(--navy)}.summary-box span{font-size:.68rem;color:var(--grey);font-weight:700}.empty-state{text-align:center;color:var(--grey);padding:28px}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:.82rem}th,td{padding:9px 8px;text-align:left;border-bottom:1px solid #eef0f2;vertical-align:top}th{color:var(--navy);font-size:.72rem;text-transform:uppercase}.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 20px;border-radius:10px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:100}.toast.show{opacity:1}.conn{font-size:.75rem;color:var(--grey);padding:6px 16px;background:#fff;border-bottom:1px solid var(--line)}.dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:6px;background:var(--red)}.dot.online{background:var(--green)}.hide{display:none!important}@media(max-width:680px){header{padding:12px 14px}.mode-grid{grid-template-columns:1fr}.point-actions{grid-template-columns:repeat(2,1fr)}.summary-grid{grid-template-columns:repeat(2,1fr)}main{padding:16px 12px 70px}.machine-list-item{align-items:flex-start}.machine-list-item>span{white-space:nowrap}}
+  </style>
 </head>
 <body>
-<header><div><b>CheckPlant</b> — KCM Waste Management</div>
-<nav><button id="navHome" onclick="goHome()">Home</button><button id="navOffice" onclick="requestBackOffice()">Back Office</button></nav></header>
-<div class="sync-banner"><span class="conn-dot online" id="connDot"></span><span id="connText">Connecting...</span></div>
+<header>
+  <div><b>CheckGrease</b><small>KCM Waste Management</small></div>
+  <nav><button id="navHome" class="active" onclick="goHome()">Home</button></nav>
+</header>
+<div class="conn"><span id="connDot" class="dot"></span><span id="connText">Connecting to CheckPlant…</span></div>
 <main>
-<div class="screen active" id="screen-home">
-<h1 style="color:var(--navy)">CheckPlant</h1><p>Plant machinery servicing &amp; safety check records</p>
-<div id="overdueAlerts"></div>
-<div class="mode-grid">
-<div class="mode-card service" onclick="startService()"><h2>🔧 Service Mode</h2><p>Checklist, hours, LOLER check, sign-off.</p></div>
-<div class="mode-card check" onclick="showScreen('check-category')"><h2>✅ Check Mode</h2><p>Safety check for a machine category.</p></div>
-<div class="mode-card defect" onclick="showScreen('defect-select')"><h2>🛠️ Defect Resolution</h2><p>Resolve an outstanding defect.</p></div>
-</div>
-<div class="card"><div class="section-title">🏭 Machine Profiles</div><div id="homeMachineList"></div></div>
-<div class="card"><div class="section-title">📅 Upcoming Bookings</div><div id="homeUpcomingBookings"></div></div>
-</div>
-<div class="screen" id="screen-pin-entry">
-<div class="pin-wrap" style="max-width:320px;margin:60px auto;text-align:center">
-<h2 style="color:var(--navy)">🔒 Back Office Locked</h2>
-<p class="progress-note" style="margin-bottom:16px">Enter the 4-digit PIN to continue.</p>
-<input type="password" id="pinInput" maxlength="4" inputmode="numeric" pattern="[0-9]*" style="text-align:center;font-size:1.8rem;letter-spacing:.5em;padding:16px" onkeydown="if(event.key==='Enter')submitPin()">
-<button class="btn btn-primary btn-block" style="margin-top:16px" onclick="submitPin()">Unlock</button>
-<button class="back-link" style="margin-top:14px" onclick="goHome()">← Back to Home</button>
-</div></div>
-<div class="screen" id="screen-service-select"><button class="back-link" onclick="goHome()">← Back</button>
-<div class="card"><div class="section-title">🔧 Service Mode</div>
-<label>Select Machine <span class="required-star">*</span></label>
-<select id="serviceMachineSelect" onchange="onServiceMachineChosen()"><option value="">-- Choose machine --</option></select>
-<p class="progress-note" id="noMachinesNote" style="display:none">No machines added yet.</p>
-<div id="lastServiceHint"></div></div></div>
-<div class="screen" id="screen-service-form">
-<button class="back-link" onclick="showScreen('service-select')">← Back</button>
-<div class="card"><div class="section-title">Service Checklist — <span id="serviceMachineName"></span></div>
-<div class="row"><div><label>Technician</label><input type="text" id="svcTechName"></div><div><label>Date</label><input type="date" id="svcDate"></div></div>
-<div class="row" style="margin-top:12px"><div><label>Current Hour Meter Reading <span class="required-star">*</span></label><input type="number" id="svcHours" min="0"></div></div></div>
-<div class="card"><div class="section-title">Serviceable Items <span class="badge" id="svcItemCount">0</span></div>
-<div id="serviceItemsList"></div><p class="progress-note" id="svcNoItemsNote" style="display:none">No items set.</p></div>
-<div class="loler-panel" id="svcLolerPanel">
-<div class="section-title loler">⚖️ LOLER Thorough Examination — Statutory (kept separate)</div>
-<p class="progress-note">Verifies a valid LOLER certificate exists. Mark N/A only if never used for lifting.</p>
-<div class="checklist-item"><div>LOLER cert checked and in date?</div>
-<div class="check-pair">
-<div class="check-box serviceable" data-loler="pass" onclick="toggleLolerStatus(this,'pass')">PASS</div>
-<div class="check-box replaced" data-loler="defect" onclick="toggleLolerStatus(this,'defect')">DEFECT</div>
-<div class="check-box na" data-loler="na" onclick="toggleLolerStatus(this,'na')">N/A</div></div></div>
-<div class="row" style="margin-top:12px"><div><label>Cert Date</label><input type="date" id="lolerCertDate"></div><div><label>Next Due</label><input type="date" id="lolerNextDue"></div></div>
-<div class="row" style="margin-top:12px"><div><label>Examiner</label><input type="text" id="lolerExaminer"></div></div></div>
-<div class="card"><div class="section-title">Notes</div><textarea id="svcNotes"></textarea></div>
-<div class="card"><div class="section-title">Sign Off</div>
-<div class="row"><div><label>Name <span class="required-star">*</span></label><input type="text" id="svcSignName"></div><div><label>Date <span class="required-star">*</span></label><input type="date" id="svcSignDate"></div></div>
-<canvas class="sigPad" id="sigPadService"></canvas>
-<button class="btn btn-secondary" onclick="clearSig('sigPadService')">Clear Signature</button></div>
-<button class="btn btn-primary btn-block" onclick="completeAndShare('service')">Complete &amp; Share PDF</button></div>
-<div class="screen" id="screen-check-category">
-<button class="back-link" onclick="goHome()">← Back</button>
-<div class="card"><div class="section-title">✅ Select Machine Category</div><div class="cat-grid" id="categoryGrid"></div></div></div>
-<div class="screen" id="screen-check-form">
-<button class="back-link" onclick="showScreen('check-category')">← Back</button>
-<div class="card"><div class="section-title">Safety Check — <span id="checkCategoryName"></span></div>
-<div class="row"><div><label>Machine <span class="required-star">*</span></label><select id="chkMachineSelect" onchange="onCheckMachineChosen()"><option value="">-- Choose machine --</option></select></div><div><label>Date</label><input type="date" id="chkDate"></div></div>
-<div class="row" style="margin-top:12px"><div><label>Hours <span class="required-star">*</span></label><input type="number" id="chkHours" min="0"></div></div></div>
-<div class="card"><div class="section-title">Safety Checklist <span class="badge" id="chkItemCount">0</span></div>
-<div id="checkItemsList"></div><p class="progress-note" id="chkNoItemsNote" style="display:none">No items set.</p></div>
-<div class="card"><div class="section-title">Notes</div><textarea id="chkNotes"></textarea></div>
-<div class="card"><div class="section-title">Sign Off</div>
-<div class="row"><div><label>Name <span class="required-star">*</span></label><input type="text" id="chkSignName"></div><div><label>Date <span class="required-star">*</span></label><input type="date" id="chkSignDate"></div></div>
-<canvas class="sigPad" id="sigPadCheck"></canvas>
-<button class="btn btn-secondary" onclick="clearSig('sigPadCheck')">Clear Signature</button></div>
-<button class="btn btn-primary btn-block" onclick="completeAndShare('check')">Complete &amp; Share PDF</button></div>
-<div class="screen" id="screen-defect-select">
-<button class="back-link" onclick="goHome()">← Back</button>
-<div class="card"><div class="section-title">🛠️ Select Outstanding Defect</div><div id="outstandingDefectsList"></div></div></div>
-<div class="screen" id="screen-defect-form">
-<button class="back-link" onclick="showScreen('defect-select')">← Back</button>
-<div class="card"><div class="section-title">🛠️ Defect Resolution</div>
-<div class="row"><div><label>Machine</label><input type="text" id="defMachineName" disabled></div><div><label>Defect</label><input type="text" id="defItemName" disabled></div></div>
-<div class="row" style="margin-top:12px"><div><label>Date Raised</label><input type="text" id="defDateRaised" disabled></div><div><label>Days Outstanding</label><input type="text" id="defDaysOutstanding" disabled></div></div>
-<div class="row" style="margin-top:12px"><div><label>Hours <span class="required-star">*</span></label><input type="number" id="defHours" min="0"></div><div><label>Date Resolved</label><input type="date" id="defResolvedDate"></div></div></div>
-<div class="card"><div class="section-title">Work Carried Out</div><textarea id="defWorkDone"></textarea></div>
-<div class="card"><div class="section-title">Sign Off</div>
-<div class="row"><div><label>Name <span class="required-star">*</span></label><input type="text" id="defSignName"></div><div><label>Date <span class="required-star">*</span></label><input type="date" id="defSignDate"></div></div>
-<canvas class="sigPad" id="sigPadDefect"></canvas>
-<button class="btn btn-secondary" onclick="clearSig('sigPadDefect')">Clear Signature</button></div>
-<button class="btn btn-primary btn-block" onclick="completeAndShare('defect')">Complete &amp; Share PDF</button></div>
-<div class="screen" id="screen-pdf-ready">
-<button class="back-link" onclick="goHome()">← Back to Home</button>
-<div class="card"><div class="section-title">✅ Report Complete</div>
-<p class="progress-note" style="margin-bottom:14px">Your report has been saved. View it inline or download a copy.</p>
-<div class="row"><button class="btn btn-primary btn-block" onclick="viewPDF()">👁 View PDF</button><button class="btn btn-secondary btn-block" onclick="downloadPDF()">⬇ Download PDF</button></div>
-</div></div>
-<div class="screen" id="screen-machine-profile">
-<button class="back-link" onclick="goHome()">← Back</button>
-<div class="card"><div id="profileMachineName" class="section-title">Machine</div><p class="progress-note" id="profileItemCount"></p>
-<button class="btn btn-primary btn-sm" onclick="startServiceFromProfile()">Start New Service</button></div>
-<div class="card"><div class="section-title">Status</div><div id="profileStatusCard"></div></div>
-<div class="card"><div class="section-title">Last Service</div><div id="lastServiceCard"></div></div>
-<div class="card"><div class="section-title">LOLER Status</div><div id="profileLolerCard"></div></div>
-<div class="card"><div class="section-title">Service History</div><div id="serviceHistoryList"></div></div></div>
-<div class="screen" id="screen-backoffice">
-<button class="back-link" onclick="goHome()">← Back</button>
-<h1 style="color:var(--navy)">Back Office</h1>
-<div class="tabs">
-<button class="active" data-tab="daily" onclick="switchOfficeTab('daily')">Daily Checks</button>
-<button data-tab="machines" onclick="switchOfficeTab('machines')">Machines</button>
-<button data-tab="categories" onclick="switchOfficeTab('categories')">Check Categories</button>
-<button data-tab="defects" onclick="switchOfficeTab('defects')">Outstanding Defects</button>
-<button data-tab="calendar" onclick="switchOfficeTab('calendar')">Service Calendar</button>
-<button data-tab="records" onclick="switchOfficeTab('records')">Records</button>
-<button data-tab="sheets" onclick="switchOfficeTab('sheets')">Google Sheets CSV</button>
-<button data-tab="security" onclick="switchOfficeTab('security')">Security</button>
-<button data-tab="data" onclick="switchOfficeTab('data')">Backup/Restore</button></div>
-<div id="office-daily" class="office-tab">
-<div class="card"><div class="section-title">📋 Daily Checks — Today</div>
-<p class="progress-note">Shows every machine with a Service, Check, or Defect Resolution logged today (resets at midnight). Live — no refresh needed.</p></div>
-<div id="dailyChecksWrap"></div></div>
-<div id="office-machines" class="office-tab" style="display:none"><div class="card"><div class="section-title">Add New Machine</div>
-<div class="row"><input type="text" id="newMachineName" placeholder="Machine name">
-<input type="text" id="newMachineSerial" placeholder="Serial number">
-<select id="newMachineCategory" style="max-width:220px"></select>
-<select id="newMachineBranch" style="max-width:160px"><option value="">No branch</option><option>Rotherham</option><option>Shires</option><option>Sheffield</option></select></div>
-<button class="btn btn-primary btn-block" style="margin-top:10px" onclick="addMachine()">Add Machine</button></div>
-<div class="branch-filter" id="machineBranchFilter"></div>
-<div id="machineListContainer"></div></div>
-<div id="office-categories" class="office-tab" style="display:none">
-<div class="card"><div class="section-title">Safety Check Categories</div>
-<p class="progress-note">Grab, Forklift/Reach Truck, Loading Shovel, Excavator, Cherry Picker/Scissor Lift, Industrial Shredder, Static Plant (Picking Belt), Crusher/Screener, Baler (Cardboard/Tyre) — UK PUWER/LOLER aligned. Missing categories/fields are auto-repaired from code defaults on load.</p></div>
-<div id="categoryListContainer"></div></div>
-<div id="office-defects" class="office-tab" style="display:none">
-<div class="card"><div class="section-title">Outstanding Defects <span class="badge red" id="defectCount">0</span></div>
-<div id="defectsTableWrap"></div></div></div>
-<div id="office-calendar" class="office-tab" style="display:none">
-<div class="card"><div class="section-title">📅 Service Calendar</div>
-<div class="row"><select id="bookingMachineSelect"></select><input type="date" id="bookingDate"></div>
-<div class="row" style="margin-top:10px"><input type="text" id="bookingNote" placeholder="Note (optional)">
-<button class="btn btn-primary" onclick="addBooking()">Add Booking</button></div></div>
-<div class="card">
-<div class="row"><button class="btn btn-secondary btn-sm" onclick="calMonthOffset--;renderCalendar()">← Prev</button>
-<div id="calMonthLabel" style="flex:2;text-align:center;font-weight:800"></div>
-<button class="btn btn-secondary btn-sm" onclick="calMonthOffset++;renderCalendar()">Next →</button></div>
-<div class="cal-grid" id="calDowRow"></div><div class="cal-grid" id="calGrid"></div></div></div>
-<div id="office-records" class="office-tab" style="display:none">
-<div class="card"><div class="section-title">Submitted Records <span class="badge" id="recordCount">0</span></div>
-<div class="branch-filter" id="recordsBranchFilter"></div><div id="recordsTableWrap"></div></div></div>
-<div id="office-sheets" class="office-tab" style="display:none">
-<div class="card"><div class="section-title">CSV Export</div>
-<button class="btn btn-secondary" onclick="exportRecordsCSV()">Download Records CSV</button>
-<button class="btn btn-secondary" onclick="exportDefectsCSV()">Download Outstanding Defects CSV</button>
-<label><span class="switch"><input type="checkbox" id="autoCsvToggle" onchange="toggleAutoCsv()"><span class="slider"></span></span> Auto-download CSV</label></div>
-<div class="card"><div class="section-title">Live Google Sheets Sync <span class="badge" id="sheetsStatusBadge">Not connected</span></div>
-<p class="progress-note">A default Sheets URL is built into the app — every device syncs automatically. Override below only if you need to point at a different Sheet.</p>
-<input type="url" id="sheetsWebhookUrl" placeholder="Apps Script Web App URL">
-<div class="row" style="margin-top:10px">
-<button class="btn btn-primary" onclick="saveSheetsWebhook()">Save URL</button>
-<button class="btn btn-secondary" onclick="testSheetsWebhook()">Send Test Row</button>
-<button class="btn btn-danger" onclick="resetSheetsWebhook()">Reset to Default</button></div>
-<label><span class="switch"><input type="checkbox" id="autoSheetsToggle" onchange="toggleAutoSheets()"><span class="slider"></span></span> Auto-push every record</label></div>
-<div class="card"><div class="section-title">Sync Log</div><pre id="syncLogBox" style="background:#0e1015;color:#9ae6b4;padding:12px;border-radius:10px;font-size:.72rem;white-space:pre-wrap;max-height:200px;overflow-y:auto">No sync attempts yet.</pre>
-<button class="btn btn-secondary" onclick="clearSyncLog()">Clear Log</button></div></div>
-<div id="office-security" class="office-tab" style="display:none">
-<div class="card"><div class="section-title">🔒 Back Office Security</div>
-<p class="progress-note" style="margin-bottom:12px">Change the PIN required to unlock Back Office. Applies immediately on all devices.</p>
-<input type="text" id="newPinInput" maxlength="4" inputmode="numeric" placeholder="New 4-digit PIN">
-<button class="btn btn-primary btn-block" style="margin-top:10px" onclick="changePin()">Update PIN</button></div></div>
-<div id="office-data" class="office-tab" style="display:none">
-<div class="card"><div class="section-title">Backup &amp; Restore</div>
-<button class="btn btn-secondary" onclick="exportData()">Export Backup JSON</button></div></div>
-</div></main>
-<div class="toast" id="toast"></div>
-<footer>CheckPlant by KCM Waste Management</footer>
+  <section id="screen-home" class="screen active">
+    <h1 style="color:var(--navy);margin:4px 0 6px">CheckGrease</h1>
+    <p class="subtle">Record manual machine greasing, capture exceptions and raise linked CheckPlant defects.</p>
+    <div id="homeAlerts"></div>
+    <div class="mode-grid">
+      <div class="mode-card grease" onclick="startGrease()"><h2>Start Greasing</h2><p>Search by machine type, select a machine and record every grease point.</p></div>
+      <div class="mode-card history" onclick="showScreen('history')"><h2>Grease History</h2><p>Review completed records, exceptions and linked CheckPlant defects.</p></div>
+    </div>
+    <div class="card"><div class="section-title">CheckPlant Machines <span id="machineCount" class="badge navy">0</span></div><p class="subtle">All machines are loaded from the live CheckPlant database. Grease points are selected from the vehicle/equipment type; the grease applier covers any machine-specific additional points.</p><div id="homeMachineList"></div></div>
+  </section>
+
+  <section id="screen-select" class="screen">
+    <button class="back-link" onclick="goHome()">← Back to Home</button>
+    <div class="card">
+      <div class="section-title">Select Machine</div>
+      <p class="subtle">Choose a vehicle/equipment type first, then search or select the individual CheckPlant machine.</p>
+      <label>Machine / vehicle type</label>
+      <select id="machineTypeSelect" onchange="onMachineTypeChanged()"></select>
+      <label style="margin-top:12px">Search within selected type</label>
+      <input id="machineSearch" type="search" placeholder="Machine name or serial number" oninput="renderSelectList()">
+      <div id="selectMachineList" style="margin-top:14px"></div>
+    </div>
+  </section>
+
+  <section id="screen-grease" class="screen">
+    <button class="back-link" onclick="showScreen('select')">← Change Machine</button>
+    <div class="card">
+      <div class="section-title" id="greaseMachineTitle">Greasing Record</div>
+      <div id="greaseMachineMeta" class="subtle"></div>
+      <div class="row" style="margin-top:14px"><div><label>Greasing date <span class="required">*</span></label><input type="date" id="greaseDate"></div><div><label>Current hour meter</label><input type="number" id="greaseHours" min="0" placeholder="Optional"></div></div>
+      <div class="row" style="margin-top:12px"><div><label>Grease applier <span class="required">*</span></label><input id="greaseOperative" type="text" placeholder="Name"></div><div><label>Grease product used</label><input id="greaseProduct" type="text" placeholder="e.g. EP2 lithium-complex"></div></div>
+      <div style="margin-top:12px"><label>Grease batch / cartridge reference</label><input id="greaseBatch" type="text" placeholder="Optional"></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Visual Check</div>
+      <p class="subtle">Only add a note where there is a physical blockage, damage, contamination or other defect affecting the greasing task.</p>
+      <label>Visual-check result <span class="required">*</span></label>
+      <select id="visualResult" onchange="toggleVisualNotes()"><option value="clear">No visible blockage or defect found</option><option value="issue">Physical blockage or defect found</option></select>
+      <div id="visualNotesWrap" class="hide" style="margin-top:12px"><label>Visual-check notes <span class="required">*</span></label><textarea id="visualNotes" placeholder="Describe the location, issue and immediate action taken."></textarea><label class="checkbox-row" style="margin-top:10px"><input id="visualCreateDefect" type="checkbox" checked><span>Create a linked CheckPlant defect for this issue.</span></label></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Standard Grease Points <span id="pointCount" class="badge navy">0</span></div>
+      <div class="alert amber">The list below is the standard vehicle/equipment-type grease-point checklist. The grease applier is responsible for completing any additional machine-specific, attachment-specific or OEM-required points.</div>
+      <div id="greasePointsList"></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Grease Applier Notes</div>
+      <label>Additional machine-specific grease points completed</label><textarea id="additionalPointsNotes" placeholder="Optional. Record any additional grease points completed that are unique to this machine or attachment."></textarea>
+      <label style="margin-top:12px">General notes</label><textarea id="greaseGeneralNotes" placeholder="Optional notes about this greasing round."></textarea>
+      <label class="checkbox-row" style="margin-top:12px"><input id="greaseConfirm" type="checkbox"><span>I confirm I have completed the standard points shown and any additional applicable machine-specific grease points, and recorded all issues found.</span></label>
+      <button class="btn btn-primary btn-block" onclick="saveGreaseRecord()">Complete Greasing Record</button>
+    </div>
+  </section>
+
+  <section id="screen-complete" class="screen">
+    <button class="back-link" onclick="goHome()">← Back to Home</button>
+    <div class="card"><div class="section-title">Greasing Record Saved</div><div id="completionMessage" class="alert green">The record has been saved.</div><div id="completionSummary"></div><button class="btn btn-primary btn-block" onclick="startGrease()">Start Another Greasing Record</button></div>
+  </section>
+
+  <section id="screen-history" class="screen">
+    <button class="back-link" onclick="goHome()">← Back to Home</button>
+    <h1 style="color:var(--navy);margin-top:4px">Grease History</h1>
+    <div class="card"><div class="row"><div><label>Filter machine type</label><select id="historyTypeFilter" onchange="populateHistoryMachines();renderHistory()"></select></div><div><label>Filter machine</label><select id="historyMachineFilter" onchange="renderHistory()"><option value="all">All machines</option></select></div><div><label>Filter result</label><select id="historyResultFilter" onchange="renderHistory()"><option value="all">All results</option><option value="completed">Completed</option><option value="completed-with-exception">Completed with exception</option></select></div></div><div id="historyList" style="margin-top:14px"></div></div>
+  </section>
+</main>
+<div id="toast" class="toast"></div>
+
 <script>
-const firebaseConfig={apiKey:"AIzaSyD60Z04IRIvv-EaSyPzoA33fEQ3yT6wsQQ",authDomain:"checkplant-kcm.firebaseapp.com",projectId:"checkplant-kcm",storageBucket:"checkplant-kcm.firebasestorage.app",messagingSenderId:"492245064396",appId:"1:492245064396:web:c79e64b32b9856766bc069"};
-firebase.initializeApp(firebaseConfig);
-const db=firebase.firestore();
-function setConn(o,t){document.getElementById('connDot').className='conn-dot '+(o?'online':'offline');document.getElementById('connText').textContent=t;}
-const DEFAULT_CATEGORIES={
-grab:{label:"Grab (Material Handler)",emoji:"🧲",lolerApplies:true,items:["Grab tines/jaws condition","Hydraulic hoses & fittings","Rotation motor & bearing","Grab wear plates","Wire ropes/chains (if fitted)","Boom & dipper condition","Cab glazing & mirrors","Warning lights & alarms","Tyres/tracks condition","Fire extinguisher present & in date"]},
-forklift:{label:"Forklift / Reach Truck",emoji:"🚜",lolerApplies:true,items:["Forks & carriage condition","Mast & chains","Hydraulic hoses & leaks","Tyres condition & pressure","Horn & reverse alarm","Lights & beacon working","Seatbelt operation","Brakes (parking & foot)","Battery/fuel level & connections","Overhead guard condition","Load capacity plate visible","Mirrors & visibility aids"]},
-loadingshovel:{label:"Loading Shovel",emoji:"🚛",lolerApplies:false,items:["Bucket condition & pins","Hydraulic rams & hoses","Tyres condition & pressure","Brakes function","Lights & beacon","Reverse alarm/camera","Steering function","Engine oil/coolant levels","Cab glazing & mirrors","Fire extinguisher present & in date"]},
-excavator:{label:"Excavator",emoji:"🚧",lolerApplies:true,items:["Bucket teeth condition","Boom & dipper pins","Hydraulic hoses & rams","Tracks/undercarriage condition","Slew ring & bearing","Lights & beacon","Reverse alarm/camera","Cab glazing & mirrors","Fire extinguisher present & in date","Fuel/oil leaks check"]},
-cherrypicker:{label:"Cherry Picker / Scissor Lift",emoji:"🏗️",lolerApplies:true,items:["Guard rails & gate condition","Platform floor condition","Emergency lowering function","Outriggers/stabilisers","Hydraulic hoses & leaks","Controls (platform & base)","Tyres/wheels condition","Harness anchor points","Warning decals & load chart visible","Battery/fuel level"]},
-shredder:{label:"Industrial Shredder",emoji:"⚙️",lolerApplies:false,items:["Emergency stop button/pull-cord tested and functional","Feed hopper guard/interlock in place and engaged","Reverse/jam-clear function operating correctly","Blade/rotor condition — no visible damage or excessive wear","Hydraulic ram/pusher — no leaks, smooth operation","Access doors/guards interlocked — machine cannot run when open","Dust/fire suppression system present and functional (if fitted)","Warning labels and signage legible","Noise/vibration abnormal levels check","Housekeeping — clear of debris/blockages around infeed and discharge"]},
-staticplant:{label:"Static Plant (Picking Belt)",emoji:"🏭",lolerApplies:false,items:["Pull-cord emergency stops working along full belt length","Head/tail drum guards fitted and secure","Nip point and trap point guarding intact","Belt tracking/alignment correct, no excessive wear or fraying","Side guards and handrails/platforms secure","Adequate lighting at picking stations","Dust suppression/extraction functioning","No loose material build-up (spillage/carryback) creating slip hazard","Coupling guards on drives fitted","Siren/hooter sounds before start-up"]},
-crusher:{label:"Crusher / Screener",emoji:"🪨",lolerApplies:false,items:["Guards over crushing chamber, conveyors, and drive belts intact","Emergency stops tested and accessible","Screen mesh/deck condition — no tears or excessive wear","Hydraulic hoses/rams — no leaks or damage","Outriggers/stabilizers/jacks correctly deployed (mobile units)","Dust suppression system operational","Tracks/wheels and undercarriage condition (mobile units)","Overband magnet/metal detector functioning (if fitted)","Access ladders/platforms secure","Isolation/lockout points clearly labeled and accessible"]},
-baler:{label:"Baler (Cardboard/Tyre)",emoji:"📦",lolerApplies:true,items:["Emergency stop buttons tested — control panel and loading area","Door/access interlocks — chamber cannot open while running","Hydraulic ram guarding — no leaks, smooth operation","Wire feed mechanism guarding — rollers, cutters, tensioners covered","Rotating shafts and pulleys — guards intact","Electrical contactors and wiring enclosed, undamaged","Bale ejection area clear and guarded","Oil level and hydraulic hose condition","Warning labels and signage legible","LOLER thorough examination certificate — checked and in date"]}
-};
-const SEED_MACHINES=[
-{name:"GRAB 1 - TWH 236",serialNumber:"5893",categoryKey:"grab"},
-{name:"GRAB 2 - MHL FUCHS 340",serialNumber:"5530",categoryKey:"grab"},
-{name:"GRAB 3 - MHL FUCHS 320",serialNumber:"1020",categoryKey:"grab"},
-{name:"GRAB 5 - MHL FUCHS 340F",serialNumber:"5940",categoryKey:"grab"},
-{name:"GRAB 6 - MHL FUCHS 320",serialNumber:"1586",categoryKey:"grab"},
-{name:"GRAB 7 - TWH 228",serialNumber:"5727",categoryKey:"grab"},
-{name:"GRAB 8 - TWH 236",serialNumber:"6129",categoryKey:"grab"},
-{name:"GRAB 9 - TWH 224",serialNumber:"6041",categoryKey:"grab"},
-{name:"Loading Telehandler/Bucket TM320",serialNumber:"2742157",categoryKey:"loadingshovel"},
-{name:"Loading Shovel JCB 11",serialNumber:"3191928",categoryKey:"loadingshovel"},
-{name:"Loading Shovel JCB 12",serialNumber:"3191929",categoryKey:"loadingshovel"},
-{name:"Case 821F Loading Shovel",serialNumber:"FNH821F1NFHE12226",categoryKey:"loadingshovel"},
-{name:"Excavator JCB9",serialNumber:"2500405",categoryKey:"excavator"},
-{name:"Excavator JCB10",serialNumber:"2846517",categoryKey:"excavator"},
-{name:"Excavator JS160",serialNumber:"2767718",categoryKey:"excavator"},
-{name:"JCB FLT 1",serialNumber:"1540942",categoryKey:"forklift"},
-{name:"JCB FLT 2",serialNumber:"2253915",categoryKey:"forklift"},
-{name:"JCB FLT 3",serialNumber:"1540677",categoryKey:"forklift"},
-{name:"JCB FLT 4",serialNumber:"2996250",categoryKey:"forklift"},
-{name:"Doppstadt Inventhor Shredder",serialNumber:"22",categoryKey:"shredder"},
-{name:"Doppstadt 2060 Shredder",serialNumber:"35",categoryKey:"shredder"},
-{name:"Terex TBG630 Shredder",serialNumber:"63180",categoryKey:"shredder"},
-{name:"Tana Shark Shredder",serialNumber:"BT0367",categoryKey:"shredder"},
-{name:"Crusher",serialNumber:"89162",categoryKey:"crusher"},
-{name:"Warrior Screen",serialNumber:"12204249",categoryKey:"crusher"},
-{name:"Granulator Shredder",serialNumber:"2009101199",categoryKey:"shredder"},
-{name:"Granulator",serialNumber:"3/0029",categoryKey:"shredder"},
-{name:"Doppstadt Trommel",serialNumber:"364",categoryKey:"crusher"},
-{name:"CAT Engine Trommel Screen",serialNumber:"SN 33411160 / Arr. No 244-3103",categoryKey:"crusher"},
-{name:"Blue MAC",serialNumber:"E171",categoryKey:"staticplant"},
-{name:"Fines Clean Up",serialNumber:"E331",categoryKey:"staticplant"},
-{name:"Nihot",serialNumber:"27147",categoryKey:"staticplant"},
-{name:"Rotaro",serialNumber:"006",categoryKey:"staticplant"},
-{name:"Cardboard Baler - Godswill GB1575TR",serialNumber:"Model GB1575TR",categoryKey:"baler"},
-{name:"Tyre Baler",serialNumber:"361-0004",categoryKey:"baler"}
-];
+  /* CheckGrease uses existing CheckPlant Firestore: machines and defects.
+     It writes greasing history to the new greaseRecords collection only. */
+  const firebaseConfig={apiKey:"AIzaSyD60Z04IRIvv-EaSyPzoA33fEQ3yT6wsQQ",authDomain:"checkplant-kcm.firebaseapp.com",projectId:"checkplant-kcm",storageBucket:"checkplant-kcm.firebasestorage.app",messagingSenderId:"492245064396",appId:"1:492245064396:web:c79e64b32b9856766bc069"};
+  firebase.initializeApp(firebaseConfig);const db=firebase.firestore();
 
-const BRANCHES=["Rotherham","Shires","Sheffield"];
-const SERVICE_HOURS_LIMIT=500,SERVICE_DUE_SOON_WINDOW=100,LOLER_DUE_SOON_DAYS=30;
-let machines=[],categories={},records=[],defects=[],bookings=[];
-const DEFAULT_SHEETS_URL="https://script.google.com/macros/s/AKfycbypRwQyTWNeBKliniJ5hYxeLLY6UWaZS0-HD8uSWDzsg8QNpA1kIwwisiSilBWzsrOD/exec";
-let settings=JSON.parse(localStorage.getItem('cpsettings')||'{}');
-if(!settings.sheetsWebhookUrl) settings.sheetsWebhookUrl = DEFAULT_SHEETS_URL;
-if(settings.autoSheets === undefined) settings.autoSheets = true;
-if(settings.autoCsv === undefined) settings.autoCsv = false;
-localStorage.setItem('cpsettings', JSON.stringify(settings));
-let syncLog=JSON.parse(localStorage.getItem('cpsynclog')||'[]');
-let currentServiceMachine=null,currentCheckCategory=null,currentCheckMachine=null,currentProfileMachineId=null,currentDefect=null;
-let officeMachineBranchFilter='all',recordsBranchFilter='all',calMonthOffset=0,pendingLolerStatus='pass';
-let backOfficeUnlocked = false;
-let currentPin = '0320';
-let lastGeneratedDoc = null;
-let lastGeneratedRecord = null;
+  const TYPE_LABELS={
+    "all":"All machine types",
+    "material-handler-grab":"Material Handler / Grab",
+    "telehandler":"Telehandler",
+    "loading-shovel":"Loading Shovel",
+    "excavator":"Excavator",
+    "forklift-telehandler":"Forklift / Telehandler",
+    "shredder":"Shredder",
+    "crusher-screener-trommel":"Crusher / Screener / Trommel",
+    "granulator-shredder":"Granulator Shredder",
+    "granulator":"Granulator",
+    "static-separation-plant":"Static Separation Plant",
+    "baler":"Baler"
+  };
+  const CATEGORY_DEFAULTS={grab:"material-handler-grab",forklift:"forklift-telehandler",loadingshovel:"loading-shovel",excavator:"excavator",shredder:"shredder",crusher:"crusher-screener-trommel",staticplant:"static-separation-plant",baler:"baler"};
 
-async function loadPinSetting(){
-  try{
-    const doc = await db.collection('settings').doc('backoffice').get();
-    if(doc.exists && doc.data().pin){ currentPin = doc.data().pin; }
-    else { await db.collection('settings').doc('backoffice').set({pin: currentPin}); }
-  }catch(e){ console.error('Could not load PIN setting', e); }
-}
-function requestBackOffice(){
-  if(backOfficeUnlocked){ showScreen('backoffice'); return; }
-  showScreen('pin-entry');
-  document.getElementById('pinInput').value = '';
-  setTimeout(()=>document.getElementById('pinInput').focus(), 100);
-}
-function submitPin(){
-  const entered = document.getElementById('pinInput').value.trim();
-  if(entered === currentPin){
-    backOfficeUnlocked = true;
-    showScreen('backoffice');
-    toast('Back Office unlocked');
-  } else {
-    toast('Incorrect PIN');
-    document.getElementById('pinInput').value = '';
+  /* Standard lists: amend point wording later only if needed. The grease applier covers unique/additional machine points in their notes. */
+  const STANDARD_POINTS={
+    "material-handler-grab":[["GP-01","Boom/base pivot points"],["GP-02","Dipper/stick pivot points"],["GP-03","Grab/attachment pivot points"],["GP-04","Slew-ring/rotation lubrication point"]],
+    "telehandler":[["GP-01","Boom pivot points"],["GP-02","Carriage and attachment pivots"],["GP-03","Steering and axle lubrication points"]],
+    "loading-shovel":[["GP-01","Loader-arm pivot points"],["GP-02","Bucket and linkage pivots"],["GP-03","Articulation joint"],["GP-04","Steering and axle points"]],
+    "excavator":[["GP-01","Boom base and boom pivot points"],["GP-02","Dipper/stick pivot points"],["GP-03","Bucket, quick hitch and attachment pivots"],["GP-04","Slew-ring lubrication point"]],
+    "forklift-telehandler":[["GP-01","Mast and carriage points"],["GP-02","Tilt cylinder and attachment pivots"],["GP-03","Steering axle points"]],
+    "shredder":[["GP-01","Rotor bearing lubrication points"],["GP-02","Conveyor head/tail bearings"],["GP-03","Hinges and service pivots"]],
+    "crusher-screener-trommel":[["GP-01","Main bearing lubrication points"],["GP-02","Conveyor head/tail bearings"],["GP-03","Screen/trommel support rollers or pivots"]],
+    "granulator-shredder":[["GP-01","Rotor bearing lubrication points"],["GP-02","Conveyor bearing lubrication points"]],
+    "granulator":[["GP-01","Rotor bearing lubrication points"],["GP-02","Drive and conveyor lubrication points"]],
+    "static-separation-plant":[["GP-01","Conveyor bearing lubrication points"],["GP-02","Drive, rotary and separation-component points"]],
+    "baler":[["GP-01","Ram and linkage pivot points"],["GP-02","Door hinges and guide components"]]
+  };
+
+  let machines=[],greaseRecords=[],selectedMachine=null,selectedType="all",pointState={};
+  const $=id=>document.getElementById(id);const todayISO=()=>new Date().toISOString().slice(0,10);
+  const esc=v=>String(v??"").replace(/[&<>\"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+  const toast=m=>{const t=$("toast");t.textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),3000)};
+  const setConn=(ok,text)=>{$("connDot").className="dot"+(ok?" online":"");$("connText").textContent=text};
+  const machineType=m=>m.greaseType||CATEGORY_DEFAULTS[m.categoryKey]||"";
+  const sortedMachines=()=>[...machines].sort((a,b)=>(a.name||"").localeCompare(b.name||""));
+
+  function showScreen(name){document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));$("screen-"+name).classList.add("active");$("navHome").classList.toggle("active",name==="home");if(name==="home")renderHome();if(name==="select")renderTypeSelect();if(name==="history"){populateHistoryTypes();populateHistoryMachines();renderHistory()}window.scrollTo(0,0)}
+  function goHome(){showScreen("home")}function startGrease(){selectedMachine=null;selectedType="all";showScreen("select")}
+
+  function initFirestore(){
+    db.collection("machines").orderBy("name").onSnapshot(s=>{machines=s.docs.map(d=>({id:d.id,...d.data()}));setConn(true,"Connected to CheckPlant Firestore");renderHome();renderTypeSelect()},e=>setConn(false,"Machine data error: "+e.message));
+    db.collection("greaseRecords").orderBy("createdAt","desc").onSnapshot(s=>{greaseRecords=s.docs.map(d=>({id:d.id,...d.data()}));renderHome();renderHistory()},e=>console.error("Grease records error",e));
   }
-}
-async function changePin(){
-  const newPin = document.getElementById('newPinInput').value.trim();
-  if(!/^\d{4}$/.test(newPin)){ toast('PIN must be exactly 4 digits'); return; }
-  await db.collection('settings').doc('backoffice').set({pin: newPin});
-  currentPin = newPin;
-  document.getElementById('newPinInput').value = '';
-  toast('PIN updated');
-}
-function getTodayRecordsByMachine(){
-  const today = todayISO();
-  const todayRecords = records.filter(r=>r.date===today);
-  const byMachine = {};
-  todayRecords.forEach(r=>{
-    if(!r.machineId) return;
-    if(!byMachine[r.machineId]) byMachine[r.machineId] = [];
-    byMachine[r.machineId].push(r);
-  });
-  return byMachine;
-}
-function renderDailyChecks(){
-  const wrap = document.getElementById('dailyChecksWrap');
-  if(!wrap) return;
-  const byMachine = getTodayRecordsByMachine();
-  const branchGroups = {};
-  BRANCHES.forEach(b=>branchGroups[b] = {done:[], notDone:[]});
-  branchGroups['No branch'] = {done:[], notDone:[]};
-  machines.forEach(m=>{
-    const branchKey = m.branch || 'No branch';
-    if(!branchGroups[branchKey]) branchGroups[branchKey] = {done:[], notDone:[]};
-    const todaysActivity = byMachine[m.id];
-    if(todaysActivity && todaysActivity.length){
-      branchGroups[branchKey].done.push({m, activity: todaysActivity});
-    } else {
-      branchGroups[branchKey].notDone.push(m);
-    }
-  });
-  let html = '';
-  Object.entries(branchGroups).forEach(([branch, groups])=>{
-    const total = groups.done.length + groups.notDone.length;
-    if(total === 0) return;
-    const pct = total ? Math.round((groups.done.length/total)*100) : 0;
-    html += '<div class="card"><div class="section-title">'+escapeHtml(branch)+' <span class="badge '+(pct===100?'green':pct>=50?'amber':'red')+'">'+groups.done.length+'/'+total+' ('+pct+'%)</span></div>';
-    groups.done.forEach(({m,activity})=>{
-      const types = activity.map(a=>a.type==='service'?'Service':a.type==='check'?'Check':'Defect Resolution');
-      const names = activity.map(a=>escapeHtml(a.signName||'-'));
-      html += '<div class="alert-row"><span>✅ '+escapeHtml(m.name)+'</span><span>'+types.join(', ')+' by '+names.join(', ')+'</span></div>';
-    });
-    groups.notDone.forEach(m=>{
-      html += '<div class="alert-row"><span>🔴 '+escapeHtml(m.name)+'</span><span style="color:var(--red)">Not done today</span></div>';
-    });
-    html += '</div>';
-  });
-  wrap.innerHTML = html || '<div class="empty-state">No machines to show.</div>';
-}
-async function ensureCategoriesSeeded(existingDocs){
-  const batch = db.batch();
-  let needsCommit = false;
-  const existingKeys = new Set(existingDocs.map(d=>d.id));
-  Object.entries(DEFAULT_CATEGORIES).forEach(([key, defaultCat])=>{
-    if(!existingKeys.has(key)){
-      batch.set(db.collection('categories').doc(key), defaultCat);
-      needsCommit = true;
-      logSync('Seeded missing category: '+key);
-    }
-  });
-  existingDocs.forEach(docSnap=>{
-    const key = docSnap.id;
-    const defaultCat = DEFAULT_CATEGORIES[key];
-    if(!defaultCat) return;
-    const data = docSnap.data();
-    const patch = {};
-    if(data.lolerApplies === undefined) patch.lolerApplies = defaultCat.lolerApplies;
-    if(data.label === undefined) patch.label = defaultCat.label;
-    if(data.emoji === undefined) patch.emoji = defaultCat.emoji;
-    if(data.items === undefined) patch.items = defaultCat.items;
-    if(Object.keys(patch).length){
-      batch.update(db.collection('categories').doc(key), patch);
-      needsCommit = true;
-      logSync('Backfilled fields on category "'+key+'": '+Object.keys(patch).join(', '));
-    }
-  });
-  if(needsCommit){ await batch.commit(); return true; }
-  return false;
-}
 
-async function ensureMachinesSeeded(existingDocs){
-  const existingKeys = new Set(existingDocs.map(d=>{
-    const data = d.data();
-    return (data.name||'').trim().toLowerCase()+'|'+(data.serialNumber||'').trim().toLowerCase();
-  }));
-  const batch = db.batch();
-  let needsCommit = false;
-  SEED_MACHINES.forEach(seed=>{
-    const key = seed.name.trim().toLowerCase()+'|'+seed.serialNumber.trim().toLowerCase();
-    if(!existingKeys.has(key)){
-      const ref = db.collection('machines').doc();
-      batch.set(ref, {
-        name: seed.name, serialNumber: seed.serialNumber, categoryKey: seed.categoryKey, branch: '',
-        items: [], currentHours: 0, lastServiceHours: 0, nextServiceDueHours: SERVICE_HOURS_LIMIT,
-        loler: { applies: DEFAULT_CATEGORIES[seed.categoryKey] ? DEFAULT_CATEGORIES[seed.categoryKey].lolerApplies : false, lastExamDate: null, nextDueDate: null, examinerName: '' },
-        createdAt: firebase.firestore.Timestamp.now()
-      });
-      needsCommit = true;
-      existingKeys.add(key);
-    }
-  });
-  if(needsCommit){ await batch.commit(); logSync('Seeded '+SEED_MACHINES.length+' machine list — added any missing entries'); return true; }
-  return false;
-}
+  function renderHome(){const list=$("homeMachineList");if(!list)return;$("machineCount").textContent=machines.length;const exceptions=greaseRecords.filter(r=>r.overallResult==="completed-with-exception").length;$("homeAlerts").innerHTML=exceptions?`<div class="alert amber"><b>${exceptions}</b> grease record${exceptions===1?"":"s"} with an exception. Linked defects are available in CheckPlant.</div>`:"";if(!machines.length){list.innerHTML='<div class="empty-state">No machines found in the CheckPlant database.</div>';return}list.innerHTML=sortedMachines().map(m=>{const t=machineType(m),last=greaseRecords.find(r=>r.machineId===m.id);return `<div class="machine-list-item" onclick="chooseMachine('${m.id}')"><div><div class="mname">${esc(m.name)}</div><div class="mmeta">${esc(TYPE_LABELS[t]||"Type not mapped")} · ${m.serialNumber?"S/N "+esc(m.serialNumber):"No serial recorded"}</div><div class="mlast">${last?"Last grease record: "+esc(last.date||"—")+" by "+esc(last.operativeName||"—"):"No grease record yet"}</div></div><span class="badge ${last?.overallResult==='completed-with-exception'?'amber':'green'}">${last?.overallResult==='completed-with-exception'?'Exception':'Ready'}</span></div>`}).join("")}
 
-function initFirestoreListeners(){
-setConn(true,"Connecting...");
-loadPinSetting();
-db.collection('machines').orderBy('name').onSnapshot(async s=>{
-  const seeded = await ensureMachinesSeeded(s.docs);
-  if(seeded) return;
-  machines=s.docs.map(d=>({id:d.id,...d.data()}));populateServiceMachineSelect();populateBookingMachineSelect();renderMachineList();renderHomeMachineList();renderOverdueAlerts();renderCalendar();renderDailyChecks();setConn(true,"Connected");
-},e=>setConn(false,"Error: "+e.message));
-db.collection('categories').onSnapshot(async s=>{
-  const seeded = await ensureCategoriesSeeded(s.docs);
-  if(seeded) return;
-  categories={};s.docs.forEach(d=>categories[d.id]=d.data());
-  renderCategoryGrid();renderCategoryList();populateNewMachineCategorySelect();
-},e=>setConn(false,"Cat error: "+e.message));
-db.collection('records').orderBy('createdAt','desc').onSnapshot(s=>{records=s.docs.map(d=>({id:d.id,...d.data()}));renderRecordsTable();renderHomeMachineList();renderDailyChecks();},e=>setConn(false,"Rec error: "+e.message));
-db.collection('defects').orderBy('dateRaised','desc').onSnapshot(s=>{defects=s.docs.map(d=>({id:d.id,...d.data()}));renderDefectsTable();renderOutstandingDefectsList();},e=>setConn(false,"Def error: "+e.message));
-db.collection('bookings').orderBy('date').onSnapshot(s=>{bookings=s.docs.map(d=>({id:d.id,...d.data()}));renderCalendar();renderHomeUpcomingBookings();},e=>setConn(false,"Book error: "+e.message));
-}
-function showScreen(n){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById('screen-'+n).classList.add('active');if(n==='backoffice')switchOfficeTab('daily');window.scrollTo(0,0);}
-function goHome(){showScreen('home');}
-function startService(){showScreen('service-select');}
-function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);}
-function escapeHtml(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
-function escapeAttr(s){return escapeHtml(s).replace(/'/g,"&#39;");}
-function todayISO(){return new Date().toISOString().slice(0,10);}
-function daysBetween(a,b){return Math.round((new Date(b)-new Date(a))/86400000);}
-function renderOverdueAlerts(){
-const w=document.getElementById('overdueAlerts');const sO=[],sD=[],lO=[],lD=[];const t=todayISO();
-machines.forEach(m=>{const cur=m.currentHours||0,last=m.lastServiceHours||0,since=cur-last;
-if(since>=SERVICE_HOURS_LIMIT)sO.push({m,since});else if(since>=SERVICE_HOURS_LIMIT-SERVICE_DUE_SOON_WINDOW)sD.push({m,since});
-if(m.loler&&m.loler.applies&&m.loler.nextDueDate){const d=daysBetween(t,m.loler.nextDueDate);if(d<0)lO.push({m,d});else if(d<=LOLER_DUE_SOON_DAYS)lD.push({m,d});}});
-let h='';
-if(sO.length||sD.length){h+='<div class="alert-panel service-alert"><div class="section-title" style="color:var(--amber)">🔧 Service Due</div>';
-sO.forEach(x=>h+='<div class="alert-row"><span>🔴 '+escapeHtml(x.m.name)+'</span><span>'+x.since+' hrs — OVERDUE (due at '+(x.m.nextServiceDueHours!=null?x.m.nextServiceDueHours:((x.m.lastServiceHours||0)+SERVICE_HOURS_LIMIT))+' hrs)</span></div>');
-sD.forEach(x=>h+='<div class="alert-row"><span>🟠 '+escapeHtml(x.m.name)+'</span><span>'+x.since+' hrs — due soon (due at '+(x.m.nextServiceDueHours!=null?x.m.nextServiceDueHours:((x.m.lastServiceHours||0)+SERVICE_HOURS_LIMIT))+' hrs)</span></div>');h+='</div>';}
-if(lO.length||lD.length){h+='<div class="alert-panel loler-alert"><div class="section-title" style="color:var(--red)">⚖️ LOLER Due</div>';
-lO.forEach(x=>h+='<div class="alert-row"><span>🔴 '+escapeHtml(x.m.name)+'</span><span>Overdue '+Math.abs(x.d)+'d</span></div>');
-lD.forEach(x=>h+='<div class="alert-row"><span>🟠 '+escapeHtml(x.m.name)+'</span><span>Due in '+x.d+'d</span></div>');h+='</div>';}
-w.innerHTML=h;}
-function machineHoursStatus(m){const s=(m.currentHours||0)-(m.lastServiceHours||0);if(s>=SERVICE_HOURS_LIMIT)return{label:'Overdue',cls:'red'};if(s>=SERVICE_HOURS_LIMIT-SERVICE_DUE_SOON_WINDOW)return{label:'Due soon',cls:'amber'};return{label:'OK',cls:'green'};}
-function machineNextServiceDue(m){return m.nextServiceDueHours!=null ? m.nextServiceDueHours : ((m.lastServiceHours||0)+SERVICE_HOURS_LIMIT);}
-function renderHomeMachineList(){const w=document.getElementById('homeMachineList');if(!w)return;w.innerHTML='';if(!machines.length){w.innerHTML='<p class="progress-note">No machines yet.</p>';return;}
-machines.forEach(m=>{const ls=records.find(r=>r.type==='service'&&r.machineId===m.id);const st=machineHoursStatus(m);const row=document.createElement('div');row.className='machine-list-item';row.onclick=()=>openMachineProfile(m.id);
-row.innerHTML='<div><div class="mname">'+escapeHtml(m.name)+(m.serialNumber?' <span style="color:var(--grey);font-weight:400">(S/N: '+escapeHtml(m.serialNumber)+')</span>':'')+'</div><div class="mlast">'+(ls?'Last serviced '+ls.date+' by '+escapeHtml(ls.signName||'-'):'No service yet')+'</div><div class="mmeta">'+escapeHtml(m.branch||'No branch')+' · '+(categories[m.categoryKey]?categories[m.categoryKey].label:'Uncategorised')+' · '+(m.currentHours||0)+' hrs · next due '+machineNextServiceDue(m)+' hrs</div></div><span class="badge '+st.cls+'">'+st.label+'</span>';
-w.appendChild(row);});}
-function renderHomeUpcomingBookings(){const w=document.getElementById('homeUpcomingBookings');if(!w)return;const t=todayISO();const up=bookings.filter(b=>b.date>=t).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,6);
-if(!up.length){w.innerHTML='<p class="progress-note">No upcoming bookings.</p>';return;}
-w.innerHTML=up.map(b=>'<div class="alert-row"><span>'+escapeHtml(b.machineName)+'</span><span>'+b.date+(b.note?' — '+escapeHtml(b.note):'')+'</span></div>').join('');}
-function openMachineProfile(id){currentProfileMachineId=id;const m=machines.find(x=>x.id===id);if(!m)return;
-document.getElementById('profileMachineName').textContent=m.name+(m.serialNumber?' (S/N: '+m.serialNumber+')':'');
-document.getElementById('profileItemCount').textContent=machineChecklistItems(m).length+' items · '+(m.currentHours||0)+' hrs · '+(m.branch||'No branch');
-const st=machineHoursStatus(m),since=(m.currentHours||0)-(m.lastServiceHours||0);
-document.getElementById('profileStatusCard').innerHTML='<span class="badge '+st.cls+'">'+st.label+'</span><p class="progress-note">'+since+' hrs since last service · Next service due at <strong>'+machineNextServiceDue(m)+' hrs</strong> · Serial: '+escapeHtml(m.serialNumber||'-')+'</p>';
-const mr=records.filter(r=>r.type==='service'&&r.machineId===id);const lc=document.getElementById('lastServiceCard');
-if(!mr.length){lc.innerHTML='<div class="empty-state">No service recorded yet.</div>';}else{const last=mr[0];
-lc.innerHTML='<div><strong>Date:</strong> '+last.date+' <strong>Tech:</strong> '+escapeHtml(last.signName||'-')+' <strong>Hours:</strong> '+(last.hoursReading!=null?last.hoursReading:'-')+'</div>'+
-'<button class="btn btn-secondary btn-sm" onclick="reprintRecord(\'' +last.id+ '\')">View PDF</button>';}
-const lolc=document.getElementById('profileLolerCard');
-if(!m.loler||!m.loler.applies){lolc.innerHTML='<div class="empty-state">LOLER N/A.</div>';}else{
-const t=todayISO();const d=m.loler.nextDueDate?daysBetween(t,m.loler.nextDueDate):null;let cls='grey',lbl='No exam on record';
-if(d!=null){if(d<0){cls='red';lbl='Overdue '+Math.abs(d)+'d';}else if(d<=LOLER_DUE_SOON_DAYS){cls='amber';lbl='Due in '+d+'d';}else{cls='green';lbl='In date';}}
-lolc.innerHTML='<span class="badge '+cls+'">'+lbl+'</span><p class="progress-note">Next due: '+(m.loler.nextDueDate||'-')+' Examiner: '+escapeHtml(m.loler.examinerName||'-')+'</p>';}
-const hl=document.getElementById('serviceHistoryList');
-if(mr.length<=1){hl.innerHTML='<div class="empty-state">No earlier services.</div>';}else{hl.innerHTML='';mr.slice(1).forEach(r=>{const d=document.createElement('div');d.className='history-item';
-d.innerHTML='<div>'+r.date+' <button class="btn btn-secondary btn-sm" onclick="reprintRecord(\''+r.id+'\')">PDF</button></div>';hl.appendChild(d);});}
-showScreen('machine-profile');}
-function startServiceFromProfile(){const id=currentProfileMachineId;showScreen('service-select');document.getElementById('serviceMachineSelect').value=id;onServiceMachineChosen();}
-function populateServiceMachineSelect(){const sel=document.getElementById('serviceMachineSelect');if(!sel)return;const cv=sel.value;sel.innerHTML='<option value="">-- Choose machine --</option>';
-machines.forEach(m=>{const o=document.createElement('option');o.value=m.id;o.textContent=m.name+(m.serialNumber?' (S/N: '+m.serialNumber+')':'')+' ('+(m.branch||'no branch')+')';sel.appendChild(o);});sel.value=cv;
-document.getElementById('noMachinesNote').style.display=machines.length?'none':'block';}
-function machineChecklistItems(m){if(m.categoryKey&&categories[m.categoryKey])return categories[m.categoryKey].items||[];return m.items||[];}
-function onServiceMachineChosen(){const id=document.getElementById('serviceMachineSelect').value;if(!id)return;currentServiceMachine=machines.find(m=>m.id===id);
-document.getElementById('serviceMachineName').textContent=currentServiceMachine.name+(currentServiceMachine.serialNumber?' (S/N: '+currentServiceMachine.serialNumber+')':'');
-document.getElementById('svcTechName').value='';document.getElementById('svcDate').value=todayISO();
-document.getElementById('svcHours').value=currentServiceMachine.currentHours||'';document.getElementById('svcNotes').value='';
-document.getElementById('svcSignName').value='';document.getElementById('svcSignDate').value=todayISO();
-document.getElementById('lolerCertDate').value='';document.getElementById('lolerNextDue').value='';document.getElementById('lolerExaminer').value='';
-pendingLolerStatus='pass';document.querySelectorAll('#svcLolerPanel .check-box').forEach(b=>b.classList.remove('active'));
-const ls=records.find(r=>r.type==='service'&&r.machineId===id);const since=(currentServiceMachine.currentHours||0)-(currentServiceMachine.lastServiceHours||0);
-document.getElementById('lastServiceHint').innerHTML='<p class="progress-note">'+(ls?'Last serviced '+ls.date:'No previous service')+'. Hours since reset: '+since+' (resets to 0 now). Next service due will be set to current hours + 500.</p>';
-renderServiceItems();const ck=currentServiceMachine.categoryKey;const la=ck&&categories[ck]?categories[ck].lolerApplies:true;
-document.getElementById('svcLolerPanel').style.display='block';if(!la){document.querySelector('#svcLolerPanel .check-box[data-loler="na"]').click();}
-showScreen('service-form');setTimeout(()=>initSigPad('sigPadService'),50);}
-function renderServiceItems(){const l=document.getElementById('serviceItemsList');l.innerHTML='';const items=machineChecklistItems(currentServiceMachine);
-document.getElementById('svcItemCount').textContent=items.length;document.getElementById('svcNoItemsNote').style.display=items.length?'none':'block';
-items.forEach((item,idx)=>{const row=document.createElement('div');row.className='checklist-item';
-row.innerHTML='<div>'+escapeHtml(item)+'</div><div class="check-pair"><div class="check-box serviceable" data-idx="'+idx+'" onclick="toggleCheck(this,\'service\')">Serviceable</div><div class="check-box replaced" data-idx="'+idx+'" onclick="toggleCheck(this,\'service\')">Replaced</div></div>';
-l.appendChild(row);});}
-function toggleCheck(el,mode){const idx=el.dataset.idx;const c=mode==='service'?document.getElementById('serviceItemsList'):document.getElementById('checkItemsList');
-const pair=c.querySelectorAll('.check-box[data-idx="'+idx+'"]');pair.forEach(b=>{if(b===el)b.classList.toggle('active');else if(el.classList.contains('active'))b.classList.remove('active');});}
-function toggleLolerStatus(el,status){pendingLolerStatus=status;document.querySelectorAll('#svcLolerPanel .check-box').forEach(b=>b.classList.remove('active'));el.classList.add('active');}
-function renderCategoryGrid(){const g=document.getElementById('categoryGrid');if(!g)return;g.innerHTML='';
-Object.entries(categories).forEach(([k,c])=>{const card=document.createElement('div');card.className='cat-card';card.onclick=()=>onCategoryChosen(k);
-card.innerHTML='<div class="emoji">'+c.emoji+'</div><div class="label">'+escapeHtml(c.label)+'</div>';g.appendChild(card);});}
-function onCategoryChosen(key){currentCheckCategory=key;document.getElementById('checkCategoryName').textContent=categories[key].label;
-const sel=document.getElementById('chkMachineSelect');sel.innerHTML='<option value="">-- Choose machine --</option>';
-machines.filter(m=>m.categoryKey===key).forEach(m=>{const o=document.createElement('option');o.value=m.id;o.textContent=m.name+(m.serialNumber?' (S/N: '+m.serialNumber+')':'');sel.appendChild(o);});
-currentCheckMachine=null;document.getElementById('chkDate').value=todayISO();document.getElementById('chkHours').value='';
-document.getElementById('chkNotes').value='';document.getElementById('chkSignName').value='';document.getElementById('chkSignDate').value=todayISO();
-renderCheckItems();showScreen('check-form');setTimeout(()=>initSigPad('sigPadCheck'),50);}
-function onCheckMachineChosen(){const id=document.getElementById('chkMachineSelect').value;currentCheckMachine=machines.find(m=>m.id===id)||null;
-if(currentCheckMachine)document.getElementById('chkHours').value=currentCheckMachine.currentHours||'';}
-function renderCheckItems(){const l=document.getElementById('checkItemsList');l.innerHTML='';const items=categories[currentCheckCategory].items;
-document.getElementById('chkItemCount').textContent=items.length;document.getElementById('chkNoItemsNote').style.display=items.length?'none':'block';
-items.forEach((item,idx)=>{const row=document.createElement('div');row.className='checklist-item';
-row.innerHTML='<div>'+escapeHtml(item)+'</div><div class="check-pair"><div class="check-box serviceable" data-idx="'+idx+'" onclick="toggleCheck(this,\'check\')">Pass</div><div class="check-box replaced" data-idx="'+idx+'" onclick="toggleCheck(this,\'check\')">Defect</div></div>';
-l.appendChild(row);});}
-const sigPads={};
-function initSigPad(canvasId){const canvas=document.getElementById(canvasId);if(!canvas)return;const ctx=canvas.getContext('2d');let saved=null;
-function resize(){const rect=canvas.getBoundingClientRect();const ratio=Math.max(window.devicePixelRatio||1,1);
-if(canvas.width&&canvas.height){try{saved=ctx.getImageData(0,0,canvas.width,canvas.height);}catch(e){saved=null;}}
-canvas.width=rect.width*ratio;canvas.height=180*ratio;ctx.scale(ratio,ratio);ctx.lineWidth=2.2;ctx.lineCap='round';ctx.strokeStyle='#1c1f26';
-if(saved){try{ctx.putImageData(saved,0,0);}catch(e){}}}
-resize();let drawing=false,lastX=0,lastY=0;
-function pos(e){const r=canvas.getBoundingClientRect();const cx=(e.touches?e.touches[0].clientX:e.clientX)-r.left;const cy=(e.touches?e.touches[0].clientY:e.clientY)-r.top;return[cx,cy];}
-function start(e){drawing=true;[lastX,lastY]=pos(e);e.preventDefault();}
-function move(e){if(!drawing)return;const[x,y]=pos(e);ctx.beginPath();ctx.moveTo(lastX,lastY);ctx.lineTo(x,y);ctx.stroke();[lastX,lastY]=[x,y];sigPads[canvasId].hasSignature=true;e.preventDefault();}
-function end(){drawing=false;}
-canvas.onmousedown=start;canvas.onmousemove=move;canvas.onmouseup=end;canvas.onmouseleave=end;
-canvas.ontouchstart=start;canvas.ontouchmove=move;canvas.ontouchend=end;
-const rh=()=>resize();window.addEventListener('resize',rh);window.addEventListener('orientationchange',rh);
-if(sigPads[canvasId]&&sigPads[canvasId]._rh){window.removeEventListener('resize',sigPads[canvasId]._rh);window.removeEventListener('orientationchange',sigPads[canvasId]._rh);}
-sigPads[canvasId]={canvas,ctx,hasSignature:sigPads[canvasId]?sigPads[canvasId].hasSignature:false,_rh:rh};}
-function clearSig(id){const p=sigPads[id];if(!p)return;p.ctx.clearRect(0,0,p.canvas.width,p.canvas.height);p.hasSignature=false;}
-function collectItems(containerId,items){const c=document.getElementById(containerId);const res=[];
-items.forEach((item,idx)=>{const boxes=c.querySelectorAll('.check-box[data-idx="'+idx+'"]');let status='Not checked';
-boxes.forEach(b=>{if(b.classList.contains('active'))status=b.textContent.trim();});res.push({name:item,status});});return res;}
-function renderOutstandingDefectsList(){const w=document.getElementById('outstandingDefectsList');if(!w)return;
-const open=defects.filter(d=>d.status==='open');if(!open.length){w.innerHTML='<div class="empty-state">No outstanding defects.</div>';return;}
-w.innerHTML='';open.forEach(d=>{const days=daysBetween(d.dateRaised,todayISO());const row=document.createElement('div');row.className='machine-list-item';row.onclick=()=>openDefectForm(d.id);
-row.innerHTML='<div><div class="mname">'+escapeHtml(d.machineName)+' — '+escapeHtml(d.itemName)+'</div><div class="mlast">Raised '+d.dateRaised+'</div></div><span class="badge red">'+days+'d</span>';
-w.appendChild(row);});}
-function openDefectForm(id){currentDefect=defects.find(d=>d.id===id);if(!currentDefect)return;
-document.getElementById('defMachineName').value=currentDefect.machineName;document.getElementById('defItemName').value=currentDefect.itemName;
-document.getElementById('defDateRaised').value=currentDefect.dateRaised;document.getElementById('defDaysOutstanding').value=daysBetween(currentDefect.dateRaised,todayISO())+' days';
-const m=machines.find(x=>x.id===currentDefect.machineId);document.getElementById('defHours').value=m?(m.currentHours||''):'';
-document.getElementById('defResolvedDate').value=todayISO();document.getElementById('defWorkDone').value='';
-document.getElementById('defSignName').value='';document.getElementById('defSignDate').value=todayISO();
-showScreen('defect-form');setTimeout(()=>initSigPad('sigPadDefect'),50);}
-async function completeAndShare(mode){
-if(mode==='service'){
-if(!currentServiceMachine){toast('Select a machine first');return;}
-const techName=document.getElementById('svcTechName').value.trim();const signName=document.getElementById('svcSignName').value.trim();
-const signDate=document.getElementById('svcSignDate').value;const hours=document.getElementById('svcHours').value;const sig=sigPads['sigPadService'];
-if(!signName||!signDate){toast('Enter name and date');return;}if(!sig||!sig.hasSignature){toast('Draw signature');return;}if(hours===''){toast('Enter hours');return;}
-const items=collectItems('serviceItemsList',machineChecklistItems(currentServiceMachine));
-const lolerCertDate=document.getElementById('lolerCertDate').value,lolerNextDue=document.getElementById('lolerNextDue').value,lolerExaminer=document.getElementById('lolerExaminer').value.trim();
-const lolerSection={status:pendingLolerStatus,certDate:lolerCertDate,nextDueDate:lolerNextDue,examinerName:lolerExaminer};
-const hoursNum=Number(hours);const nextDue=hoursNum+SERVICE_HOURS_LIMIT;
-const record={type:'service',machineId:currentServiceMachine.id,subject:currentServiceMachine.name,serialNumber:currentServiceMachine.serialNumber||'',branch:currentServiceMachine.branch||'',technician:techName,date:document.getElementById('svcDate').value,items,notes:document.getElementById('svcNotes').value.trim(),signName,signDate,signatureData:sig.canvas.toDataURL('image/png'),hoursReading:hoursNum,nextServiceDueHours:nextDue,lolerSection,createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending'};
-await db.collection('machines').doc(currentServiceMachine.id).update({currentHours:hoursNum,lastServiceHours:hoursNum,nextServiceDueHours:nextDue});
-if(lolerSection.status!=='na'){await db.collection('machines').doc(currentServiceMachine.id).update({loler:{applies:true,lastExamDate:lolerCertDate||null,nextDueDate:lolerNextDue||null,examinerName:lolerExaminer||''}});}
-if(lolerSection.status==='defect'){await db.collection('defects').add({machineId:currentServiceMachine.id,machineName:currentServiceMachine.name,itemName:'LOLER — Statutory: exam overdue/expired',dateRaised:todayISO(),status:'open',resolvedDate:null,resolvedBy:null,resolutionRecordId:null,severity:'statutory'});}
-await saveRecordToFirestore(record);
-}else if(mode==='check'){
-if(!currentCheckCategory){toast('Select a category');return;}if(!currentCheckMachine){toast('Select a machine');return;}
-const signName=document.getElementById('chkSignName').value.trim(),signDate=document.getElementById('chkSignDate').value,hours=document.getElementById('chkHours').value,sig=sigPads['sigPadCheck'];
-if(!signName||!signDate){toast('Enter name and date');return;}if(!sig||!sig.hasSignature){toast('Draw signature');return;}if(hours===''){toast('Enter hours');return;}
-const cat=categories[currentCheckCategory];const items=collectItems('checkItemsList',cat.items);
-const record={type:'check',categoryKey:currentCheckCategory,machineId:currentCheckMachine.id,subject:cat.label+' — '+currentCheckMachine.name,serialNumber:currentCheckMachine.serialNumber||'',branch:currentCheckMachine.branch||'',technician:signName,date:document.getElementById('chkDate').value,items,notes:document.getElementById('chkNotes').value.trim(),signName,signDate,signatureData:sig.canvas.toDataURL('image/png'),hoursReading:Number(hours),createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending'};
-await db.collection('machines').doc(currentCheckMachine.id).update({currentHours:Number(hours)});
-for(const di of items.filter(i=>i.status==='Defect')){await db.collection('defects').add({machineId:currentCheckMachine.id,machineName:currentCheckMachine.name,itemName:di.name,dateRaised:todayISO(),status:'open',resolvedDate:null,resolvedBy:null,resolutionRecordId:null,severity:'routine'});}
-await saveRecordToFirestore(record);
-}else if(mode==='defect'){
-if(!currentDefect){toast('Select a defect');return;}
-const signName=document.getElementById('defSignName').value.trim(),signDate=document.getElementById('defSignDate').value,hours=document.getElementById('defHours').value,workDone=document.getElementById('defWorkDone').value.trim(),sig=sigPads['sigPadDefect'];
-if(!signName||!signDate){toast('Enter name and date');return;}if(!sig||!sig.hasSignature){toast('Draw signature');return;}if(hours===''){toast('Enter hours');return;}if(!workDone){toast('Describe work');return;}
-const m=machines.find(x=>x.id===currentDefect.machineId);
-const record={type:'defect',machineId:currentDefect.machineId,subject:currentDefect.machineName+' — '+currentDefect.itemName,serialNumber:m?(m.serialNumber||''):'',branch:m?(m.branch||''):'',technician:signName,date:document.getElementById('defResolvedDate').value,items:[{name:currentDefect.itemName,status:'Resolved'}],notes:workDone,signName,signDate,signatureData:sig.canvas.toDataURL('image/png'),hoursReading:Number(hours),defectRefId:currentDefect.id,createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending'};
-if(m)await db.collection('machines').doc(m.id).update({currentHours:Number(hours)});
-await db.collection('defects').doc(currentDefect.id).update({status:'resolved',resolvedDate:document.getElementById('defResolvedDate').value,resolvedBy:signName});
-await saveRecordToFirestore(record);
-if(record.id)await db.collection('defects').doc(currentDefect.id).update({resolutionRecordId:record.id});
-}}
-async function saveRecordToFirestore(record){try{const ref=await db.collection('records').add(record);record.id=ref.id;toast('Saved');afterRecordCreated(record);generatePDF(record);}catch(err){toast('Save failed');console.error(err);}}
-function afterRecordCreated(record){if(settings.autoSheets&&settings.sheetsWebhookUrl)pushRecordToSheets(record,true);if(settings.autoCsv)downloadSingleRecordCsv(record);}
-function generatePDF(record){const jsPDF=window.jspdf.jsPDF;const doc=new jsPDF({unit:'pt',format:'a4'});const pageW=doc.internal.pageSize.getWidth();const margin=40;let y=50;
-doc.setFillColor(46,46,143);doc.rect(0,0,pageW,74,'F');doc.setFillColor(47,174,78);doc.rect(0,70,pageW,4,'F');
-doc.setTextColor(255,255,255);doc.setFontSize(20);doc.setFont(undefined,'bold');doc.text('CheckPlant',margin,33);
-doc.setFontSize(10);doc.text('KCM WASTE MANAGEMENT',margin,50);
-const typeLabel=record.type==='service'?'Service Report':record.type==='check'?'Safety Check Report':'Defect Resolution Report';
-doc.setFont(undefined,'normal');doc.text(typeLabel,margin,64);y=98;
-doc.setTextColor(28,31,38);doc.setFontSize(13);doc.setFont(undefined,'bold');doc.text(record.subject,margin,y);y+=20;
-doc.setFontSize(10);doc.setFont(undefined,'normal');doc.text('Date: '+record.date+'  Branch: '+(record.branch||'-')+(record.serialNumber?'  S/N: '+record.serialNumber:''),margin,y);
-doc.text('By: '+(record.technician||record.signName),margin+280,y);y+=16;
-if(record.hoursReading!=null){doc.text('Hours: '+record.hoursReading+(record.nextServiceDueHours!=null?'  Next service due: '+record.nextServiceDueHours+' hrs':''),margin,y);y+=16;}
-y+=8;doc.setDrawColor(220,220,220);doc.line(margin,y,pageW-margin,y);y+=20;
-doc.setFontSize(12);doc.setFont(undefined,'bold');doc.setTextColor(46,46,143);
-doc.text(record.type==='service'?'Serviceable Items':record.type==='check'?'Safety Checklist':'Defect Details',margin,y);doc.setTextColor(28,31,38);y+=10;
-const colX=margin,colStatusX=pageW-margin-110;
-record.items.forEach(it=>{if(y>760){doc.addPage();y=50;}doc.setFontSize(10);doc.setFont(undefined,'normal');
-const lines=doc.splitTextToSize(it.name,colStatusX-colX-10);doc.text(lines,colX,y+2);
-let sc=[107,114,128];if(['Serviceable','Pass','Resolved'].includes(it.status))sc=[38,143,64];else if(['Replaced','Defect'].includes(it.status))sc=[220,38,38];else if(it.status==='N/A')sc=[154,161,171];
-doc.setTextColor(...sc);doc.setFont(undefined,'bold');doc.text(it.status,colStatusX,y+2);doc.setTextColor(28,31,38);
-y+=Math.max(16,lines.length*12+4);doc.setDrawColor(240,240,240);doc.line(margin,y-6,pageW-margin,y-6);y+=10;});
-if(record.lolerSection){if(y>650){doc.addPage();y=50;}y+=10;doc.setFontSize(12);doc.setFont(undefined,'bold');doc.setTextColor(220,38,38);
-doc.text('LOLER Thorough Examination (Statutory)',margin,y);doc.setTextColor(28,31,38);y+=16;doc.setFontSize(10);doc.setFont(undefined,'normal');
-const ls=record.lolerSection;const st=ls.status==='pass'?'PASS':ls.status==='defect'?'DEFECT':'N/A';
-doc.text('Status: '+st,margin,y);y+=14;doc.text('Cert: '+(ls.certDate||'-')+' Next due: '+(ls.nextDueDate||'-'),margin,y);y+=14;
-doc.text('Examiner: '+(ls.examinerName||'-'),margin,y);y+=10;}
-if(y>680){doc.addPage();y=50;}y+=12;doc.setFontSize(12);doc.setFont(undefined,'bold');doc.setTextColor(46,46,143);
-doc.text(record.type==='defect'?'Work Carried Out':'Notes',margin,y);doc.setTextColor(28,31,38);y+=16;doc.setFontSize(10);doc.setFont(undefined,'normal');
-const nl=doc.splitTextToSize(record.notes||'No notes.',pageW-2*margin);doc.text(nl,margin,y);y+=nl.length*13+20;
-if(y>650){doc.addPage();y=50;}doc.setDrawColor(220,220,220);doc.line(margin,y,pageW-margin,y);y+=20;
-doc.setFontSize(12);doc.setFont(undefined,'bold');doc.setTextColor(46,46,143);doc.text('Sign Off',margin,y);doc.setTextColor(28,31,38);y+=14;
-doc.setFontSize(10);doc.setFont(undefined,'normal');doc.text('Name: '+record.signName,margin,y);doc.text('Date: '+record.signDate,margin+250,y);y+=10;
-try{doc.addImage(record.signatureData,'PNG',margin,y,200,70);}catch(e){}y+=80;
-doc.setDrawColor(180,180,180);doc.line(margin,y,margin+200,y);doc.setFontSize(8);doc.setTextColor(120,120,120);doc.text('Signature',margin,y+10);
-doc.setFontSize(8);doc.setTextColor(150,150,150);doc.text('CheckPlant KCM — '+new Date().toLocaleString('en-GB'),margin,800);
-lastGeneratedDoc = doc;
-lastGeneratedRecord = record;
-showScreen('pdf-ready');
-setTimeout(()=>{if(record.type==='service')currentServiceMachine=null;else if(record.type==='check'){currentCheckCategory=null;currentCheckMachine=null;}else currentDefect=null;},300);}
-function viewPDF(){
-  if(!lastGeneratedDoc){ toast('No PDF ready to view'); return; }
-  try{ const blobUrl = lastGeneratedDoc.output('bloburl'); window.open(blobUrl, '_blank'); }
-  catch(e){ toast('Could not open PDF viewer, try Download instead'); }
-}
-function downloadPDF(){
-  if(!lastGeneratedDoc || !lastGeneratedRecord){ toast('No PDF ready to download'); return; }
-  const fileName = 'CheckPlant_KCM_'+lastGeneratedRecord.type+'_'+lastGeneratedRecord.subject.replace(/[^a-z0-9]/gi,'_')+'_'+lastGeneratedRecord.date+'.pdf';
-  lastGeneratedDoc.save(fileName);
-}function saveSheetsWebhook(){const url=document.getElementById('sheetsWebhookUrl').value.trim();if(!url){toast('Enter URL');return;}
-settings.sheetsWebhookUrl=url;localStorage.setItem('cpsettings',JSON.stringify(settings));renderSheetsStatus();toast('Saved');}
-function clearSheetsWebhook(){settings.sheetsWebhookUrl='';settings.autoSheets=false;localStorage.setItem('cpsettings',JSON.stringify(settings));document.getElementById('sheetsWebhookUrl').value='';renderSheetsStatus();toast('Disconnected');}
-function clearSheetsWebhook(){settings.sheetsWebhookUrl='';settings.autoSheets=false;localStorage.setItem('cpsettings',JSON.stringify(settings));document.getElementById('sheetsWebhookUrl').value='';renderSheetsStatus();toast('Disconnected');}
-function resetSheetsWebhook(){settings.sheetsWebhookUrl=DEFAULT_SHEETS_URL;localStorage.setItem('cpsettings',JSON.stringify(settings));renderSheetsStatus();toast('Reset to built-in default');}
-function toggleAutoSheets(){settings.autoSheets=document.getElementById('autoSheetsToggle').checked;localStorage.setItem('cpsettings',JSON.stringify(settings));}
-function toggleAutoCsv(){settings.autoCsv=document.getElementById('autoCsvToggle').checked;localStorage.setItem('cpsettings',JSON.stringify(settings));}
-function renderSheetsStatus(){document.getElementById('sheetsWebhookUrl').value=settings.sheetsWebhookUrl||'';document.getElementById('autoSheetsToggle').checked=!!settings.autoSheets;document.getElementById('autoCsvToggle').checked=!!settings.autoCsv;
-const b=document.getElementById('sheetsStatusBadge');if(settings.sheetsWebhookUrl){b.textContent='Connected';b.className='badge green';}else{b.textContent='Not connected';b.className='badge grey';}renderSyncLog();}
-function logSync(m){const l='['+new Date().toLocaleTimeString('en-GB')+'] '+m;syncLog.unshift(l);syncLog=syncLog.slice(0,25);localStorage.setItem('cpsynclog',JSON.stringify(syncLog));renderSyncLog();}
-function renderSyncLog(){const el=document.getElementById('syncLogBox');if(!el)return;el.textContent=syncLog.length?syncLog.join('\n'):'No sync attempts yet.';}
-function clearSyncLog(){syncLog=[];localStorage.setItem('cpsynclog',JSON.stringify(syncLog));renderSyncLog();}
-async function pushRecordToSheets(record,silent){if(!settings.sheetsWebhookUrl){toast('No URL configured');return;}const url=settings.sheetsWebhookUrl;logSync('POST -> '+url);
-try{const resp=await fetch(url,{method:'POST',redirect:'follow',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(record)});const text=await resp.text();logSync('HTTP '+resp.status+': '+text.slice(0,200));
-let parsed=null;try{parsed=JSON.parse(text);}catch(e){}if(resp.ok&&(!parsed||parsed.status!=='error')){if(!silent)toast('Sent');return;}throw new Error('retry GET');
-}catch(err){logSync('POST failed: '+err.message);try{const payload=encodeURIComponent(JSON.stringify(record));const getUrl=url+(url.includes('?')?'&':'?')+'record='+payload;
-const resp2=await fetch(getUrl,{method:'GET',redirect:'follow'});const text2=await resp2.text();logSync('GET '+resp2.status+': '+text2.slice(0,200));
-if(resp2.ok){if(!silent)toast('Sent via fallback');}else if(!silent)toast('Sync failed');}catch(err2){logSync('GET failed: '+err2.message);if(!silent)toast('Could not reach Sheets');}}}
-function testSheetsWebhook(){const url=document.getElementById('sheetsWebhookUrl').value.trim();if(!url){toast('Enter URL first');return;}
-settings.sheetsWebhookUrl=url;localStorage.setItem('cpsettings',JSON.stringify(settings));
-pushRecordToSheets({type:'check',subject:'Test row',technician:'Test',date:todayISO(),items:[{name:'Sample',status:'Pass'}],notes:'Test.',signName:'Test',signDate:todayISO(),hoursReading:0},false);}
-function switchOfficeTab(tab){document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
-document.querySelectorAll('.office-tab').forEach(el=>el.style.display='none');document.getElementById('office-'+tab).style.display='block';
-if(tab==='daily')renderDailyChecks();if(tab==='machines')renderMachineList();if(tab==='categories')renderCategoryList();if(tab==='defects')renderDefectsTable();
-if(tab==='calendar')renderCalendar();if(tab==='records')renderRecordsTable();if(tab==='sheets')renderSheetsStatus();}
-function populateNewMachineCategorySelect(){const sel=document.getElementById('newMachineCategory');if(!sel)return;const cv=sel.value;sel.innerHTML='';
-Object.entries(categories).forEach(([k,c])=>{const o=document.createElement('option');o.value=k;o.textContent=c.emoji+' '+c.label;sel.appendChild(o);});sel.value=cv;}
-function renderMachineBranchFilter(){const w=document.getElementById('machineBranchFilter');if(!w)return;
-w.innerHTML='<button class="'+(officeMachineBranchFilter==='all'?'active':'')+'" onclick="setMachineBranchFilter(\'all\')">All</button>'+BRANCHES.map(b=>'<button class="'+(officeMachineBranchFilter===b?'active':'')+'" onclick="setMachineBranchFilter(\''+b+'\')">'+b+'</button>').join('');}
-function setMachineBranchFilter(b){officeMachineBranchFilter=b;renderMachineBranchFilter();renderMachineList();}
-async function addMachine(){const input=document.getElementById('newMachineName');const name=input.value.trim();const serialInput=document.getElementById('newMachineSerial');const serialNumber=serialInput.value.trim();const categoryKey=document.getElementById('newMachineCategory').value;const branch=document.getElementById('newMachineBranch').value;
-if(!name){toast('Enter a name');return;}
-await db.collection('machines').add({name,serialNumber,items:[],categoryKey,branch,currentHours:0,lastServiceHours:0,nextServiceDueHours:SERVICE_HOURS_LIMIT,loler:{applies:categories[categoryKey]?categories[categoryKey].lolerApplies:false,lastExamDate:null,nextDueDate:null,examinerName:''},createdAt:firebase.firestore.Timestamp.now()});
-input.value='';serialInput.value='';toast('Machine added');}
-async function deleteMachine(id){if(!confirm('Delete this machine?'))return;await db.collection('machines').doc(id).delete();}
-async function updateMachineField(id,field,value){await db.collection('machines').doc(id).update({[field]:value});}
-function renderMachineList(){renderMachineBranchFilter();const w=document.getElementById('machineListContainer');w.innerHTML='';
-const filtered=officeMachineBranchFilter==='all'?machines:machines.filter(m=>m.branch===officeMachineBranchFilter);
-if(!filtered.length){w.innerHTML='<div class="card"><div class="empty-state">No machines.</div></div>';return;}
-filtered.forEach(m=>{const card=document.createElement('div');card.className='card';
-const catOpts=Object.entries(categories).map(([k,c])=>'<option value="'+k+'" '+(m.categoryKey===k?'selected':'')+'>'+c.emoji+' '+c.label+'</option>').join('');
-const brOpts=BRANCHES.map(b=>'<option value="'+b+'" '+(m.branch===b?'selected':'')+'>'+b+'</option>').join('');
-card.innerHTML='<div style="display:flex;justify-content:space-between"><b>'+escapeHtml(m.name)+'</b><div><button class="btn btn-secondary btn-sm" onclick="openMachineProfile(\''+m.id+'\')">Profile</button> <button class="icon-btn" onclick="deleteMachine(\''+m.id+'\')">🗑</button></div></div>'+
-'<div class="row" style="margin-top:8px"><input type="text" value="'+escapeAttr(m.serialNumber||'')+'" placeholder="Serial number" onchange="updateMachineField(\''+m.id+'\',\'serialNumber\',this.value)"></div>'+
-'<div class="row" style="margin-top:8px"><select onchange="updateMachineField(\''+m.id+'\',\'categoryKey\',this.value)">'+catOpts+'</select><select onchange="updateMachineField(\''+m.id+'\',\'branch\',this.value)">'+brOpts+'</select></div>'+
-'<div class="row" style="margin-top:8px"><input type="number" value="'+(m.currentHours||0)+'" onchange="updateMachineField(\''+m.id+'\',\'currentHours\',Number(this.value))"><input type="number" value="'+(m.lastServiceHours||0)+'" onchange="updateMachineField(\''+m.id+'\',\'lastServiceHours\',Number(this.value))"><input type="number" value="'+(m.nextServiceDueHours!=null?m.nextServiceDueHours:((m.lastServiceHours||0)+SERVICE_HOURS_LIMIT))+'" title="Next service due (hrs)" onchange="updateMachineField(\''+m.id+'\',\'nextServiceDueHours\',Number(this.value))"></div>'+
-'<div class="row" style="margin-top:8px"><select onchange="updateMachineLolerApplies(\''+m.id+'\',this.value)"><option value="true" '+(m.loler&&m.loler.applies?'selected':'')+'>LOLER: Yes</option><option value="false" '+(!(m.loler&&m.loler.applies)?'selected':'')+'>LOLER: No</option></select><input type="date" value="'+(m.loler&&m.loler.nextDueDate?m.loler.nextDueDate:'')+'" onchange="updateMachineLolerField(\''+m.id+'\',\'nextDueDate\',this.value)"></div>';
-w.appendChild(card);});}
-async function updateMachineLolerApplies(id,val){const applies=val==='true';const m=machines.find(x=>x.id===id);await db.collection('machines').doc(id).update({loler:{...(m.loler||{}),applies}});}
-async function updateMachineLolerField(id,field,val){const m=machines.find(x=>x.id===id);await db.collection('machines').doc(id).update({loler:{...(m.loler||{}),[field]:val}});}
-function renderCategoryList(){const w=document.getElementById('categoryListContainer');if(!w)return;w.innerHTML='';
-Object.entries(categories).forEach(([k,c])=>{const card=document.createElement('div');card.className='card';
-card.innerHTML='<div class="section-title">'+c.emoji+' '+escapeHtml(c.label)+' <span class="badge '+(c.lolerApplies?'red':'grey')+'">'+(c.lolerApplies?'LOLER applies':'LOLER N/A')+'</span></div><div id="catitems-'+k+'"></div><div class="item-row" style="margin-top:8px"><input type="text" id="newcatitem-'+k+'" placeholder="Add item"><button class="icon-btn" onclick="addCategoryItem(\''+k+'\')">➕</button></div>';
-w.appendChild(card);renderCategoryItems(k);});}
-function renderCategoryItems(key){const el=document.getElementById('catitems-'+key);if(!el)return;el.innerHTML='';
-categories[key].items.forEach((item,idx)=>{const row=document.createElement('div');row.className='item-row';
-row.innerHTML='<input type="text" value="'+escapeAttr(item)+'" onchange="editCategoryItem(\''+key+'\','+idx+',this.value)"><button class="icon-btn" onclick="deleteCategoryItem(\''+key+'\','+idx+')">🗑</button>';el.appendChild(row);});}
-async function addCategoryItem(key){const input=document.getElementById('newcatitem-'+key);const val=input.value.trim();if(!val)return;
-await db.collection('categories').doc(key).update({items:[...categories[key].items,val]});input.value='';}
-async function editCategoryItem(key,idx,val){const items=[...categories[key].items];items[idx]=val;await db.collection('categories').doc(key).update({items});}
-async function deleteCategoryItem(key,idx){const items=categories[key].items.filter((_,i)=>i!==idx);await db.collection('categories').doc(key).update({items});}
-function renderDefectsTable(){const ce=document.getElementById('defectCount');const oc=defects.filter(d=>d.status==='open').length;if(ce)ce.textContent=oc;
-const w=document.getElementById('defectsTableWrap');if(!w)return;if(!defects.length){w.innerHTML='<div class="empty-state">No defects.</div>';return;}
-let h='<table><thead><tr><th>Machine</th><th>Defect</th><th>Raised</th><th>Days</th><th>Status</th><th>Resolved</th></tr></thead><tbody>';
-defects.forEach(d=>{const days=d.status==='open'?daysBetween(d.dateRaised,todayISO()):daysBetween(d.dateRaised,d.resolvedDate||todayISO());
-h+='<tr><td>'+escapeHtml(d.machineName)+'</td><td>'+escapeHtml(d.itemName)+'</td><td>'+d.dateRaised+'</td><td>'+days+'</td><td><span class="pill '+d.status+'">'+d.status+'</span></td><td>'+(d.resolvedDate?d.resolvedDate+' by '+escapeHtml(d.resolvedBy||'-'):'-')+'</td></tr>';});
-h+='</tbody></table>';w.innerHTML=h;}
-function exportDefectsCSV(){if(!defects.length){toast('No defects');return;}let csv='Machine,Defect,Raised,Days,Status,Resolved,By\n';
-defects.forEach(d=>{const days=d.status==='open'?daysBetween(d.dateRaised,todayISO()):daysBetween(d.dateRaised,d.resolvedDate||todayISO());
-csv+=[d.machineName,d.itemName,d.dateRaised,days,d.status,d.resolvedDate||'',d.resolvedBy||''].map(v=>String(v).replace(/,/g,';')).join(',')+'\n';});
-const blob=new Blob([csv],{type:'text/csv'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='CheckPlant_Defects_'+todayISO()+'.csv';a.click();URL.revokeObjectURL(url);toast('Downloaded');}
-function populateBookingMachineSelect(){const sel=document.getElementById('bookingMachineSelect');if(!sel)return;const cv=sel.value;sel.innerHTML='';
-machines.forEach(m=>{const o=document.createElement('option');o.value=m.id;o.textContent=m.name;sel.appendChild(o);});sel.value=cv;}
-async function addBooking(){const machineId=document.getElementById('bookingMachineSelect').value;const date=document.getElementById('bookingDate').value;const note=document.getElementById('bookingNote').value.trim();
-if(!machineId||!date){toast('Choose machine and date');return;}const m=machines.find(x=>x.id===machineId);
-await db.collection('bookings').add({machineId,machineName:m?m.name:'',branch:m?m.branch:'',date,note,createdAt:firebase.firestore.Timestamp.now()});
-document.getElementById('bookingNote').value='';toast('Booking added');}
-async function deleteBooking(id){if(!confirm('Remove booking?'))return;await db.collection('bookings').doc(id).delete();}
-function renderCalendar(){const dowEl=document.getElementById('calDowRow'),gridEl=document.getElementById('calGrid'),labelEl=document.getElementById('calMonthLabel');if(!gridEl)return;
-const now=new Date();const vd=new Date(now.getFullYear(),now.getMonth()+calMonthOffset,1);const year=vd.getFullYear(),month=vd.getMonth();
-labelEl.textContent=vd.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
-dowEl.innerHTML=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d=>'<div class="cal-dow">'+d+'</div>').join('');
-const fd=new Date(year,month,1);let so=fd.getDay()-1;if(so<0)so=6;const dim=new Date(year,month+1,0).getDate();const ts=todayISO();let h='';
-for(let i=0;i<so;i++)h+='<div class="cal-cell" style="visibility:hidden"></div>';
-for(let d=1;d<=dim;d++){const ds=year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');const db_=bookings.filter(b=>b.date===ds);
-h+='<div class="cal-cell '+(ds===ts?'today':'')+'"><div>'+d+'</div>'+db_.map(b=>'<div class="cal-booking" onclick="event.stopPropagation();deleteBooking(\''+b.id+'\')">'+escapeHtml(b.machineName)+'</div>').join('')+'</div>';}
-gridEl.innerHTML=h;}
-function renderRecordsBranchFilter(){const w=document.getElementById('recordsBranchFilter');if(!w)return;
-w.innerHTML='<button class="'+(recordsBranchFilter==='all'?'active':'')+'" onclick="setRecordsBranchFilter(\'all\')">All</button>'+BRANCHES.map(b=>'<button class="'+(recordsBranchFilter===b?'active':'')+'" onclick="setRecordsBranchFilter(\''+b+'\')">'+b+'</button>').join('');}
-function setRecordsBranchFilter(b){recordsBranchFilter=b;renderRecordsBranchFilter();renderRecordsTable();}
-function renderRecordsTable(){renderRecordsBranchFilter();const filtered=recordsBranchFilter==='all'?records:records.filter(r=>r.branch===recordsBranchFilter);
-const ce=document.getElementById('recordCount');if(ce)ce.textContent=filtered.length;const w=document.getElementById('recordsTableWrap');if(!w)return;
-if(!filtered.length){w.innerHTML='<div class="empty-state">No records.</div>';return;}
-let h='<table><thead><tr><th>Type</th><th>Subject</th><th>Branch</th><th>By</th><th>Date</th><th>Hrs</th><th></th></tr></thead><tbody>';
-filtered.forEach(r=>{const pl=r.type==='service'?'Service':r.type==='check'?'Check':'Defect';
-h+='<tr><td><span class="pill '+r.type+'">'+pl+'</span></td><td>'+escapeHtml(r.subject)+'</td><td>'+escapeHtml(r.branch||'-')+'</td><td>'+escapeHtml(r.signName)+'</td><td>'+r.date+'</td><td>'+(r.hoursReading!=null?r.hoursReading:'-')+'</td><td><button class="btn btn-secondary btn-sm" onclick="reprintRecord(\''+r.id+'\')">PDF</button></td></tr>';});
-h+='</tbody></table>';w.innerHTML=h;}
-function reprintRecord(id){const r=records.find(x=>x.id===id);if(r)generatePDF(r);}
-function csvRow(r){const items=r.items.map(i=>i.name+':'+i.status).join(' | ');
-return [r.type,r.subject,r.branch||'',r.signName,r.date,r.hoursReading!=null?r.hoursReading:'',(r.notes||'').replace(/,/g,';'),items].map(v=>String(v).replace(/,/g,';')).join(',');}
-function exportRecordsCSV(){if(!records.length){toast('No records');return;}let csv='Type,Subject,Branch,By,Date,Hours,Notes,Items\n';
-records.forEach(r=>{csv+=csvRow(r)+'\n';});const blob=new Blob([csv],{type:'text/csv'});const url=URL.createObjectURL(blob);
-const a=document.createElement('a');a.href=url;a.download='CheckPlant_Records_'+todayISO()+'.csv';a.click();URL.revokeObjectURL(url);toast('Downloaded');}
-function downloadSingleRecordCsv(record){let csv='Type,Subject,Branch,By,Date,Hours,Notes,Items\n'+csvRow(record);
-const blob=new Blob([csv],{type:'text/csv'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='CheckPlant_'+record.type+'_'+record.date+'.csv';a.click();URL.revokeObjectURL(url);}
-function exportData(){const data={machines,categories,records,defects,bookings,exportedAt:new Date().toISOString()};
-const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);
-const a=document.createElement('a');a.href=url;a.download='CheckPlant_Backup_'+todayISO()+'.json';a.click();URL.revokeObjectURL(url);toast('Exported');}
-document.getElementById('svcDate').value=todayISO();document.getElementById('svcSignDate').value=todayISO();
-document.getElementById('chkDate').value=todayISO();document.getElementById('chkSignDate').value=todayISO();
-document.getElementById('defResolvedDate').value=todayISO();document.getElementById('defSignDate').value=todayISO();
-document.getElementById('bookingDate').value=todayISO();
-initFirestoreListeners();renderSheetsStatus();
+  function typeOptions(includeAll=true){const types=[...new Set(machines.map(machineType).filter(Boolean))].sort((a,b)=>(TYPE_LABELS[a]||a).localeCompare(TYPE_LABELS[b]||b));return (includeAll?'<option value="all">All machine types</option>':'<option value="">Choose machine type</option>')+types.map(t=>`<option value="${t}">${esc(TYPE_LABELS[t]||t)}</option>`).join("")}
+  function renderTypeSelect(){const sel=$("machineTypeSelect");if(!sel)return;const current=sel.value||selectedType;sel.innerHTML=typeOptions(true);sel.value=Object.keys(TYPE_LABELS).includes(current)?current:"all";selectedType=sel.value;renderSelectList()}
+  function onMachineTypeChanged(){selectedType=$("machineTypeSelect").value;renderSelectList()}
+  function renderSelectList(){const list=$("selectMachineList");if(!list)return;const q=$("machineSearch").value.trim().toLowerCase();const shown=sortedMachines().filter(m=>{const t=machineType(m);return(selectedType==="all"||t===selectedType)&&[m.name,m.serialNumber].join(" ").toLowerCase().includes(q)});list.innerHTML=shown.length?shown.map(m=>`<div class="machine-list-item" onclick="chooseMachine('${m.id}')"><div><div class="mname">${esc(m.name)}</div><div class="mmeta">${esc(TYPE_LABELS[machineType(m)]||"Type not mapped")} · ${m.serialNumber?"S/N "+esc(m.serialNumber):"No serial number"}</div></div><span class="badge navy">Select</span></div>`).join(""):'<div class="empty-state">No machine matches this selection.</div>'}
+
+  function chooseMachine(id){selectedMachine=machines.find(m=>m.id===id);if(!selectedMachine)return;const type=machineType(selectedMachine);$("greaseMachineTitle").textContent=selectedMachine.name;$("greaseMachineMeta").textContent=`${TYPE_LABELS[type]||"Type not mapped"} · ${selectedMachine.serialNumber?"S/N "+selectedMachine.serialNumber:"No serial number"}${selectedMachine.branch?" · "+selectedMachine.branch:""}`;$("greaseDate").value=todayISO();$("greaseHours").value=selectedMachine.currentHours??"";$("greaseOperative").value="";$("greaseProduct").value="";$("greaseBatch").value="";$("visualResult").value="clear";$("visualNotes").value="";$("visualCreateDefect").checked=true;$("additionalPointsNotes").value="";$("greaseGeneralNotes").value="";$("greaseConfirm").checked=false;toggleVisualNotes();renderGreasePoints();showScreen("grease")}
+  function renderGreasePoints(){const type=machineType(selectedMachine),points=STANDARD_POINTS[type]||[];pointState={};$("pointCount").textContent=points.length;if(!points.length){$("greasePointsList").innerHTML='<div class="alert red">No standard list is mapped for this machine type. Use the grease applier notes to record the work completed and raise any issues.</div>';return}$("greasePointsList").innerHTML=points.map((p,i)=>{pointState[p[0]]={pointId:p[0],pointName:p[1],result:"",notes:""};return `<div class="point-card" id="point-${i}"><div class="point-title">${esc(p[0])} — ${esc(p[1])}</div><div class="point-meta">Complete all applicable nipples/points in this standard area. The grease applier covers any additional machine-specific points.</div><div class="point-actions"><button class="greased" onclick="setPointResult(${i},'greased')">Greased</button><button class="na" onclick="setPointResult(${i},'not-required')">Not required</button><button class="unable" onclick="setPointResult(${i},'unable-to-grease')">Unable to grease</button><button class="defect" onclick="setPointResult(${i},'defect-found')">Defect found</button></div><div class="point-note"><label>Issue / defect notes <span class="required">*</span></label><textarea id="point-note-${i}" placeholder="Describe the blockage, damage, physical defect or action required."></textarea><label class="checkbox-row"><input id="point-defect-${i}" type="checkbox" checked><span>Create a linked CheckPlant defect.</span></label></div></div>`}).join("")}
+  function setPointResult(index,result){const p=STANDARD_POINTS[machineType(selectedMachine)][index];pointState[p[0]].result=result;const card=$("point-"+index);card.classList.toggle("exception",["unable-to-grease","defect-found"].includes(result));card.querySelectorAll(".point-actions button").forEach(b=>b.classList.remove("selected"));card.querySelector(`.${result==='not-required'?'na':result==='unable-to-grease'?'unable':result==='defect-found'?'defect':'greased'}`).classList.add("selected")}
+  function toggleVisualNotes(){$("visualNotesWrap").classList.toggle("hide",$("visualResult").value!=="issue")}
+
+  async function saveGreaseRecord(){
+    if(!selectedMachine){toast("Select a machine first.");return}const operative=$("greaseOperative").value.trim();if(!operative){toast("Enter the grease applier name.");return}if(!$("greaseConfirm").checked){toast("Tick the completion confirmation.");return}
+    const visualIssue=$("visualResult").value==="issue",visualNotes=$("visualNotes").value.trim();if(visualIssue&&!visualNotes){toast("Enter visual-check notes for the issue found.");return}
+    const points=STANDARD_POINTS[machineType(selectedMachine)]||[];const pointResults=points.map((p,i)=>({pointId:p[0],pointName:p[1],result:pointState[p[0]]?.result||"not-recorded",notes:$("point-note-"+i)?$("point-note-"+i).value.trim():"",createDefect:$("point-defect-"+i)?$("point-defect-"+i).checked:false}));
+    const incomplete=pointResults.filter(p=>p.result==="not-recorded");if(incomplete.length){toast("Record an outcome for every standard grease point.");return}const exceptions=pointResults.filter(p=>["unable-to-grease","defect-found"].includes(p.result));for(const p of exceptions){if(!p.notes){toast("Add notes to every point marked unable or defect found.");return}}
+    const recordRef=db.collection("greaseRecords").doc(),batch=db.batch(),linkedDefectIds=[];
+    const newDefect=(itemName,result,notes,pointId=null,pointName=null)=>{const ref=db.collection("defects").doc();linkedDefectIds.push(ref.id);batch.set(ref,{machineId:selectedMachine.id,machineName:selectedMachine.name,itemName,dateRaised:$("greaseDate").value,status:"open",resolvedDate:null,resolvedBy:null,resolutionRecordId:null,severity:"routine",source:"checkgrease",greaseRecordId:recordRef.id,greasePointId:pointId,greasePointName:pointName,greaseResult:result,notes,createdAt:firebase.firestore.FieldValue.serverTimestamp()});return ref.id};
+    if(visualIssue&&$("visualCreateDefect").checked)newDefect("Greasing: visual blockage or defect found","visual-check-issue",visualNotes);
+    pointResults.forEach(p=>{if(["unable-to-grease","defect-found"].includes(p.result)&&p.createDefect)p.linkedDefectId=newDefect(`Greasing: ${p.pointId} — ${p.pointName}`,p.result,p.notes,p.pointId,p.pointName)});
+    const hours=$("greaseHours").value,hasException=visualIssue||exceptions.length>0,type=machineType(selectedMachine);
+    const record={type:"grease",source:"checkgrease",machineId:selectedMachine.id,machineName:selectedMachine.name,serialNumber:selectedMachine.serialNumber||"",branch:selectedMachine.branch||"",categoryKey:selectedMachine.categoryKey||"",greaseType:type,greaseTypeLabel:TYPE_LABELS[type]||type,date:$("greaseDate").value,operativeName:operative,hoursReading:hours===""?null:Number(hours),greaseProduct:$("greaseProduct").value.trim(),greaseBatch:$("greaseBatch").value.trim(),visualCheck:{result:visualIssue?"issue":"clear",notes:visualNotes},pointResults,additionalPointsNotes:$("additionalPointsNotes").value.trim(),notes:$("greaseGeneralNotes").value.trim(),overallResult:hasException?"completed-with-exception":"completed",linkedDefectIds,createdAt:firebase.firestore.FieldValue.serverTimestamp()};
+    batch.set(recordRef,record);if(hours!=="")batch.update(db.collection("machines").doc(selectedMachine.id),{currentHours:Number(hours)});
+    try{await batch.commit();$("completionMessage").textContent=linkedDefectIds.length?`Greasing record saved and ${linkedDefectIds.length} linked CheckPlant defect${linkedDefectIds.length===1?"":"s"} created.`:"Greasing record saved. No linked CheckPlant defect was created.";$("completionSummary").innerHTML=`<div class="summary-grid"><div class="summary-box"><b>${pointResults.filter(p=>p.result==='greased').length}</b><span>Greased</span></div><div class="summary-box"><b>${pointResults.filter(p=>p.result==='not-required').length}</b><span>Not required</span></div><div class="summary-box"><b>${exceptions.length}</b><span>Point exceptions</span></div><div class="summary-box"><b>${linkedDefectIds.length}</b><span>Defects created</span></div></div><p class="subtle">Record ID: ${recordRef.id}</p>`;showScreen("complete")}catch(err){console.error(err);toast("Save failed: "+err.message)}
+  }
+
+  function populateHistoryTypes(){const sel=$("historyTypeFilter");const current=sel.value||"all";sel.innerHTML=typeOptions(true);sel.value=current}
+  function populateHistoryMachines(){const sel=$("historyMachineFilter");if(!sel)return;const current=sel.value||"all",type=$("historyTypeFilter")?.value||"all";sel.innerHTML='<option value="all">All machines</option>'+sortedMachines().filter(m=>type==="all"||machineType(m)===type).map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join("");sel.value=[...sel.options].some(o=>o.value===current)?current:"all"}
+  function renderHistory(){const target=$("historyList");if(!target)return;const type=$("historyTypeFilter")?.value||"all",machine=$("historyMachineFilter")?.value||"all",result=$("historyResultFilter")?.value||"all";const rows=greaseRecords.filter(r=>(type==="all"||r.greaseType===type)&&(machine==="all"||r.machineId===machine)&&(result==="all"||r.overallResult===result));if(!rows.length){target.innerHTML='<div class="empty-state">No greasing records match this filter.</div>';return}target.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Date</th><th>Machine</th><th>Type</th><th>Applier</th><th>Result</th><th>Defects</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.date||"—")}</td><td>${esc(r.machineName||"—")}</td><td>${esc(r.greaseTypeLabel||TYPE_LABELS[r.greaseType]||"—")}</td><td>${esc(r.operativeName||"—")}</td><td><span class="pill ${r.overallResult==='completed'?'completed':'exception'}">${r.overallResult==='completed'?'Completed':'Exception'}</span></td><td>${(r.linkedDefectIds||[]).length}</td></tr>`).join("")}</tbody></table></div>`}
+  initFirestore();
 </script>
 </body>
 </html>
