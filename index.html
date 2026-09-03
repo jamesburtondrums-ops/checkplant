@@ -529,7 +529,10 @@ function startServiceFromProfile(){const id=currentProfileMachineId;showScreen('
 function populateServiceMachineSelect(){const sel=document.getElementById('serviceMachineSelect');if(!sel)return;const cv=sel.value;sel.innerHTML='<option value="">-- Choose machine --</option>';
 machines.forEach(m=>{const o=document.createElement('option');o.value=m.id;o.textContent=m.name+(m.serialNumber?' (S/N: '+m.serialNumber+')':'')+' ('+(m.branch||'no branch')+')';sel.appendChild(o);});sel.value=cv;
 document.getElementById('noMachinesNote').style.display=machines.length?'none':'block';}
-function machineChecklistItems(m){if(m.categoryKey&&categories[m.categoryKey])return categories[m.categoryKey].items||[];return m.items||[];}
+function machineChecklistItems(m){
+      const cat = m.categoryKey ? categories[m.categoryKey] : null;
+      if(cat) return (cat.serviceItems && cat.serviceItems.length) ? cat.serviceItems : cat.items;
+      return m.items;
 function onServiceMachineChosen(){const id=document.getElementById('serviceMachineSelect').value;if(!id)return;currentServiceMachine=machines.find(m=>m.id===id);
 document.getElementById('serviceMachineName').textContent=currentServiceMachine.name+(currentServiceMachine.serialNumber?' (S/N: '+currentServiceMachine.serialNumber+')':'');
 document.getElementById('svcTechName').value='';document.getElementById('svcDate').value=todayISO();
@@ -561,7 +564,8 @@ document.getElementById('chkNotes').value='';document.getElementById('chkSignNam
 renderCheckItems();showScreen('check-form');setTimeout(()=>initSigPad('sigPadCheck'),50);}
 function onCheckMachineChosen(){const id=document.getElementById('chkMachineSelect').value;currentCheckMachine=machines.find(m=>m.id===id)||null;
 if(currentCheckMachine)document.getElementById('chkHours').value=currentCheckMachine.currentHours||'';}
-function renderCheckItems(){const l=document.getElementById('checkItemsList');l.innerHTML='';const items=categories[currentCheckCategory].items;
+function renderCheckItems(){const l=document.getElementById('checkItemsList');l.innerHTML='';const cat = categories[currentCheckCategory];
+      const items = (cat.checkItems && cat.checkItems.length) ? cat.checkItems : cat.items;
 document.getElementById('chkItemCount').textContent=items.length;document.getElementById('chkNoItemsNote').style.display=items.length?'none':'block';
 items.forEach((item,idx)=>{const row=document.createElement('div');row.className='checklist-item';
 row.innerHTML='<div>'+escapeHtml(item)+'</div><div class="check-pair"><div class="check-box serviceable" data-idx="'+idx+'" onclick="toggleCheck(this,\'check\')">Pass</div><div class="check-box replaced" data-idx="'+idx+'" onclick="toggleCheck(this,\'check\')">Defect</div></div>';
@@ -617,7 +621,9 @@ await saveRecordToFirestore(record);
 if(!currentCheckCategory){toast('Select a category');return;}if(!currentCheckMachine){toast('Select a machine');return;}
 const signName=document.getElementById('chkSignName').value.trim(),signDate=document.getElementById('chkSignDate').value,hours=document.getElementById('chkHours').value,sig=sigPads['sigPadCheck'];
 if(!signName||!signDate){toast('Enter name and date');return;}if(!sig||!sig.hasSignature){toast('Draw signature');return;}if(hours===''){toast('Enter hours');return;}
-const cat=categories[currentCheckCategory];const items=collectItems('checkItemsList',cat.items);
+const cat = categories[currentCheckCategory];
+    const checkSrc = (cat.checkItems && cat.checkItems.length) ? cat.checkItems : cat.items;
+    const items = collectItems('checkItemsList', checkSrc);
 const record={type:'check',categoryKey:currentCheckCategory,machineId:currentCheckMachine.id,subject:cat.label+' — '+currentCheckMachine.name,serialNumber:currentCheckMachine.serialNumber||'',branch:currentCheckMachine.branch||'',technician:signName,date:document.getElementById('chkDate').value,items,notes:document.getElementById('chkNotes').value.trim(),signName,signDate,signatureData:sig.canvas.toDataURL('image/png'),hoursReading:Number(hours),createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending'};
 await db.collection('machines').doc(currentCheckMachine.id).update({currentHours:Number(hours)});
 for(const di of items.filter(i=>i.status==='Defect')){await db.collection('defects').add({machineId:currentCheckMachine.id,machineName:currentCheckMachine.name,itemName:di.name,dateRaised:todayISO(),status:'open',resolvedDate:null,resolvedBy:null,resolutionRecordId:null,severity:'routine'});}
@@ -731,17 +737,87 @@ card.innerHTML='<div style="display:flex;justify-content:space-between"><b>'+esc
 w.appendChild(card);});}
 async function updateMachineLolerApplies(id,val){const applies=val==='true';const m=machines.find(x=>x.id===id);await db.collection('machines').doc(id).update({loler:{...(m.loler||{}),applies}});}
 async function updateMachineLolerField(id,field,val){const m=machines.find(x=>x.id===id);await db.collection('machines').doc(id).update({loler:{...(m.loler||{}),[field]:val}});}
-function renderCategoryList(){const w=document.getElementById('categoryListContainer');if(!w)return;w.innerHTML='';
-Object.entries(categories).forEach(([k,c])=>{const card=document.createElement('div');card.className='card';
-card.innerHTML='<div class="section-title">'+c.emoji+' '+escapeHtml(c.label)+' <span class="badge '+(c.lolerApplies?'red':'grey')+'">'+(c.lolerApplies?'LOLER applies':'LOLER N/A')+'</span></div><div id="catitems-'+k+'"></div><div class="item-row" style="margin-top:8px"><input type="text" id="newcatitem-'+k+'" placeholder="Add item"><button class="icon-btn" onclick="addCategoryItem(\''+k+'\')">➕</button></div>';
-w.appendChild(card);renderCategoryItems(k);});}
-function renderCategoryItems(key){const el=document.getElementById('catitems-'+key);if(!el)return;el.innerHTML='';
-categories[key].items.forEach((item,idx)=>{const row=document.createElement('div');row.className='item-row';
-row.innerHTML='<input type="text" value="'+escapeAttr(item)+'" onchange="editCategoryItem(\''+key+'\','+idx+',this.value)"><button class="icon-btn" onclick="deleteCategoryItem(\''+key+'\','+idx+')">🗑</button>';el.appendChild(row);});}
-async function addCategoryItem(key){const input=document.getElementById('newcatitem-'+key);const val=input.value.trim();if(!val)return;
-await db.collection('categories').doc(key).update({items:[...categories[key].items,val]});input.value='';}
-async function editCategoryItem(key,idx,val){const items=[...categories[key].items];items[idx]=val;await db.collection('categories').doc(key).update({items});}
-async function deleteCategoryItem(key,idx){const items=categories[key].items.filter((_,i)=>i!==idx);await db.collection('categories').doc(key).update({items});}
+ function renderCategoryList(){
+      const wrap = document.getElementById('categoryListContainer');
+      if(!wrap) return;
+      wrap.innerHTML = '';
+      Object.entries(categories).forEach(([key,cat])=>{
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `<div class="section-title">${cat.emoji||''} ${escapeHtml(cat.label)}
+            <span class="badge ${cat.lolerApplies?'red':'grey'}" style="margin-left:8px">${cat.lolerApplies?'LOLER applies':'LOLER N/A'}</span></div>
+          <div style="font-weight:700;font-size:.82rem;margin:10px 0 4px;color:var(--navy)">Service Mode Questions</div>
+          <div id="svcCatItems-${key}"></div>
+          <div class="item-row" style="margin-top:8px">
+            <input type="text" id="newSvcCatItem-${key}" placeholder="Add Service Mode item">
+            <button class="icon-btn" onclick="addCategoryItem('${key}','service')">Add</button>
+          </div>
+          <div style="font-weight:700;font-size:.82rem;margin:16px 0 4px;color:var(--green-dark)">Check Mode Questions</div>
+          <div id="chkCatItems-${key}"></div>
+          <div class="item-row" style="margin-top:8px">
+            <input type="text" id="newChkCatItem-${key}" placeholder="Add Check Mode item">
+            <button class="icon-btn" onclick="addCategoryItem('${key}','check')">Add</button>
+          </div>`;
+        wrap.appendChild(card);
+        renderCategoryItems(key);
+      });
+    }
+function renderCategoryItems(key){
+      const cat = categories[key];
+      const svcList = (cat.serviceItems && cat.serviceItems.length) ? cat.serviceItems : cat.items;
+      const chkList = (cat.checkItems && cat.checkItems.length) ? cat.checkItems : cat.items;
+
+      const svcEl = document.getElementById(`svcCatItems-${key}`);
+      if(svcEl){
+        svcEl.innerHTML = '';
+        svcList.forEach((item, idx)=>{
+          const row = document.createElement('div');
+          row.className = 'item-row';
+          row.innerHTML = `<input type="text" value="${escapeAttr(item)}" onchange="editCategoryItem('${key}','service',${idx},this.value)">
+            <button class="icon-btn del" onclick="deleteCategoryItem('${key}','service',${idx})">Delete</button>`;
+          svcEl.appendChild(row);
+        });
+      }
+      const chkEl = document.getElementById(`chkCatItems-${key}`);
+      if(chkEl){
+        chkEl.innerHTML = '';
+        chkList.forEach((item, idx)=>{
+          const row = document.createElement('div');
+          row.className = 'item-row';
+          row.innerHTML = `<input type="text" value="${escapeAttr(item)}" onchange="editCategoryItem('${key}','check',${idx},this.value)">
+            <button class="icon-btn del" onclick="deleteCategoryItem('${key}','check',${idx})">Delete</button>`;
+          chkEl.appendChild(row);
+        });
+      }
+    }
+async function addCategoryItem(key, mode){
+      const inputId = mode==='service' ? `newSvcCatItem-${key}` : `newChkCatItem-${key}`;
+      const input = document.getElementById(inputId);
+      const val = input.value.trim();
+      if(!val) return;
+      const cat = categories[key];
+      const field = mode==='service' ? 'serviceItems' : 'checkItems';
+      const current = (cat[field] && cat[field].length) ? cat[field] : [...cat.items];
+      const newItems = [...current, val];
+      await db.collection('categories').doc(key).update({ [field]: newItems });
+      input.value = '';
+    }
+
+    async function editCategoryItem(key, mode, idx, val){
+      const cat = categories[key];
+      const field = mode==='service' ? 'serviceItems' : 'checkItems';
+      const current = (cat[field] && cat[field].length) ? [...cat[field]] : [...cat.items];
+      current[idx] = val;
+      await db.collection('categories').doc(key).update({ [field]: current });
+    }
+
+    async function deleteCategoryItem(key, mode, idx){
+      const cat = categories[key];
+      const field = mode==='service' ? 'serviceItems' : 'checkItems';
+      const current = (cat[field] && cat[field].length) ? [...cat[field]] : [...cat.items];
+      const newItems = current.filter((_,i)=>i!==idx);
+      await db.collection('categories').doc(key).update({ [field]: newItems });
+    }
 function renderDefectsTable(){const ce=document.getElementById('defectCount');const oc=defects.filter(d=>d.status==='open').length;if(ce)ce.textContent=oc;
 const w=document.getElementById('defectsTableWrap');if(!w)return;if(!defects.length){w.innerHTML='<div class="empty-state">No defects.</div>';return;}
 let h='<table><thead><tr><th>Machine</th><th>Defect</th><th>Raised</th><th>Days</th><th>Status</th><th>Resolved</th></tr></thead><tbody>';
