@@ -476,7 +476,6 @@ db.collection('categories').onSnapshot(async s=>{
 db.collection('records').orderBy('createdAt','desc').onSnapshot(s=>{records=s.docs.map(d=>({id:d.id,...d.data()}));renderRecordsTable();renderHomeMachineList();renderDailyChecks();},e=>setConn(false,"Rec error: "+e.message));
 db.collection('defects').orderBy('dateRaised','desc').onSnapshot(s=>{defects=s.docs.map(d=>({id:d.id,...d.data()}));renderDefectsTable();renderOutstandingDefectsList();},e=>setConn(false,"Def error: "+e.message));
 db.collection('bookings').orderBy('date').onSnapshot(s=>{bookings=s.docs.map(d=>({id:d.id,...d.data()}));renderCalendar();renderHomeUpcomingBookings();},e=>setConn(false,"Book error: "+e.message));
-}
 function showScreen(n){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById('screen-'+n).classList.add('active');if(n==='backoffice')switchOfficeTab('daily');window.scrollTo(0,0);}
 function goHome(){showScreen('home');}
 function startService(){showScreen('service-select');}
