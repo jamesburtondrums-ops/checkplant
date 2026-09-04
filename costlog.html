@@ -1,379 +1,59 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CostLog — KCM Waste Management</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<style>
-:root{--navy:#2E2E8F;--green:#2FAE4E;--green-dark:#268F40;--red:#dc2626;--amber:#d97706;--grey:#6b7280;--light:#f4f6f8;--dark:#1c1f26;--radius:14px;}
-*{box-sizing:border-box;}
-body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--light);color:var(--dark);}
-header{background:var(--navy);color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:50;box-shadow:0 2px 8px rgba(0,0,0,.15);}
-header .brand{display:flex;flex-direction:column;line-height:1.15;}
-header .brand .app-name{font-weight:800;font-size:1.25rem;}
-header .brand .company-name{font-weight:600;font-size:.68rem;color:var(--green);letter-spacing:.03em;text-transform:uppercase;}
-header nav button{background:transparent;border:1px solid #ffffff40;color:#fff;padding:8px 14px;border-radius:10px;cursor:pointer;font-size:.85rem;font-weight:600;margin-left:6px;}
-header nav button.active{background:var(--green);border-color:var(--green);}
-main{max-width:1200px;margin:0 auto;padding:20px 16px 80px;}
-.card{background:#fff;border-radius:var(--radius);padding:20px;margin-bottom:16px;box-shadow:0 2px 6px rgba(0,0,0,.04);border:1px solid #eceef1;}
-.section-title{font-size:1.05rem;font-weight:800;margin:0 0 10px;display:flex;align-items:center;gap:8px;color:var(--navy);justify-content:space-between;flex-wrap:wrap;}
-label{font-weight:700;font-size:.82rem;display:block;margin-bottom:5px;color:var(--grey);}
-select,input,textarea{width:100%;padding:10px;border-radius:9px;border:1.5px solid #dde1e6;font-size:.92rem;background:#fff;}
-select:focus,input:focus,textarea:focus{outline:none;border-color:var(--navy);}
-textarea{min-height:70px;resize:vertical;font-family:inherit;}
-.btn{padding:10px 16px;border-radius:9px;border:none;font-weight:700;cursor:pointer;font-size:.85rem;display:inline-flex;align-items:center;gap:6px;}
-.btn-primary{background:var(--green);color:#fff;}
-.btn-primary:hover{background:var(--green-dark);}
-.btn-secondary{background:#eceef1;color:var(--dark);}
-.btn-secondary:hover{background:#dfe2e6;}
-.btn-danger{background:var(--red);color:#fff;}
-.btn-block{width:100%;justify-content:center;}
-.btn-sm{padding:6px 11px;font-size:.75rem;}
-.row{display:flex;gap:12px;flex-wrap:wrap;}
-.row>*{flex:1;min-width:150px;}
-.tabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;}
-.tabs button{padding:9px 14px;border-radius:9px;border:1px solid #e5e7eb;background:#fff;cursor:pointer;font-weight:700;font-size:.82rem;color:var(--grey);}
-.tabs button.active{background:var(--navy);color:#fff;border-color:var(--navy);}
-.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
-@media (max-width:700px){.stat-row{grid-template-columns:repeat(2,1fr);}}
-.stat-box{background:#fff;border-radius:12px;padding:14px;text-align:center;border:1px solid #eceef1;}
-.stat-box .num{font-size:1.5rem;font-weight:800;color:var(--navy);}
-.stat-box .lbl{font-size:.68rem;color:var(--grey);text-transform:uppercase;font-weight:700;margin-top:2px;}
-table{width:100%;border-collapse:collapse;font-size:.83rem;}
-th,td{text-align:left;padding:9px 8px;border-bottom:1px solid #eef0f2;}
-th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;white-space:nowrap;}
-tr:hover{background:#fafafa;}
-td.num{text-align:right;font-variant-numeric:tabular-nums;}
-.filter-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center;}
-.filter-bar button{padding:6px 13px;border-radius:20px;border:1.5px solid #e5e7eb;background:#fff;cursor:pointer;font-size:.78rem;font-weight:700;}
-.filter-bar button.active{background:var(--navy);border-color:var(--navy);color:#fff;}
-.badge{background:var(--green);color:#fff;border-radius:20px;padding:2px 10px;font-size:.7rem;font-weight:800;}
-.badge.grey{background:#9aa1ab;}
-.badge.red{background:var(--red);}
-.badge.amber{background:var(--amber);}
-.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 20px;border-radius:10px;font-size:.9rem;font-weight:600;z-index:200;box-shadow:0 6px 20px rgba(0,0,0,.2);opacity:0;transition:opacity .25s;pointer-events:none;}
-.toast.show{opacity:1;}
-.empty-state{text-align:center;color:var(--grey);padding:30px 10px;font-size:.9rem;}
-.sync-banner{font-size:.78rem;color:var(--grey);display:flex;align-items:center;padding:6px 14px;}
-.conn-dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:6px;}
-.conn-dot.online{background:var(--green);}
-.conn-dot.offline{background:var(--red);}
-.icon-btn{background:#f1f2f4;border:none;border-radius:8px;width:30px;height:30px;cursor:pointer;font-size:.85rem;}
-.icon-btn.del{color:var(--red);}
-.table-wrap{overflow-x:auto;}
-.chart-bar-wrap{display:flex;flex-direction:column;gap:6px;margin-top:10px;}
-.chart-bar-row{display:flex;align-items:center;gap:10px;font-size:.78rem;}
-.chart-bar-label{width:150px;flex-shrink:0;color:var(--grey);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.chart-bar-track{flex:1;background:#eef0f3;border-radius:6px;height:18px;position:relative;}
-.chart-bar-fill{background:var(--navy);height:100%;border-radius:6px;}
-.chart-bar-val{width:80px;text-align:right;flex-shrink:0;font-weight:700;}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#2E2E8F">
+  <title>CheckGrease | KCM Waste Management</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <style>
+    :root{--navy:#2E2E8F;--green:#2FAE4E;--green-dark:#268F40;--red:#dc2626;--amber:#d97706;--grey:#6b7280;--light:#f4f6f8;--dark:#1c1f26;--line:#e5e7eb;--radius:14px}
+    *{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--light);color:var(--dark)}
+    header{background:var(--navy);color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;gap:10px;position:sticky;top:0;z-index:50}header b{font-size:1.05rem}header small{display:block;opacity:.8;font-size:.7rem;margin-top:2px}header nav{display:flex;gap:6px}header button{background:transparent;border:1px solid #ffffff55;color:#fff;padding:8px 12px;border-radius:10px;cursor:pointer;font-weight:700}header button.active{background:var(--green);border-color:var(--green)}
+    main{max-width:980px;margin:0 auto;padding:20px 16px 80px}.screen{display:none}.screen.active{display:block}.card{background:#fff;border:1px solid #eceef1;border-radius:var(--radius);padding:18px;margin-bottom:14px;box-shadow:0 1px 2px #1c1f2608}.section-title{font-size:1.05rem;font-weight:800;color:var(--navy);margin-bottom:10px}.subtle{color:var(--grey);font-size:.84rem;line-height:1.45}.row{display:flex;gap:12px;flex-wrap:wrap}.row>*{flex:1;min-width:180px}label{font-weight:700;font-size:.84rem;display:block;margin-bottom:6px}select,input,textarea{width:100%;padding:12px;border:1.5px solid #dde1e6;border-radius:10px;background:#fff;font:inherit;color:var(--dark)}textarea{min-height:95px;resize:vertical}.btn{padding:12px 18px;border:0;border-radius:10px;font-weight:800;cursor:pointer;font-size:.94rem}.btn-primary{background:var(--green);color:#fff}.btn-primary:hover{background:var(--green-dark)}.btn-secondary{background:#eceef1;color:var(--dark)}.btn-block{width:100%}.btn-sm{padding:7px 10px;font-size:.75rem}.back-link{border:0;background:transparent;color:var(--grey);padding:4px 0 14px;cursor:pointer;font-weight:700}.mode-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-bottom:16px}.mode-card{background:#fff;border:2px solid var(--line);border-radius:var(--radius);padding:22px 16px;text-align:center;cursor:pointer}.mode-card.grease{border-top:5px solid var(--green)}.mode-card.history{border-top:5px solid var(--navy)}.mode-card h2{font-size:1rem;margin:4px 0 8px;color:var(--navy)}.mode-card p{font-size:.8rem;color:var(--grey);margin:0;line-height:1.35}.badge,.pill{display:inline-block;border-radius:20px;padding:3px 10px;font-size:.7rem;font-weight:800}.badge.green,.pill.completed{background:#dcfce7;color:var(--green-dark)}.badge.red,.pill.open{background:#fee2e2;color:var(--red)}.badge.amber,.pill.exception{background:#fef3c7;color:#92400e}.badge.grey{background:#f3f4f6;color:var(--grey)}.badge.navy{background:#e3e3fa;color:var(--navy)}.machine-list-item{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px;border:1.5px solid var(--line);border-radius:12px;background:#fff;margin-bottom:9px;cursor:pointer}.machine-list-item:hover{border-color:var(--navy)}.mname{font-weight:800}.mmeta,.mlast{font-size:.75rem;color:var(--grey);margin-top:3px}.alert{border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:.86rem}.alert.amber{background:#fff7ed;border:1px solid #fdba74;color:#9a3412}.alert.red{background:#fef2f2;border:1px solid #fca5a5;color:#991b1b}.alert.green{background:#f0fdf4;border:1px solid #86efac;color:#166534}.point-card{border:1.5px solid var(--line);border-radius:12px;padding:14px;margin-bottom:10px}.point-card.exception{border-color:#f59e0b;background:#fffdf5}.point-title{font-weight:800}.point-meta{color:var(--grey);font-size:.77rem;line-height:1.4;margin-top:4px}.point-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:12px}.point-actions button{padding:9px 5px;border:1.5px solid #d8dbe0;background:#fff;border-radius:8px;cursor:pointer;font-size:.71rem;font-weight:800;color:var(--grey)}.point-actions button.selected.greased{background:#dcfce7;border-color:var(--green);color:var(--green-dark)}.point-actions button.selected.na{background:#f3f4f6;border-color:#9aa1ab;color:#4b5563}.point-actions button.selected.unable{background:#fef3c7;border-color:#f59e0b;color:#92400e}.point-actions button.selected.defect{background:#fee2e2;border-color:var(--red);color:var(--red)}.point-note{margin-top:10px;display:none}.point-card.exception .point-note{display:block}.checkbox-row{display:flex;align-items:flex-start;gap:10px;padding:11px;border:1.5px solid var(--line);border-radius:10px;margin-bottom:8px}.checkbox-row input{width:18px;height:18px;min-width:18px;margin-top:2px}.required{color:var(--red)}.summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0}.summary-box{border-radius:10px;padding:11px;text-align:center;background:#f7f8fa}.summary-box b{display:block;font-size:1.18rem;color:var(--navy)}.summary-box span{font-size:.68rem;color:var(--grey);font-weight:700}.empty-state{text-align:center;color:var(--grey);padding:28px}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:.82rem}th,td{padding:9px 8px;text-align:left;border-bottom:1px solid #eef0f2;vertical-align:top}th{color:var(--navy);font-size:.72rem;text-transform:uppercase}.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 20px;border-radius:10px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:100}.toast.show{opacity:1}.conn{font-size:.75rem;color:var(--grey);padding:6px 16px;background:#fff;border-bottom:1px solid var(--line)}.dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:6px;background:var(--red)}.dot.online{background:var(--green)}.hide{display:none!important}@media(max-width:680px){header{padding:12px 14px}.mode-grid{grid-template-columns:1fr}.point-actions{grid-template-columns:repeat(2,1fr)}.summary-grid{grid-template-columns:repeat(2,1fr)}main{padding:16px 12px 70px}.machine-list-item{align-items:flex-start}.machine-list-item>span{white-space:nowrap}}
+  </style>
 </head>
 <body>
-<header>
-  <div class="brand"><span class="app-name">CostLog</span><span class="company-name">KCM Waste Management</span></div>
-  <nav>
-    <button id="navLog" class="active" onclick="showView('log')">Log Entry</button>
-    <button id="navReports" onclick="showView('reports')">Reports</button>
-  </nav>
-</header>
-<div class="sync-banner"><span class="conn-dot online" id="connDot"></span><span id="connText">Connecting...</span></div>
+<header><div><b>CheckGrease</b><small>KCM Waste Management</small></div><nav><button id="navHome" class="active" onclick="goHome()">Home</button></nav></header>
+<div class="conn"><span id="connDot" class="dot"></span><span id="connText">Connecting to CheckPlant…</span></div>
 <main>
-
-<div id="view-log">
-  <div class="card">
-    <div class="section-title">Log Repair / Maintenance Cost</div>
-    <div class="row">
-      <div><label>Machine <span style="color:var(--red)">*</span></label><select id="entryMachine" onchange="onEntryMachineChange()"><option value="">-- Choose machine --</option></select></div>
-      <div><label>Date <span style="color:var(--red)">*</span></label><input type="date" id="entryDate"></div>
-    </div>
-    <div class="row" style="margin-top:10px">
-      <div><label>Linked Defect ID (optional)</label><select id="entryDefect"><option value="">-- None / general maintenance --</option></select></div>
-      <div><label>Work Type</label><select id="entryWorkType"><option value="repair">Repair</option><option value="service">Scheduled Service</option><option value="inspection">Inspection</option><option value="other">Other</option></select></div>
-    </div>
-    <div class="row" style="margin-top:10px">
-      <div><label>Labour Hours</label><input type="number" id="entryLabourHours" min="0" step="0.25" placeholder="e.g. 2.5"></div>
-      <div><label>Labour Rate (£/hr, optional)</label><input type="number" id="entryLabourRate" min="0" step="0.01" placeholder="e.g. 28.00"></div>
-      <div><label>Parts Cost (£)</label><input type="number" id="entryPartsCost" min="0" step="0.01" placeholder="e.g. 145.00"></div>
-    </div>
-    <div class="row" style="margin-top:10px">
-      <div><label>Downtime (hours)</label><input type="number" id="entryDowntime" min="0" step="0.25" placeholder="e.g. 4"></div>
-      <div><label>Other Costs (£, optional)</label><input type="number" id="entryOtherCost" min="0" step="0.01" placeholder="e.g. callout fee"></div>
-    </div>
-    <label style="margin-top:10px">Parts Used (description)</label>
-    <textarea id="entryPartsDesc" placeholder="e.g. Hydraulic hose x2, filter kit"></textarea>
-    <label style="margin-top:10px">Notes</label>
-    <textarea id="entryNotes" placeholder="What was done, any follow-up needed"></textarea>
-    <div style="margin-top:14px"><strong>Total cost: <span id="entryTotalPreview">£0.00</span></strong></div>
-    <button class="btn btn-primary btn-block" style="margin-top:12px" onclick="saveEntry()">Save Entry</button>
-  </div>
-  <div class="card">
-    <div class="section-title">Recent Entries <span class="badge" id="recentCount">0</span></div>
-    <div class="table-wrap"><table id="recentTable"><thead><tr><th>Date</th><th>Machine</th><th>Type</th><th>Labour</th><th>Parts</th><th>Downtime</th><th>Total</th><th></th></tr></thead><tbody></tbody></table></div>
-  </div>
-</div>
-
-<div id="view-reports" style="display:none">
-  <div class="card">
-    <div class="section-title">Cost Reports</div>
-    <div class="tabs" id="periodTabs">
-      <button class="active" data-period="daily" onclick="setPeriod('daily')">Daily</button>
-      <button data-period="monthly" onclick="setPeriod('monthly')">Monthly</button>
-      <button data-period="yearly" onclick="setPeriod('yearly')">Yearly</button>
-    </div>
-    <div class="row">
-      <div><label>From</label><input type="date" id="reportFrom"></div>
-      <div><label>To</label><input type="date" id="reportTo"></div>
-      <div><label>Group By</label><select id="reportGroupBy" onchange="renderReports()"><option value="machine">Asset (Machine)</option><option value="branch">Branch</option></select></div>
-    </div>
-    <div class="filter-bar" id="reportBranchFilter" style="margin-top:10px"></div>
-    <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="renderReports()">Apply Filters</button>
-    <button class="btn btn-secondary btn-sm" onclick="exportReportCSV()">Export CSV</button>
-  </div>
-  <div class="stat-row">
-    <div class="stat-box"><div class="num" id="statTotalCost">£0</div><div class="lbl">Total Cost</div></div>
-    <div class="stat-box"><div class="num" id="statLabourCost">£0</div><div class="lbl">Labour Cost</div></div>
-    <div class="stat-box"><div class="num" id="statPartsCost">£0</div><div class="lbl">Parts Cost</div></div>
-    <div class="stat-box"><div class="num" id="statDowntime">0h</div><div class="lbl">Total Downtime</div></div>
-  </div>
-  <div class="card">
-    <div class="section-title">Cost by <span id="groupByLabel">Asset</span></div>
-    <div class="chart-bar-wrap" id="groupChart"></div>
-  </div>
-  <div class="card">
-    <div class="section-title">Entries in Range <span class="badge" id="reportEntryCount">0</span></div>
-    <div class="table-wrap"><table id="reportTable"><thead><tr><th>Date</th><th>Machine</th><th>Branch</th><th>Type</th><th>Labour (hrs)</th><th>Labour Cost</th><th>Parts Cost</th><th>Other</th><th>Downtime (hrs)</th><th>Total</th></tr></thead><tbody></tbody></table></div>
-  </div>
-</div>
-
-</main>
-<div class="toast" id="toast"></div>
-
+  <section id="screen-home" class="screen active">
+    <h1 style="color:var(--navy);margin:4px 0 6px">CheckGrease</h1><p class="subtle">Record manual machine greasing, view completed PDF records and raise linked CheckPlant defects.</p>
+    <div class="mode-grid"><div class="mode-card grease" onclick="startGrease()"><h2>Start Greasing</h2><p>Search by machine type, select a machine and record every grease point.</p></div><div class="mode-card history" onclick="showScreen('history')"><h2>Grease History & PDFs</h2><p>View or download a PDF for every completed grease record.</p></div></div>
+    <div class="card"><div class="section-title">CheckPlant Machines <span id="machineCount" class="badge navy">0</span></div><p class="subtle">All machines load from the live CheckPlant database. The grease applier covers any unique, attachment-specific or machine-specific points.</p><div id="homeMachineList"></div></div>
+  </section>
+  <section id="screen-select" class="screen"><button class="back-link" onclick="goHome()">← Back to Home</button><div class="card"><div class="section-title">Select Machine</div><p class="subtle">Choose a vehicle/equipment type first, then search or select the individual CheckPlant machine.</p><label>Machine / vehicle type</label><select id="machineTypeSelect" onchange="onMachineTypeChanged()"></select><label style="margin-top:12px">Search within selected type</label><input id="machineSearch" type="search" placeholder="Machine name or serial number" oninput="renderSelectList()"><div id="selectMachineList" style="margin-top:14px"></div></div></section>
+  <section id="screen-grease" class="screen"><button class="back-link" onclick="showScreen('select')">← Change Machine</button><div class="card"><div class="section-title" id="greaseMachineTitle">Greasing Record</div><div id="greaseMachineMeta" class="subtle"></div><div class="row" style="margin-top:14px"><div><label>Greasing date <span class="required">*</span></label><input type="date" id="greaseDate"></div><div><label>Current hour meter</label><input type="number" id="greaseHours" min="0" placeholder="Optional"></div></div><div class="row" style="margin-top:12px"><div><label>Grease applier <span class="required">*</span></label><input id="greaseOperative" type="text" placeholder="Name"></div><div><label>Grease product used</label><input id="greaseProduct" type="text" placeholder="e.g. EP2 lithium-complex"></div></div><div style="margin-top:12px"><label>Grease batch / cartridge reference</label><input id="greaseBatch" type="text" placeholder="Optional"></div></div>
+    <div class="card"><div class="section-title">Visual Check</div><p class="subtle">Only add a note where there is a physical blockage, damage, contamination or other defect affecting the greasing task.</p><label>Visual-check result <span class="required">*</span></label><select id="visualResult" onchange="toggleVisualNotes()"><option value="clear">No visible blockage or defect found</option><option value="issue">Physical blockage or defect found</option></select><div id="visualNotesWrap" class="hide" style="margin-top:12px"><label>Visual-check notes <span class="required">*</span></label><textarea id="visualNotes" placeholder="Describe the location, issue and immediate action taken."></textarea><label class="checkbox-row" style="margin-top:10px"><input id="visualCreateDefect" type="checkbox" checked><span>Create a linked CheckPlant defect for this issue.</span></label></div></div>
+    <div class="card"><div class="section-title">Standard Grease Points <span id="pointCount" class="badge navy">0</span></div><div class="alert amber">This is a standard equipment-type list. The grease applier is responsible for completing any additional machine-specific, attachment-specific or OEM-required points.</div><div id="greasePointsList"></div></div>
+    <div class="card"><div class="section-title">Grease Applier Notes</div><label>Additional machine-specific grease points completed</label><textarea id="additionalPointsNotes" placeholder="Optional. Record extra grease points completed that are unique to this machine or attachment."></textarea><label style="margin-top:12px">General notes</label><textarea id="greaseGeneralNotes" placeholder="Optional notes about this greasing round."></textarea><label class="checkbox-row" style="margin-top:12px"><input id="greaseConfirm" type="checkbox"><span>I confirm I have completed the standard points shown and any additional applicable machine-specific grease points, and recorded all issues found.</span></label><button class="btn btn-primary btn-block" onclick="saveGreaseRecord()">Complete Greasing Record & Create PDF</button></div>
+  </section>
+  <section id="screen-complete" class="screen"><button class="back-link" onclick="goHome()">← Back to Home</button><div class="card"><div class="section-title">Greasing Record Saved</div><div id="completionMessage" class="alert green">The record has been saved.</div><div id="completionSummary"></div><div class="row" style="margin-top:14px"><button class="btn btn-primary" onclick="viewLastPDF()">View PDF</button><button class="btn btn-secondary" onclick="downloadLastPDF()">Download PDF</button></div><button class="btn btn-secondary btn-block" style="margin-top:10px" onclick="showScreen('history')">View All Grease Records</button><button class="btn btn-primary btn-block" style="margin-top:10px" onclick="startGrease()">Start Another Greasing Record</button></div></section>
+  <section id="screen-history" class="screen"><button class="back-link" onclick="goHome()">← Back to Home</button><h1 style="color:var(--navy);margin-top:4px">Grease History & PDFs</h1><div class="card"><div class="row"><div><label>Filter machine type</label><select id="historyTypeFilter" onchange="populateHistoryMachines();renderHistory()"></select></div><div><label>Filter machine</label><select id="historyMachineFilter" onchange="renderHistory()"><option value="all">All machines</option></select></div><div><label>Filter result</label><select id="historyResultFilter" onchange="renderHistory()"><option value="all">All results</option><option value="completed">Completed</option><option value="completed-with-exception">Completed with exception</option></select></div></div><div id="historyList" style="margin-top:14px"></div></div></section>
+</main><div id="toast" class="toast"></div>
 <script>
-const firebaseConfig={apiKey:"AIzaSyD60Z04IRIvv-EaSyPzoA33fEQ3yT6wsQQ",authDomain:"checkplant-kcm.firebaseapp.com",projectId:"checkplant-kcm",storageBucket:"checkplant-kcm.firebasestorage.app",messagingSenderId:"492245064396",appId:"1:492245064396:web:c79e64b32b9856766bc069"};
-firebase.initializeApp(firebaseConfig);
-const db=firebase.firestore();
-function setConn(o,t){document.getElementById('connDot').className='conn-dot '+(o?'online':'offline');document.getElementById('connText').textContent=t;}
-
-let machines=[];
-let defects=[];
-let costEntries=[];
-let reportPeriod='daily';
-let reportBranchFilter='all';
-const BRANCHES=['Rotherham','Shires','Sheffield'];
-
-function todayISO(){return new Date().toISOString().slice(0,10);}
-function escapeHtml(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
-function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600);}
-function money(n){return '£'+(Number(n)||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});}
-
-function showView(name){
-  document.getElementById('view-log').style.display = name==='log'?'block':'none';
-  document.getElementById('view-reports').style.display = name==='reports'?'block':'none';
-  document.getElementById('navLog').classList.toggle('active', name==='log');
-  document.getElementById('navReports').classList.toggle('active', name==='reports');
-  if(name==='reports') renderReports();
-}
-
-function initListeners(){
-  setConn(true,'Connecting...');
-  db.collection('machines').orderBy('name').onSnapshot(s=>{
-    machines=s.docs.map(d=>({id:d.id,...d.data()}));
-    populateEntryMachineSelect();
-  }, e=>setConn(false,'Machines error: '+e.message));
-
-  db.collection('defects').orderBy('dateRaised','desc').onSnapshot(s=>{
-    defects=s.docs.map(d=>({id:d.id,...d.data()}));
-  }, e=>setConn(false,'Defects error: '+e.message));
-
-  db.collection('costEntries').orderBy('date','desc').onSnapshot(s=>{
-    costEntries=s.docs.map(d=>({id:d.id,...d.data()}));
-    renderRecentEntries();
-    if(document.getElementById('view-reports').style.display!=='none') renderReports();
-    setConn(true,'Connected');
-  }, e=>setConn(false,'Cost entries error: '+e.message));
-
-  document.getElementById('entryDate').value=todayISO();
-  const today=todayISO();
-  document.getElementById('reportFrom').value = today.slice(0,8)+'01';
-  document.getElementById('reportTo').value = today;
-  renderReportBranchFilter();
-  ['entryLabourHours','entryLabourRate','entryPartsCost','entryOtherCost'].forEach(id=>{
-    document.getElementById(id).addEventListener('input', updateEntryTotalPreview);
-  });
-}
-
-function populateEntryMachineSelect(){
-  const sel=document.getElementById('entryMachine');
-  const cv=sel.value;
-  sel.innerHTML='<option value="">-- Choose machine --</option>' + machines.map(m=>`<option value="${m.id}">${escapeHtml(m.name)}${m.serialNumber?(' (S/N: '+escapeHtml(m.serialNumber)+')'):''}</option>`).join('');
-  sel.value=cv;
-}
-
-function onEntryMachineChange(){
-  const machineId=document.getElementById('entryMachine').value;
-  const sel=document.getElementById('entryDefect');
-  const relevant = defects.filter(d=>d.machineId===machineId);
-  sel.innerHTML='<option value="">-- None / general maintenance --</option>' + relevant.map(d=>`<option value="${d.id}">${d.defectId?escapeHtml(d.defectId)+' — ':''}${escapeHtml(d.itemName)} (${d.status})</option>`).join('');
-}
-
-function updateEntryTotalPreview(){
-  const hrs=Number(document.getElementById('entryLabourHours').value)||0;
-  const rate=Number(document.getElementById('entryLabourRate').value)||0;
-  const parts=Number(document.getElementById('entryPartsCost').value)||0;
-  const other=Number(document.getElementById('entryOtherCost').value)||0;
-  const total = (hrs*rate) + parts + other;
-  document.getElementById('entryTotalPreview').textContent = money(total);
-}
-
-async function saveEntry(){
-  const machineId=document.getElementById('entryMachine').value;
-  if(!machineId){ toast('Select a machine'); return; }
-  const date=document.getElementById('entryDate').value;
-  if(!date){ toast('Select a date'); return; }
-  const machine=machines.find(m=>m.id===machineId);
-  const defectId=document.getElementById('entryDefect').value || null;
-  const defect = defectId ? defects.find(d=>d.id===defectId) : null;
-  const workType=document.getElementById('entryWorkType').value;
-  const labourHours=Number(document.getElementById('entryLabourHours').value)||0;
-  const labourRate=Number(document.getElementById('entryLabourRate').value)||0;
-  const partsCost=Number(document.getElementById('entryPartsCost').value)||0;
-  const otherCost=Number(document.getElementById('entryOtherCost').value)||0;
-  const downtimeHours=Number(document.getElementById('entryDowntime').value)||0;
-  const partsDesc=document.getElementById('entryPartsDesc').value.trim();
-  const notes=document.getElementById('entryNotes').value.trim();
-  const labourCost = labourHours*labourRate;
-  const totalCost = labourCost + partsCost + otherCost;
-
-  await db.collection('costEntries').add({
-    machineId, machineName: machine?machine.name:'', branch: machine?(machine.branch||''):'',
-    defectRefId: defectId, defectId: defect?(defect.defectId||null):null,
-    date, workType, labourHours, labourRate, labourCost, partsCost, otherCost, totalCost,
-    downtimeHours, partsDesc, notes, createdAt: firebase.firestore.Timestamp.now()
-  });
-
-  toast('Cost entry saved');
-  document.getElementById('entryLabourHours').value='';
-  document.getElementById('entryLabourRate').value='';
-  document.getElementById('entryPartsCost').value='';
-  document.getElementById('entryOtherCost').value='';
-  document.getElementById('entryDowntime').value='';
-  document.getElementById('entryPartsDesc').value='';
-  document.getElementById('entryNotes').value='';
-  document.getElementById('entryTotalPreview').textContent='£0.00';
-}
-
-async function deleteEntry(id){
-  if(!confirm('Delete this cost entry?')) return;
-  await db.collection('costEntries').doc(id).delete();
-  toast('Entry deleted');
-}
-
-function renderRecentEntries(){
-  const tbody=document.querySelector('#recentTable tbody');
-  const recent=costEntries.slice(0,25);
-  document.getElementById('recentCount').textContent=costEntries.length;
-  if(!recent.length){ tbody.innerHTML='<tr><td colspan="8" class="empty-state">No cost entries logged yet.</td></tr>'; return; }
-  tbody.innerHTML = recent.map(e=>`<tr>
-    <td>${e.date}</td>
-    <td>${escapeHtml(e.machineName)}</td>
-    <td>${escapeHtml(e.workType||'-')}</td>
-    <td class="num">${e.labourHours||0}h${e.labourRate?(' @ '+money(e.labourRate)):''}</td>
-    <td class="num">${money(e.partsCost)}</td>
-    <td class="num">${e.downtimeHours||0}h</td>
-    <td class="num"><strong>${money(e.totalCost)}</strong></td>
-    <td><button class="icon-btn del" onclick="deleteEntry('${e.id}')">🗑</button></td>
-  </tr>`).join('');
-}
-
-function setPeriod(p){
-  reportPeriod=p;
-  document.querySelectorAll('#periodTabs button').forEach(b=>b.classList.toggle('active', b.dataset.period===p));
-  const today=todayISO();
-  if(p==='daily'){ document.getElementById('reportFrom').value=today; document.getElementById('reportTo').value=today; }
-  else if(p==='monthly'){ document.getElementById('reportFrom').value=today.slice(0,8)+'01'; document.getElementById('reportTo').value=today; }
-  else if(p==='yearly'){ document.getElementById('reportFrom').value=today.slice(0,4)+'-01-01'; document.getElementById('reportTo').value=today; }
-  renderReports();
-}
-
-function renderReportBranchFilter(){
-  const wrap=document.getElementById('reportBranchFilter');
-  wrap.innerHTML = `<button class="${reportBranchFilter==='all'?'active':''}" onclick="setReportBranchFilter('all')">All Branches</button>` +
-    BRANCHES.map(b=>`<button class="${reportBranchFilter===b?'active':''}" onclick="setReportBranchFilter('${b}')">${b}</button>`).join('');
-}
-function setReportBranchFilter(b){ reportBranchFilter=b; renderReportBranchFilter(); renderReports(); }
-
-function getFilteredEntries(){
-  const from=document.getElementById('reportFrom').value;
-  const to=document.getElementById('reportTo').value;
-  return costEntries.filter(e=>{
-    if(from && e.date<from) return false;
-    if(to && e.date>to) return false;
-    if(reportBranchFilter!=='all' && e.branch!==reportBranchFilter) return false;
-    return true;
-  });
-}
-
-function renderReports(){
-  renderReportBranchFilter();
-  const filtered=getFilteredEntries();
-  const totalCost=filtered.reduce((s,e)=>s+(e.totalCost||0),0);
-  const labourCost=filtered.reduce((s,e)=>s+(e.labourCost||0),0);
-  const partsCost=filtered.reduce((s,e)=>s+(e.partsCost||0),0);
-  const downtime=filtered.reduce((s,e)=>s+(e.downtimeHours||0),0);
-  document.getElementById('statTotalCost').textContent=money(totalCost);
-  document.getElementById('statLabourCost').textContent=money(labourCost);
-  document.getElementById('statPartsCost').textContent=money(partsCost);
-  document.getElementById('statDowntime').textContent=downtime+'h';
-
-  const groupBy=document.getElementById('reportGroupBy').value;
-  document.getElementById('groupByLabel').textContent = groupBy==='machine' ? 'Asset' : 'Branch';
-  const groups={};
-  filtered.forEach(e=>{
-    const key = groupBy==='machine' ? (e.machineName||'Unknown') : (e.branch||'No branch');
-    groups[key]=(groups[key]||0)+(e.totalCost||0);
-  });
-  const sorted=Object.entries(groups).sort((a,b)=>b[1]-a[1]);
-  const maxVal=sorted.length?sorted[0][1]:1;
-  const chartWrap=document.getElementById('groupChart');
-  if(!sorted.length){ chartWrap.innerHTML='<div class="empty-state">No data in this range.</div>'; }
-  else {
-    chartWrap.innerHTML = sorted.map(([label,val])=>`<div class="chart-bar-row">
-      <div class="chart-bar-label">${escapeHtml(label)}</div>
-      <div class="chart-bar-track"><div class="chart-bar-fill" style="width:${maxVal?(val/maxVal*100):0}%"></div></div>
-      <div class="chart-bar-val">${money(val)}</div>
-    </div>`).join('');
-  }
-
-  const tbody=document.querySelector('#reportTable tbody');
-  document.getElementById('reportEntryCount').textContent=filtered.length;
-  if(!filtered.length){ tbody.innerHTML='<tr><td colspan="10" class="empty-state">No entries in this range.</td></tr>'; return; }
-  tbody.innerHTML = filtered.map(e=>`<tr>
-    <td>${e.date}</td><td>${escapeHtml(e.machineName)}</td><td>${escapeHtml(e.branch||'-')}</td><td>${escapeHtml(e.workType||'-')}</td>
-    <td class="num">${e.labourHours||0}</td><td class="num">${money(e.labourCost)}</td><td class="num">${money(e.partsCost)}</td>
-    <td class="num">${money(e.otherCost)}</td><td class="num">${e.downtimeHours||0}</td><td class="num"><strong>${money(e.totalCost)}</strong></td>
-  </tr>`).join('');
-}
-
-function exportReportCSV(){
-  const filtered=getFilteredEntries();
-  if(!filtered.length){ toast('No entries to export'); return; }
-  let csv='Date,Machine,Branch,Work Type,Labour Hours,Labour Rate,Labour Cost,Parts Cost,Parts Description,Other Cost,Downtime Hours,Total Cost,Defect ID,Notes\n';
-  filtered.forEach(e=>{
-    csv+=[e.date,e.machineName,e.branch||'',e.workType||'',e.labourHours||0,e.labourRate||0,e.labourCost||0,e.partsCost||0,(e.partsDesc||'').replace(/,/g,';'),e.otherCost||0,e.downtimeHours||0,e.totalCost||0,e.defectId||'',(e.notes||'').replace(/,/g,';')].map(v=>String(v).replace(/,/g,';')).join(',')+'\n';
-  });
-  const blob=new Blob([csv],{type:'text/csv'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url; a.download='CheckPlant_CostReport_'+todayISO()+'.csv'; a.click();
-  URL.revokeObjectURL(url);
-  toast('CSV downloaded');
-}
-
-initListeners();
+  const firebaseConfig={apiKey:"AIzaSyD60Z04IRIvv-EaSyPzoA33fEQ3yT6wsQQ",authDomain:"checkplant-kcm.firebaseapp.com",projectId:"checkplant-kcm",storageBucket:"checkplant-kcm.firebasestorage.app",messagingSenderId:"492245064396",appId:"1:492245064396:web:c79e64b32b9856766bc069"};
+  firebase.initializeApp(firebaseConfig);const db=firebase.firestore();
+  const TYPE_LABELS={all:"All machine types","material-handler-grab":"Material Handler / Grab",telehandler:"Telehandler","loading-shovel":"Loading Shovel",excavator:"Excavator","forklift-telehandler":"Forklift / Telehandler",shredder:"Shredder","crusher-screener-trommel":"Crusher / Screener / Trommel","granulator-shredder":"Granulator Shredder",granulator:"Granulator","static-separation-plant":"Static Separation Plant",baler:"Baler"};
+  const CATEGORY_DEFAULTS={grab:"material-handler-grab",forklift:"forklift-telehandler",loadingshovel:"loading-shovel",excavator:"excavator",shredder:"shredder",crusher:"crusher-screener-trommel",staticplant:"static-separation-plant",baler:"baler"};
+  const STANDARD_POINTS={"material-handler-grab":[["GP-01","Boom/base pivot points"],["GP-02","Dipper/stick pivot points"],["GP-03","Grab/attachment pivot points"],["GP-04","Slew-ring/rotation lubrication point"]],telehandler:[["GP-01","Boom pivot points"],["GP-02","Carriage and attachment pivots"],["GP-03","Steering and axle lubrication points"]],"loading-shovel":[["GP-01","Loader-arm pivot points"],["GP-02","Bucket and linkage pivots"],["GP-03","Articulation joint"],["GP-04","Steering and axle points"]],excavator:[["GP-01","Boom base and boom pivot points"],["GP-02","Dipper/stick pivot points"],["GP-03","Bucket, quick hitch and attachment pivots"],["GP-04","Slew-ring lubrication point"]],"forklift-telehandler":[["GP-01","Mast and carriage points"],["GP-02","Tilt cylinder and attachment pivots"],["GP-03","Steering axle points"]],shredder:[["GP-01","Rotor bearing lubrication points"],["GP-02","Conveyor head/tail bearings"],["GP-03","Hinges and service pivots"]],"crusher-screener-trommel":[["GP-01","Main bearing lubrication points"],["GP-02","Conveyor head/tail bearings"],["GP-03","Screen/trommel support rollers or pivots"]],"granulator-shredder":[["GP-01","Rotor bearing lubrication points"],["GP-02","Conveyor bearing lubrication points"]],granulator:[["GP-01","Rotor bearing lubrication points"],["GP-02","Drive and conveyor lubrication points"]],"static-separation-plant":[["GP-01","Conveyor bearing lubrication points"],["GP-02","Drive, rotary and separation-component points"]],baler:[["GP-01","Ram and linkage pivot points"],["GP-02","Door hinges and guide components"]]};
+  let machines=[],greaseRecords=[],selectedMachine=null,selectedType="all",pointState={},lastPDF=null,lastPDFRecord=null;
+  const $=id=>document.getElementById(id),todayISO=()=>new Date().toISOString().slice(0,10),esc=v=>String(v??"").replace(/[&<>\"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+  const toast=m=>{const t=$("toast");t.textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),3000)},setConn=(ok,text)=>{$("connDot").className="dot"+(ok?" online":"");$("connText").textContent=text},machineType=m=>m.greaseType||CATEGORY_DEFAULTS[m.categoryKey]||"",sortedMachines=()=>[...machines].sort((a,b)=>(a.name||"").localeCompare(b.name||""));
+  function showScreen(name){document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));$("screen-"+name).classList.add("active");$("navHome").classList.toggle("active",name==="home");if(name==="home")renderHome();if(name==="select")renderTypeSelect();if(name==="history"){populateHistoryTypes();populateHistoryMachines();renderHistory()}window.scrollTo(0,0)}function goHome(){showScreen("home")}function startGrease(){selectedMachine=null;selectedType="all";showScreen("select")}
+  function initFirestore(){db.collection("machines").orderBy("name").onSnapshot(s=>{machines=s.docs.map(d=>({id:d.id,...d.data()}));setConn(true,"Connected to CheckPlant Firestore");renderHome();renderTypeSelect()},e=>setConn(false,"Machine data error: "+e.message));db.collection("greaseRecords").orderBy("createdAt","desc").onSnapshot(s=>{greaseRecords=s.docs.map(d=>({id:d.id,...d.data()}));renderHome();renderHistory()},e=>console.error("Grease records error",e))}
+  function renderHome(){const list=$("homeMachineList");if(!list)return;$("machineCount").textContent=machines.length;if(!machines.length){list.innerHTML='<div class="empty-state">No machines found in the CheckPlant database.</div>';return}list.innerHTML=sortedMachines().map(m=>{const t=machineType(m),last=greaseRecords.find(r=>r.machineId===m.id);return `<div class="machine-list-item" onclick="chooseMachine('${m.id}')"><div><div class="mname">${esc(m.name)}</div><div class="mmeta">${esc(TYPE_LABELS[t]||"Type not mapped")} · ${m.serialNumber?"S/N "+esc(m.serialNumber):"No serial recorded"}</div><div class="mlast">${last?"Last grease record: "+esc(last.date||"—")+" by "+esc(last.operativeName||"—"):"No grease record yet"}</div></div><span class="badge ${last?.overallResult==='completed-with-exception'?'amber':'green'}">${last?.overallResult==='completed-with-exception'?'Exception':'Ready'}</span></div>`}).join("")}
+  function typeOptions(includeAll=true){const types=[...new Set(machines.map(machineType).filter(Boolean))].sort((a,b)=>(TYPE_LABELS[a]||a).localeCompare(TYPE_LABELS[b]||b));return(includeAll?'<option value="all">All machine types</option>':'<option value="">Choose machine type</option>')+types.map(t=>`<option value="${t}">${esc(TYPE_LABELS[t]||t)}</option>`).join("")}function renderTypeSelect(){const sel=$("machineTypeSelect");if(!sel)return;const current=sel.value||selectedType;sel.innerHTML=typeOptions(true);sel.value=Object.keys(TYPE_LABELS).includes(current)?current:"all";selectedType=sel.value;renderSelectList()}function onMachineTypeChanged(){selectedType=$("machineTypeSelect").value;renderSelectList()}function renderSelectList(){const list=$("selectMachineList");if(!list)return;const q=$("machineSearch").value.trim().toLowerCase(),shown=sortedMachines().filter(m=>{const t=machineType(m);return(selectedType==="all"||t===selectedType)&&[m.name,m.serialNumber].join(" ").toLowerCase().includes(q)});list.innerHTML=shown.length?shown.map(m=>`<div class="machine-list-item" onclick="chooseMachine('${m.id}')"><div><div class="mname">${esc(m.name)}</div><div class="mmeta">${esc(TYPE_LABELS[machineType(m)]||"Type not mapped")} · ${m.serialNumber?"S/N "+esc(m.serialNumber):"No serial number"}</div></div><span class="badge navy">Select</span></div>`).join(""):'<div class="empty-state">No machine matches this selection.</div>'}
+  function chooseMachine(id){selectedMachine=machines.find(m=>m.id===id);if(!selectedMachine)return;const type=machineType(selectedMachine);$("greaseMachineTitle").textContent=selectedMachine.name;$("greaseMachineMeta").textContent=`${TYPE_LABELS[type]||"Type not mapped"} · ${selectedMachine.serialNumber?"S/N "+selectedMachine.serialNumber:"No serial number"}${selectedMachine.branch?" · "+selectedMachine.branch:""}`;$("greaseDate").value=todayISO();$("greaseHours").value=selectedMachine.currentHours??"";$("greaseOperative").value="";$("greaseProduct").value="";$("greaseBatch").value="";$("visualResult").value="clear";$("visualNotes").value="";$("visualCreateDefect").checked=true;$("additionalPointsNotes").value="";$("greaseGeneralNotes").value="";$("greaseConfirm").checked=false;toggleVisualNotes();renderGreasePoints();showScreen("grease")}
+  function renderGreasePoints(){const type=machineType(selectedMachine),points=STANDARD_POINTS[type]||[];pointState={};$("pointCount").textContent=points.length;if(!points.length){$("greasePointsList").innerHTML='<div class="alert red">No standard list is mapped for this machine type. Use the grease applier notes to record work completed and raise any issues.</div>';return}$("greasePointsList").innerHTML=points.map((p,i)=>{pointState[p[0]]={pointId:p[0],pointName:p[1],result:"",notes:""};return `<div class="point-card" id="point-${i}"><div class="point-title">${esc(p[0])} — ${esc(p[1])}</div><div class="point-meta">Complete all applicable nipples/points in this standard area. The grease applier covers any additional machine-specific points.</div><div class="point-actions"><button class="greased" onclick="setPointResult(${i},'greased')">Greased</button><button class="na" onclick="setPointResult(${i},'not-required')">Not required</button><button class="unable" onclick="setPointResult(${i},'unable-to-grease')">Unable to grease</button><button class="defect" onclick="setPointResult(${i},'defect-found')">Defect found</button></div><div class="point-note"><label>Issue / defect notes <span class="required">*</span></label><textarea id="point-note-${i}" placeholder="Describe the blockage, damage, physical defect or action required."></textarea><label class="checkbox-row"><input id="point-defect-${i}" type="checkbox" checked><span>Create a linked CheckPlant defect.</span></label></div></div>`}).join("")}
+  function setPointResult(index,result){const p=STANDARD_POINTS[machineType(selectedMachine)][index];pointState[p[0]].result=result;const card=$("point-"+index);card.classList.toggle("exception",["unable-to-grease","defect-found"].includes(result));card.querySelectorAll(".point-actions button").forEach(b=>b.classList.remove("selected"));card.querySelector(`.${result==='not-required'?'na':result==='unable-to-grease'?'unable':result==='defect-found'?'defect':'greased'}`).classList.add("selected")}function toggleVisualNotes(){$("visualNotesWrap").classList.toggle("hide",$("visualResult").value!=="issue")}
+  async function saveGreaseRecord(){if(!selectedMachine){toast("Select a machine first.");return}const operative=$("greaseOperative").value.trim();if(!operative){toast("Enter the grease applier name.");return}if(!$("greaseConfirm").checked){toast("Tick the completion confirmation.");return}const visualIssue=$("visualResult").value==="issue",visualNotes=$("visualNotes").value.trim();if(visualIssue&&!visualNotes){toast("Enter visual-check notes for the issue found.");return}const points=STANDARD_POINTS[machineType(selectedMachine)]||[],pointResults=points.map((p,i)=>({pointId:p[0],pointName:p[1],result:pointState[p[0]]?.result||"not-recorded",notes:$("point-note-"+i)?$("point-note-"+i).value.trim():"",createDefect:$("point-defect-"+i)?$("point-defect-"+i).checked:false})),incomplete=pointResults.filter(p=>p.result==="not-recorded");if(incomplete.length){toast("Record an outcome for every standard grease point.");return}const exceptions=pointResults.filter(p=>["unable-to-grease","defect-found"].includes(p.result));for(const p of exceptions)if(!p.notes){toast("Add notes to every point marked unable or defect found.");return}const recordRef=db.collection("greaseRecords").doc(),batch=db.batch(),linkedDefectIds=[],newDefect=(itemName,result,notes,pointId=null,pointName=null)=>{const ref=db.collection("defects").doc();linkedDefectIds.push(ref.id);batch.set(ref,{machineId:selectedMachine.id,machineName:selectedMachine.name,itemName,dateRaised:$("greaseDate").value,status:"open",resolvedDate:null,resolvedBy:null,resolutionRecordId:null,severity:"routine",source:"checkgrease",greaseRecordId:recordRef.id,greasePointId:pointId,greasePointName:pointName,greaseResult:result,notes,createdAt:firebase.firestore.FieldValue.serverTimestamp()});return ref.id};if(visualIssue&&$("visualCreateDefect").checked)newDefect("Greasing: visual blockage or defect found","visual-check-issue",visualNotes);pointResults.forEach(p=>{if(["unable-to-grease","defect-found"].includes(p.result)&&p.createDefect)p.linkedDefectId=newDefect(`Greasing: ${p.pointId} — ${p.pointName}`,p.result,p.notes,p.pointId,p.pointName)});const hours=$("greaseHours").value,hasException=visualIssue||exceptions.length>0,type=machineType(selectedMachine),record={type:"grease",source:"checkgrease",machineId:selectedMachine.id,machineName:selectedMachine.name,serialNumber:selectedMachine.serialNumber||"",branch:selectedMachine.branch||"",categoryKey:selectedMachine.categoryKey||"",greaseType:type,greaseTypeLabel:TYPE_LABELS[type]||type,date:$("greaseDate").value,operativeName:operative,hoursReading:hours===""?null:Number(hours),greaseProduct:$("greaseProduct").value.trim(),greaseBatch:$("greaseBatch").value.trim(),visualCheck:{result:visualIssue?"issue":"clear",notes:visualNotes},pointResults,additionalPointsNotes:$("additionalPointsNotes").value.trim(),notes:$("greaseGeneralNotes").value.trim(),overallResult:hasException?"completed-with-exception":"completed",linkedDefectIds,createdAt:firebase.firestore.FieldValue.serverTimestamp()};batch.set(recordRef,record);if(hours!=="")batch.update(db.collection("machines").doc(selectedMachine.id),{currentHours:Number(hours)});try{await batch.commit();generateGreasePDF({...record,id:recordRef.id});$("completionMessage").textContent=linkedDefectIds.length?`Greasing record saved and ${linkedDefectIds.length} linked CheckPlant defect${linkedDefectIds.length===1?"":"s"} created.`:"Greasing record saved. No linked CheckPlant defect was created.";$("completionSummary").innerHTML=`<div class="summary-grid"><div class="summary-box"><b>${pointResults.filter(p=>p.result==='greased').length}</b><span>Greased</span></div><div class="summary-box"><b>${pointResults.filter(p=>p.result==='not-required').length}</b><span>Not required</span></div><div class="summary-box"><b>${exceptions.length}</b><span>Point exceptions</span></div><div class="summary-box"><b>${linkedDefectIds.length}</b><span>Defects created</span></div></div><p class="subtle">Record ID: ${recordRef.id}</p>`;showScreen("complete")}catch(err){console.error(err);toast("Save failed: "+err.message)}}
+  function generateGreasePDF(record){const jsPDF=window.jspdf.jsPDF,doc=new jsPDF({unit:"pt",format:"a4"}),pageW=doc.internal.pageSize.getWidth(),pageH=doc.internal.pageSize.getHeight(),margin=40;let y=46;const nextPage=()=>{doc.addPage();y=48};const line=(x1,y1,x2,y2)=>{doc.setDrawColor(220,220,220);doc.line(x1,y1,x2,y2)};const text=(value,x,yy,width,fontSize=10,style="normal")=>{doc.setFontSize(fontSize);doc.setFont(undefined,style);const lines=doc.splitTextToSize(String(value??"—"),width);if(y+lines.length*(fontSize+4)>pageH-54)nextPage();doc.text(lines,x,yy);return lines.length*(fontSize+4)};doc.setFillColor(46,46,143);doc.rect(0,0,pageW,74,"F");doc.setFillColor(47,174,78);doc.rect(0,70,pageW,4,"F");doc.setTextColor(255,255,255);doc.setFontSize(20);doc.setFont(undefined,"bold");doc.text("CheckGrease",margin,33);doc.setFontSize(10);doc.setFont(undefined,"normal");doc.text("KCM WASTE MANAGEMENT",margin,50);doc.text("Manual Greasing Record",margin,64);doc.setTextColor(28,31,38);y=100;doc.setFontSize(14);doc.setFont(undefined,"bold");doc.text(record.machineName||"Machine",margin,y);y+=20;doc.setFontSize(10);doc.setFont(undefined,"normal");doc.text(`Date: ${record.date||"—"}`,margin,y);doc.text(`Grease applier: ${record.operativeName||"—"}`,margin+250,y);y+=16;doc.text(`Type: ${record.greaseTypeLabel||"—"}`,margin,y);doc.text(`S/N: ${record.serialNumber||"—"}`,margin+250,y);y+=16;doc.text(`Hour meter: ${record.hoursReading??"—"}`,margin,y);doc.text(`Branch: ${record.branch||"—"}`,margin+250,y);y+=13;line(margin,y,pageW-margin,y);y+=22;doc.setTextColor(46,46,143);doc.setFontSize(12);doc.setFont(undefined,"bold");doc.text("Grease Product",margin,y);doc.setTextColor(28,31,38);y+=16;doc.setFontSize(10);doc.setFont(undefined,"normal");doc.text(`Product: ${record.greaseProduct||"Not recorded"}`,margin,y);y+=15;doc.text(`Batch / cartridge reference: ${record.greaseBatch||"Not recorded"}`,margin,y);y+=18;line(margin,y,pageW-margin,y);y+=22;doc.setTextColor(46,46,143);doc.setFontSize(12);doc.setFont(undefined,"bold");doc.text("Visual Check",margin,y);doc.setTextColor(28,31,38);y+=16;doc.setFontSize(10);doc.setFont(undefined,"normal");doc.text(record.visualCheck?.result==="issue"?"Physical blockage or defect found":"No visible blockage or defect found",margin,y);y+=15;if(record.visualCheck?.notes){y+=text(`Notes: ${record.visualCheck.notes}`,margin,y,pageW-margin*2,10)}y+=7;line(margin,y,pageW-margin,y);y+=22;doc.setTextColor(46,46,143);doc.setFontSize(12);doc.setFont(undefined,"bold");doc.text("Standard Grease Points",margin,y);y+=16;doc.setTextColor(28,31,38);doc.setFontSize(9);doc.setFont(undefined,"bold");doc.text("POINT",margin,y);doc.text("DESCRIPTION",margin+78,y);doc.text("RESULT",pageW-margin-115,y);y+=8;line(margin,y,pageW-margin,y);y+=14;(record.pointResults||[]).forEach(p=>{if(y>pageH-88)nextPage();doc.setFontSize(9);doc.setFont(undefined,"bold");doc.text(p.pointId||"—",margin,y);doc.setFont(undefined,"normal");const description=doc.splitTextToSize(p.pointName||"—",pageW-300);doc.text(description,margin+78,y);let status=(p.result||"not-recorded").replaceAll("-"," ");doc.setFont(undefined,"bold");if(["unable-to-grease","defect-found"].includes(p.result))doc.setTextColor(220,38,38);else if(p.result==="greased")doc.setTextColor(38,143,64);else doc.setTextColor(107,114,128);doc.text(status.toUpperCase(),pageW-margin-115,y);doc.setTextColor(28,31,38);doc.setFont(undefined,"normal");y+=Math.max(16,description.length*12);if(p.notes){y+=text(`Issue notes: ${p.notes}`,margin+78,y,pageW-margin-78,8)+2}line(margin,y-5,pageW-margin,y-5);y+=8});if(y>pageH-130)nextPage();doc.setTextColor(46,46,143);doc.setFontSize(12);doc.setFont(undefined,"bold");doc.text("Additional Machine-Specific Points",margin,y);doc.setTextColor(28,31,38);y+=16;doc.setFontSize(10);doc.setFont(undefined,"normal");y+=text(record.additionalPointsNotes||"None recorded.",margin,y,pageW-margin*2,10);y+=8;if(y>pageH-130)nextPage();doc.setTextColor(46,46,143);doc.setFontSize(12);doc.setFont(undefined,"bold");doc.text("General Notes",margin,y);doc.setTextColor(28,31,38);y+=16;doc.setFontSize(10);doc.setFont(undefined,"normal");y+=text(record.notes||"None recorded.",margin,y,pageW-margin*2,10);y+=8;line(margin,y,pageW-margin,y);y+=20;doc.setTextColor(46,46,143);doc.setFontSize(12);doc.setFont(undefined,"bold");doc.text("Record Outcome",margin,y);doc.setTextColor(28,31,38);y+=16;doc.setFontSize(10);doc.setFont(undefined,"normal");doc.text(record.overallResult==="completed"?"COMPLETED":"COMPLETED WITH EXCEPTION",margin,y);y+=15;doc.text(`Linked CheckPlant defects created: ${(record.linkedDefectIds||[]).length}`,margin,y);doc.setFontSize(8);doc.setTextColor(130,130,130);doc.text(`CheckGrease · KCM Waste Management · Generated ${new Date().toLocaleString("en-GB")}`,margin,pageH-28);lastPDF=doc;lastPDFRecord=record;return doc}
+  function pdfFilename(record){return `CheckGrease_${String(record.machineName||"Machine").replace(/[^a-z0-9]+/gi,"_").replace(/^_|_$/g,"")}_${record.date||todayISO()}.pdf`}function viewLastPDF(){if(!lastPDF){toast("No PDF is ready. Open a record from Grease History.");return}window.open(lastPDF.output("bloburl"),"_blank")}function downloadLastPDF(){if(!lastPDF||!lastPDFRecord){toast("No PDF is ready.");return}lastPDF.save(pdfFilename(lastPDFRecord))}function viewRecordPDF(id){const record=greaseRecords.find(r=>r.id===id);if(!record){toast("Record not found.");return}generateGreasePDF(record);viewLastPDF()}function downloadRecordPDF(id){const record=greaseRecords.find(r=>r.id===id);if(!record){toast("Record not found.");return}generateGreasePDF(record);downloadLastPDF()}
+  function populateHistoryTypes(){const sel=$("historyTypeFilter"),current=sel.value||"all";sel.innerHTML=typeOptions(true);sel.value=current}function populateHistoryMachines(){const sel=$("historyMachineFilter");if(!sel)return;const current=sel.value||"all",type=$("historyTypeFilter")?.value||"all";sel.innerHTML='<option value="all">All machines</option>'+sortedMachines().filter(m=>type==="all"||machineType(m)===type).map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join("");sel.value=[...sel.options].some(o=>o.value===current)?current:"all"}function renderHistory(){const target=$("historyList");if(!target)return;const type=$("historyTypeFilter")?.value||"all",machine=$("historyMachineFilter")?.value||"all",result=$("historyResultFilter")?.value||"all",rows=greaseRecords.filter(r=>(type==="all"||r.greaseType===type)&&(machine==="all"||r.machineId===machine)&&(result==="all"||r.overallResult===result));if(!rows.length){target.innerHTML='<div class="empty-state">No greasing records match this filter.</div>';return}target.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Date</th><th>Machine</th><th>Applier</th><th>Result</th><th>Defects</th><th>PDF</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.date||"—")}</td><td>${esc(r.machineName||"—")}</td><td>${esc(r.operativeName||"—")}</td><td><span class="pill ${r.overallResult==='completed'?'completed':'exception'}">${r.overallResult==='completed'?'Completed':'Exception'}</span></td><td>${(r.linkedDefectIds||[]).length}</td><td><button class="btn btn-primary btn-sm" onclick="viewRecordPDF('${r.id}')">View</button> <button class="btn btn-secondary btn-sm" onclick="downloadRecordPDF('${r.id}')">Download</button></td></tr>`).join("")}</tbody></table></div>`}
+  initFirestore();
 </script>
 </body>
 </html>
