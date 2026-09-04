@@ -97,6 +97,11 @@ th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;}
 </div>
 
 <div class="stat-row">
+  <div class="stat-box"><div class="num" id="statInternalCost">£0</div><div class="lbl">Internal Work Cost</div><div class="sub" id="statInternalCostSub"></div></div>
+  <div class="stat-box"><div class="num" id="statExternalCost">£0</div><div class="lbl">External Work Cost</div><div class="sub" id="statExternalCostSub"></div></div>
+</div>
+
+<div class="stat-row">
   <div class="stat-box"><div class="num" id="statOpenDefects">0</div><div class="lbl">Open Defects</div></div>
   <div class="stat-box"><div class="num" id="statOverdueDefects">0</div><div class="lbl">Overdue &gt;7 Days</div></div>
   <div class="stat-box"><div class="num" id="statChecksThisMonth">0</div><div class="lbl">Checks Logged</div></div>
@@ -104,7 +109,7 @@ th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;}
 </div>
 
 <div class="card">
-  <div class="section-title">Monthly Cost by Asset (Top 10)</div>
+  <div class="section-title">Monthly Cost by Asset (Top 10) <span style="font-size:.72rem;font-weight:600;color:var(--grey)">■ Internal &nbsp; <span style="color:var(--amber)">■</span> External</span></div>
   <div class="chart-bar-wrap" id="costChart"></div>
 </div>
 
@@ -186,25 +191,35 @@ function getMonthRange(){
 function computeStats(){
   const {from,to} = getMonthRange();
 
+  // Cost this month
   const monthCosts = costEntries.filter(e=>e.date>=from && e.date<=to);
   const totalCost = monthCosts.reduce((s,e)=>s+(e.totalCost||0),0);
+  const internalCost = monthCosts.filter(e=>(e.workSource||'internal')==='internal').reduce((s,e)=>s+(e.totalCost||0),0);
+  const externalCost = monthCosts.filter(e=>e.workSource==='external').reduce((s,e)=>s+(e.totalCost||0),0);
   document.getElementById('statMonthCost').textContent = money(totalCost);
   document.getElementById('statMonthCostSub').textContent = monthCosts.length+' entries logged';
+  document.getElementById('statInternalCost').textContent = money(internalCost);
+  document.getElementById('statInternalCostSub').textContent = monthCosts.filter(e=>(e.workSource||'internal')==='internal').length+' internal entries';
+  document.getElementById('statExternalCost').textContent = money(externalCost);
+  document.getElementById('statExternalCostSub').textContent = monthCosts.filter(e=>e.workSource==='external').length+' external entries';
 
+  // Cost by asset chart (internal vs external stacked)
   const groups={};
-  monthCosts.forEach(e=>{ const k=e.machineName||'Unknown'; groups[k]=(groups[k]||0)+(e.totalCost||0); });
-  const sorted=Object.entries(groups).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  monthCosts.forEach(e=>{ const k=e.machineName||'Unknown'; if(!groups[k]) groups[k]={internal:0,external:0}; groups[k][e.workSource==='external'?'external':'internal'] += (e.totalCost||0); });
+  const sorted=Object.entries(groups).map(([k,v])=>[k,v.internal+v.external,v]).sort((a,b)=>b[1]-a[1]).slice(0,10);
   const maxVal=sorted.length?sorted[0][1]:1;
   const chartWrap=document.getElementById('costChart');
   if(!sorted.length){ chartWrap.innerHTML='<div class="empty-state">No cost entries logged this month.</div>'; }
   else {
-    chartWrap.innerHTML = sorted.map(([label,val])=>`<div class="chart-bar-row">
+    chartWrap.innerHTML = sorted.map(([label,total,v])=>`<div class="chart-bar-row">
       <div class="chart-bar-label">${escapeHtml(label)}</div>
-      <div class="chart-bar-track"><div class="chart-bar-fill" style="width:${maxVal?(val/maxVal*100):0}%"></div></div>
-      <div class="chart-bar-val">${money(val)}</div>
+      <div class="chart-bar-track"><div class="chart-bar-fill" style="width:${maxVal?(v.internal/maxVal*100):0}%;display:inline-block"></div><div class="chart-bar-fill" style="background:var(--amber);width:${maxVal?(v.external/maxVal*100):0}%;display:inline-block"></div></div>
+      <div class="chart-bar-val">${money(total)}</div>
     </div>`).join('');
   }
 
+  // Check completion rate: checks logged this month vs number of machines (rough efficiency proxy:
+  // how many machines got at least one check/service logged in the month)
   const monthRecords = records.filter(r=>r.date>=from && r.date<=to);
   const checkRecords = monthRecords.filter(r=>r.type==='check' || r.type==='service');
   const machinesChecked = new Set(checkRecords.map(r=>r.machineId).filter(Boolean));
@@ -213,6 +228,7 @@ function computeStats(){
   document.getElementById('statCheckEfficiencySub').textContent = machinesChecked.size+' of '+machines.length+' machines checked';
   document.getElementById('statChecksThisMonth').textContent = checkRecords.length;
 
+  // Defect resolution rate this month: resolved / (resolved + still open that were raised in range or before)
   const raisedInRange = defects.filter(d=>d.dateRaised>=from && d.dateRaised<=to);
   const openNow = defects.filter(d=>d.status==='open');
   const totalConsidered = raisedInRange.length;
@@ -222,6 +238,7 @@ function computeStats(){
   document.getElementById('statOpenDefects').textContent = openNow.length;
   document.getElementById('statOverdueDefects').textContent = openNow.filter(d=>daysBetween(d.dateRaised,todayISO())>7).length;
 
+  // Average resolution time (all resolved defects with both dates, all-time, for stability)
   const resolvedWithDates = defects.filter(d=>d.status==='resolved' && d.dateRaised && d.resolvedDate);
   if(resolvedWithDates.length){
     const avgDays = resolvedWithDates.reduce((s,d)=>s+daysBetween(d.dateRaised,d.resolvedDate),0)/resolvedWithDates.length;
