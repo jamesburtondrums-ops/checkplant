@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CostLog — KCM Waste Management</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+:root{--navy:#2E2E8F;--green:#2FAE4E;--green-dark:#268F40;--red:#dc2626;--amber:#d97706;--grey:#6b7280;--light:#f4f6f8;--dark:#1c1f26;--radius:14px;}
+*{box-sizing:border-box;}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--light);color:var(--dark);}
+header{background:var(--navy);color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:50;box-shadow:0 2px 8px rgba(0,0,0,.15);}
+header .brand{display:flex;flex-direction:column;line-height:1.15;}
+header .brand .app-name{font-weight:800;font-size:1.25rem;}
+header .brand .company-name{font-weight:600;font-size:.68rem;color:var(--green);letter-spacing:.03em;text-transform:uppercase;}
+header nav button{background:transparent;border:1px solid #ffffff40;color:#fff;padding:8px 14px;border-radius:10px;cursor:pointer;font-size:.85rem;font-weight:600;margin-left:6px;}
+header nav button.active{background:var(--green);border-color:var(--green);}
+main{max-width:1200px;margin:0 auto;padding:20px 16px 80px;}
+.card{background:#fff;border-radius:var(--radius);padding:20px;margin-bottom:16px;box-shadow:0 2px 6px rgba(0,0,0,.04);border:1px solid #eceef1;}
+.section-title{font-size:1.05rem;font-weight:800;margin:0 0 10px;display:flex;align-items:center;gap:8px;color:var(--navy);justify-content:space-between;flex-wrap:wrap;}
+label{font-weight:700;font-size:.82rem;display:block;margin-bottom:5px;color:var(--grey);}
+select,input,textarea{width:100%;padding:10px;border-radius:9px;border:1.5px solid #dde1e6;font-size:.92rem;background:#fff;}
+select:focus,input:focus,textarea:focus{outline:none;border-color:var(--navy);}
+textarea{min-height:70px;resize:vertical;font-family:inherit;}
+.btn{padding:10px 16px;border-radius:9px;border:none;font-weight:700;cursor:pointer;font-size:.85rem;display:inline-flex;align-items:center;gap:6px;}
+.btn-primary{background:var(--green);color:#fff;}
+.btn-primary:hover{background:var(--green-dark);}
+.btn-secondary{background:#eceef1;color:var(--dark);}
+.btn-secondary:hover{background:#dfe2e6;}
+.btn-danger{background:var(--red);color:#fff;}
+.btn-block{width:100%;justify-content:center;}
+.btn-sm{padding:6px 11px;font-size:.75rem;}
+.row{display:flex;gap:12px;flex-wrap:wrap;}
+.row>*{flex:1;min-width:150px;}
+.tabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;}
+.tabs button{padding:9px 14px;border-radius:9px;border:1px solid #e5e7eb;background:#fff;cursor:pointer;font-weight:700;font-size:.82rem;color:var(--grey);}
+.tabs button.active{background:var(--navy);color:#fff;border-color:var(--navy);}
+.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
+@media (max-width:700px){.stat-row{grid-template-columns:repeat(2,1fr);}}
+.stat-box{background:#fff;border-radius:12px;padding:14px;text-align:center;border:1px solid #eceef1;}
+.stat-box .num{font-size:1.5rem;font-weight:800;color:var(--navy);}
+.stat-box .lbl{font-size:.68rem;color:var(--grey);text-transform:uppercase;font-weight:700;margin-top:2px;}
+table{width:100%;border-collapse:collapse;font-size:.83rem;}
+th,td{text-align:left;padding:9px 8px;border-bottom:1px solid #eef0f2;}
+th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;white-space:nowrap;}
+tr:hover{background:#fafafa;}
+td.num{text-align:right;font-variant-numeric:tabular-nums;}
+.filter-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center;}
+.filter-bar button{padding:6px 13px;border-radius:20px;border:1.5px solid #e5e7eb;background:#fff;cursor:pointer;font-size:.78rem;font-weight:700;}
+.filter-bar button.active{background:var(--navy);border-color:var(--navy);color:#fff;}
+.badge{background:var(--green);color:#fff;border-radius:20px;padding:2px 10px;font-size:.7rem;font-weight:800;}
+.badge.grey{background:#9aa1ab;}
+.badge.red{background:var(--red);}
+.badge.amber{background:var(--amber);}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 20px;border-radius:10px;font-size:.9rem;font-weight:600;z-index:200;box-shadow:0 6px 20px rgba(0,0,0,.2);opacity:0;transition:opacity .25s;pointer-events:none;}
+.toast.show{opacity:1;}
+.empty-state{text-align:center;color:var(--grey);padding:30px 10px;font-size:.9rem;}
+.sync-banner{font-size:.78rem;color:var(--grey);display:flex;align-items:center;padding:6px 14px;}
+.conn-dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:6px;}
+.conn-dot.online{background:var(--green);}
+.conn-dot.offline{background:var(--red);}
+.icon-btn{background:#f1f2f4;border:none;border-radius:8px;width:30px;height:30px;cursor:pointer;font-size:.85rem;}
+.icon-btn.del{color:var(--red);}
+.table-wrap{overflow-x:auto;}
+.chart-bar-wrap{display:flex;flex-direction:column;gap:6px;margin-top:10px;}
+.chart-bar-row{display:flex;align-items:center;gap:10px;font-size:.78rem;}
+.chart-bar-label{width:150px;flex-shrink:0;color:var(--grey);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.chart-bar-track{flex:1;background:#eef0f3;border-radius:6px;height:18px;position:relative;}
+.chart-bar-fill{background:var(--navy);height:100%;border-radius:6px;}
+.chart-bar-val{width:80px;text-align:right;flex-shrink:0;font-weight:700;}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="app-name">CostLog</span><span class="company-name">KCM Waste Management</span></div>
+  <nav>
+    <button id="navLog" class="active" onclick="showView('log')">Log Entry</button>
+    <button id="navReports" onclick="showView('reports')">Reports</button>
+  </nav>
+</header>
+<div class="sync-banner"><span class="conn-dot online" id="connDot"></span><span id="connText">Connecting...</span></div>
+<main>
+
+<div id="view-log">
+  <div class="card">
+    <div class="section-title">Log Repair / Maintenance Cost</div>
+    <div class="row">
+      <div><label>Machine <span style="color:var(--red)">*</span></label><select id="entryMachine" onchange="onEntryMachineChange()"><option value="">-- Choose machine --</option></select></div>
+      <div><label>Date <span style="color:var(--red)">*</span></label><input type="date" id="entryDate"></div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div><label>Linked Defect ID (optional)</label><select id="entryDefect"><option value="">-- None / general maintenance --</option></select></div>
+      <div><label>Work Type</label><select id="entryWorkType"><option value="repair">Repair</option><option value="service">Scheduled Service</option><option value="inspection">Inspection</option><option value="other">Other</option></select></div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div><label>Labour Hours</label><input type="number" id="entryLabourHours" min="0" step="0.25" placeholder="e.g. 2.5"></div>
+      <div><label>Labour Rate (£/hr, optional)</label><input type="number" id="entryLabourRate" min="0" step="0.01" placeholder="e.g. 28.00"></div>
+      <div><label>Parts Cost (£)</label><input type="number" id="entryPartsCost" min="0" step="0.01" placeholder="e.g. 145.00"></div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div><label>Downtime (hours)</label><input type="number" id="entryDowntime" min="0" step="0.25" placeholder="e.g. 4"></div>
+      <div><label>Other Costs (£, optional)</label><input type="number" id="entryOtherCost" min="0" step="0.01" placeholder="e.g. callout fee"></div>
+    </div>
+    <label style="margin-top:10px">Parts Used (description)</label>
+    <textarea id="entryPartsDesc" placeholder="e.g. Hydraulic hose x2, filter kit"></textarea>
+    <label style="margin-top:10px">Notes</label>
+    <textarea id="entryNotes" placeholder="What was done, any follow-up needed"></textarea>
+    <div style="margin-top:14px"><strong>Total cost: <span id="entryTotalPreview">£0.00</span></strong></div>
+    <button class="btn btn-primary btn-block" style="margin-top:12px" onclick="saveEntry()">Save Entry</button>
+  </div>
+  <div class="card">
+    <div class="section-title">Recent Entries <span class="badge" id="recentCount">0</span></div>
+    <div class="table-wrap"><table id="recentTable"><thead><tr><th>Date</th><th>Machine</th><th>Type</th><th>Labour</th><th>Parts</th><th>Downtime</th><th>Total</th><th></th></tr></thead><tbody></tbody></table></div>
+  </div>
+</div>
+
+<div id="view-reports" style="display:none">
+  <div class="card">
+    <div class="section-title">Cost Reports</div>
+    <div class="tabs" id="periodTabs">
+      <button class="active" data-period="daily" onclick="setPeriod('daily')">Daily</button>
+      <button data-period="monthly" onclick="setPeriod('monthly')">Monthly</button>
+      <button data-period="yearly" onclick="setPeriod('yearly')">Yearly</button>
+    </div>
+    <div class="row">
+      <div><label>From</label><input type="date" id="reportFrom"></div>
+      <div><label>To</label><input type="date" id="reportTo"></div>
+      <div><label>Group By</label><select id="reportGroupBy" onchange="renderReports()"><option value="machine">Asset (Machine)</option><option value="branch">Branch</option></select></div>
+    </div>
+    <div class="filter-bar" id="reportBranchFilter" style="margin-top:10px"></div>
+    <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="renderReports()">Apply Filters</button>
+    <button class="btn btn-secondary btn-sm" onclick="exportReportCSV()">Export CSV</button>
+  </div>
+  <div class="stat-row">
+    <div class="stat-box"><div class="num" id="statTotalCost">£0</div><div class="lbl">Total Cost</div></div>
+    <div class="stat-box"><div class="num" id="statLabourCost">£0</div><div class="lbl">Labour Cost</div></div>
+    <div class="stat-box"><div class="num" id="statPartsCost">£0</div><div class="lbl">Parts Cost</div></div>
+    <div class="stat-box"><div class="num" id="statDowntime">0h</div><div class="lbl">Total Downtime</div></div>
+  </div>
+  <div class="card">
+    <div class="section-title">Cost by <span id="groupByLabel">Asset</span></div>
+    <div class="chart-bar-wrap" id="groupChart"></div>
+  </div>
+  <div class="card">
+    <div class="section-title">Entries in Range <span class="badge" id="reportEntryCount">0</span></div>
+    <div class="table-wrap"><table id="reportTable"><thead><tr><th>Date</th><th>Machine</th><th>Branch</th><th>Type</th><th>Labour (hrs)</th><th>Labour Cost</th><th>Parts Cost</th><th>Other</th><th>Downtime (hrs)</th><th>Total</th></tr></thead><tbody></tbody></table></div>
+  </div>
+</div>
+
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+const firebaseConfig={apiKey:"AIzaSyD60Z04IRIvv-EaSyPzoA33fEQ3yT6wsQQ",authDomain:"checkplant-kcm.firebaseapp.com",projectId:"checkplant-kcm",storageBucket:"checkplant-kcm.firebasestorage.app",messagingSenderId:"492245064396",appId:"1:492245064396:web:c79e64b32b9856766bc069"};
+firebase.initializeApp(firebaseConfig);
+const db=firebase.firestore();
+function setConn(o,t){document.getElementById('connDot').className='conn-dot '+(o?'online':'offline');document.getElementById('connText').textContent=t;}
+
+let machines=[];
+let defects=[];
+let costEntries=[];
+let reportPeriod='daily';
+let reportBranchFilter='all';
+const BRANCHES=['Rotherham','Shires','Sheffield'];
+
+function todayISO(){return new Date().toISOString().slice(0,10);}
+function escapeHtml(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600);}
+function money(n){return '£'+(Number(n)||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});}
+
+function showView(name){
+  document.getElementById('view-log').style.display = name==='log'?'block':'none';
+  document.getElementById('view-reports').style.display = name==='reports'?'block':'none';
+  document.getElementById('navLog').classList.toggle('active', name==='log');
+  document.getElementById('navReports').classList.toggle('active', name==='reports');
+  if(name==='reports') renderReports();
+}
+
+function initListeners(){
+  setConn(true,'Connecting...');
+  db.collection('machines').orderBy('name').onSnapshot(s=>{
+    machines=s.docs.map(d=>({id:d.id,...d.data()}));
+    populateEntryMachineSelect();
+  }, e=>setConn(false,'Machines error: '+e.message));
+
+  db.collection('defects').orderBy('dateRaised','desc').onSnapshot(s=>{
+    defects=s.docs.map(d=>({id:d.id,...d.data()}));
+  }, e=>setConn(false,'Defects error: '+e.message));
+
+  db.collection('costEntries').orderBy('date','desc').onSnapshot(s=>{
+    costEntries=s.docs.map(d=>({id:d.id,...d.data()}));
+    renderRecentEntries();
+    if(document.getElementById('view-reports').style.display!=='none') renderReports();
+    setConn(true,'Connected');
+  }, e=>setConn(false,'Cost entries error: '+e.message));
+
+  document.getElementById('entryDate').value=todayISO();
+  const today=todayISO();
+  document.getElementById('reportFrom').value = today.slice(0,8)+'01';
+  document.getElementById('reportTo').value = today;
+  renderReportBranchFilter();
+  ['entryLabourHours','entryLabourRate','entryPartsCost','entryOtherCost'].forEach(id=>{
+    document.getElementById(id).addEventListener('input', updateEntryTotalPreview);
+  });
+}
+
+function populateEntryMachineSelect(){
+  const sel=document.getElementById('entryMachine');
+  const cv=sel.value;
+  sel.innerHTML='<option value="">-- Choose machine --</option>' + machines.map(m=>`<option value="${m.id}">${escapeHtml(m.name)}${m.serialNumber?(' (S/N: '+escapeHtml(m.serialNumber)+')'):''}</option>`).join('');
+  sel.value=cv;
+}
+
+function onEntryMachineChange(){
+  const machineId=document.getElementById('entryMachine').value;
+  const sel=document.getElementById('entryDefect');
+  const relevant = defects.filter(d=>d.machineId===machineId);
+  sel.innerHTML='<option value="">-- None / general maintenance --</option>' + relevant.map(d=>`<option value="${d.id}">${d.defectId?escapeHtml(d.defectId)+' — ':''}${escapeHtml(d.itemName)} (${d.status})</option>`).join('');
+}
+
+function updateEntryTotalPreview(){
+  const hrs=Number(document.getElementById('entryLabourHours').value)||0;
+  const rate=Number(document.getElementById('entryLabourRate').value)||0;
+  const parts=Number(document.getElementById('entryPartsCost').value)||0;
+  const other=Number(document.getElementById('entryOtherCost').value)||0;
+  const total = (hrs*rate) + parts + other;
+  document.getElementById('entryTotalPreview').textContent = money(total);
+}
+
+async function saveEntry(){
+  const machineId=document.getElementById('entryMachine').value;
+  if(!machineId){ toast('Select a machine'); return; }
+  const date=document.getElementById('entryDate').value;
+  if(!date){ toast('Select a date'); return; }
+  const machine=machines.find(m=>m.id===machineId);
+  const defectId=document.getElementById('entryDefect').value || null;
+  const defect = defectId ? defects.find(d=>d.id===defectId) : null;
+  const workType=document.getElementById('entryWorkType').value;
+  const labourHours=Number(document.getElementById('entryLabourHours').value)||0;
+  const labourRate=Number(document.getElementById('entryLabourRate').value)||0;
+  const partsCost=Number(document.getElementById('entryPartsCost').value)||0;
+  const otherCost=Number(document.getElementById('entryOtherCost').value)||0;
+  const downtimeHours=Number(document.getElementById('entryDowntime').value)||0;
+  const partsDesc=document.getElementById('entryPartsDesc').value.trim();
+  const notes=document.getElementById('entryNotes').value.trim();
+  const labourCost = labourHours*labourRate;
+  const totalCost = labourCost + partsCost + otherCost;
+
+  await db.collection('costEntries').add({
+    machineId, machineName: machine?machine.name:'', branch: machine?(machine.branch||''):'',
+    defectRefId: defectId, defectId: defect?(defect.defectId||null):null,
+    date, workType, labourHours, labourRate, labourCost, partsCost, otherCost, totalCost,
+    downtimeHours, partsDesc, notes, createdAt: firebase.firestore.Timestamp.now()
+  });
+
+  toast('Cost entry saved');
+  document.getElementById('entryLabourHours').value='';
+  document.getElementById('entryLabourRate').value='';
+  document.getElementById('entryPartsCost').value='';
+  document.getElementById('entryOtherCost').value='';
+  document.getElementById('entryDowntime').value='';
+  document.getElementById('entryPartsDesc').value='';
+  document.getElementById('entryNotes').value='';
+  document.getElementById('entryTotalPreview').textContent='£0.00';
+}
+
+async function deleteEntry(id){
+  if(!confirm('Delete this cost entry?')) return;
+  await db.collection('costEntries').doc(id).delete();
+  toast('Entry deleted');
+}
+
+function renderRecentEntries(){
+  const tbody=document.querySelector('#recentTable tbody');
+  const recent=costEntries.slice(0,25);
+  document.getElementById('recentCount').textContent=costEntries.length;
+  if(!recent.length){ tbody.innerHTML='<tr><td colspan="8" class="empty-state">No cost entries logged yet.</td></tr>'; return; }
+  tbody.innerHTML = recent.map(e=>`<tr>
+    <td>${e.date}</td>
+    <td>${escapeHtml(e.machineName)}</td>
+    <td>${escapeHtml(e.workType||'-')}</td>
+    <td class="num">${e.labourHours||0}h${e.labourRate?(' @ '+money(e.labourRate)):''}</td>
+    <td class="num">${money(e.partsCost)}</td>
+    <td class="num">${e.downtimeHours||0}h</td>
+    <td class="num"><strong>${money(e.totalCost)}</strong></td>
+    <td><button class="icon-btn del" onclick="deleteEntry('${e.id}')">🗑</button></td>
+  </tr>`).join('');
+}
+
+function setPeriod(p){
+  reportPeriod=p;
+  document.querySelectorAll('#periodTabs button').forEach(b=>b.classList.toggle('active', b.dataset.period===p));
+  const today=todayISO();
+  if(p==='daily'){ document.getElementById('reportFrom').value=today; document.getElementById('reportTo').value=today; }
+  else if(p==='monthly'){ document.getElementById('reportFrom').value=today.slice(0,8)+'01'; document.getElementById('reportTo').value=today; }
+  else if(p==='yearly'){ document.getElementById('reportFrom').value=today.slice(0,4)+'-01-01'; document.getElementById('reportTo').value=today; }
+  renderReports();
+}
+
+function renderReportBranchFilter(){
+  const wrap=document.getElementById('reportBranchFilter');
+  wrap.innerHTML = `<button class="${reportBranchFilter==='all'?'active':''}" onclick="setReportBranchFilter('all')">All Branches</button>` +
+    BRANCHES.map(b=>`<button class="${reportBranchFilter===b?'active':''}" onclick="setReportBranchFilter('${b}')">${b}</button>`).join('');
+}
+function setReportBranchFilter(b){ reportBranchFilter=b; renderReportBranchFilter(); renderReports(); }
+
+function getFilteredEntries(){
+  const from=document.getElementById('reportFrom').value;
+  const to=document.getElementById('reportTo').value;
+  return costEntries.filter(e=>{
+    if(from && e.date<from) return false;
+    if(to && e.date>to) return false;
+    if(reportBranchFilter!=='all' && e.branch!==reportBranchFilter) return false;
+    return true;
+  });
+}
+
+function renderReports(){
+  renderReportBranchFilter();
+  const filtered=getFilteredEntries();
+  const totalCost=filtered.reduce((s,e)=>s+(e.totalCost||0),0);
+  const labourCost=filtered.reduce((s,e)=>s+(e.labourCost||0),0);
+  const partsCost=filtered.reduce((s,e)=>s+(e.partsCost||0),0);
+  const downtime=filtered.reduce((s,e)=>s+(e.downtimeHours||0),0);
+  document.getElementById('statTotalCost').textContent=money(totalCost);
+  document.getElementById('statLabourCost').textContent=money(labourCost);
+  document.getElementById('statPartsCost').textContent=money(partsCost);
+  document.getElementById('statDowntime').textContent=downtime+'h';
+
+  const groupBy=document.getElementById('reportGroupBy').value;
+  document.getElementById('groupByLabel').textContent = groupBy==='machine' ? 'Asset' : 'Branch';
+  const groups={};
+  filtered.forEach(e=>{
+    const key = groupBy==='machine' ? (e.machineName||'Unknown') : (e.branch||'No branch');
+    groups[key]=(groups[key]||0)+(e.totalCost||0);
+  });
+  const sorted=Object.entries(groups).sort((a,b)=>b[1]-a[1]);
+  const maxVal=sorted.length?sorted[0][1]:1;
+  const chartWrap=document.getElementById('groupChart');
+  if(!sorted.length){ chartWrap.innerHTML='<div class="empty-state">No data in this range.</div>'; }
+  else {
+    chartWrap.innerHTML = sorted.map(([label,val])=>`<div class="chart-bar-row">
+      <div class="chart-bar-label">${escapeHtml(label)}</div>
+      <div class="chart-bar-track"><div class="chart-bar-fill" style="width:${maxVal?(val/maxVal*100):0}%"></div></div>
+      <div class="chart-bar-val">${money(val)}</div>
+    </div>`).join('');
+  }
+
+  const tbody=document.querySelector('#reportTable tbody');
+  document.getElementById('reportEntryCount').textContent=filtered.length;
+  if(!filtered.length){ tbody.innerHTML='<tr><td colspan="10" class="empty-state">No entries in this range.</td></tr>'; return; }
+  tbody.innerHTML = filtered.map(e=>`<tr>
+    <td>${e.date}</td><td>${escapeHtml(e.machineName)}</td><td>${escapeHtml(e.branch||'-')}</td><td>${escapeHtml(e.workType||'-')}</td>
+    <td class="num">${e.labourHours||0}</td><td class="num">${money(e.labourCost)}</td><td class="num">${money(e.partsCost)}</td>
+    <td class="num">${money(e.otherCost)}</td><td class="num">${e.downtimeHours||0}</td><td class="num"><strong>${money(e.totalCost)}</strong></td>
+  </tr>`).join('');
+}
+
+function exportReportCSV(){
+  const filtered=getFilteredEntries();
+  if(!filtered.length){ toast('No entries to export'); return; }
+  let csv='Date,Machine,Branch,Work Type,Labour Hours,Labour Rate,Labour Cost,Parts Cost,Parts Description,Other Cost,Downtime Hours,Total Cost,Defect ID,Notes\n';
+  filtered.forEach(e=>{
+    csv+=[e.date,e.machineName,e.branch||'',e.workType||'',e.labourHours||0,e.labourRate||0,e.labourCost||0,e.partsCost||0,(e.partsDesc||'').replace(/,/g,';'),e.otherCost||0,e.downtimeHours||0,e.totalCost||0,e.defectId||'',(e.notes||'').replace(/,/g,';')].map(v=>String(v).replace(/,/g,';')).join(',')+'\n';
+  });
+  const blob=new Blob([csv],{type:'text/csv'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download='CheckPlant_CostReport_'+todayISO()+'.csv'; a.click();
+  URL.revokeObjectURL(url);
+  toast('CSV downloaded');
+}
+
+initListeners();
+</script>
+</body>
+</html>
