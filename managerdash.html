@@ -79,7 +79,7 @@ th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;}
   <div class="links-grid">
     <a class="link-card" href="index.html"><div class="li-icon">🔧</div><div class="li-name">CheckPlant</div><div class="li-desc">Service, Check & Defect Resolution</div></a>
     <a class="link-card" href="costlog.html"><div class="li-icon">💷</div><div class="li-name">CostLog</div><div class="li-desc">Repair costs & downtime</div></a>
-    <a class="link-card" href="index.html#backoffice"><div class="li-icon">🗂️</div><div class="li-name">Back Office</div><div class="li-desc">Machines, categories, records</div></a>
+    <a class="link-card" href="checkgrease.html"><div class="li-icon">🛢️</div><div class="li-name">CheckGrease</div><div class="li-desc">Lubrication & greasing schedule</div></a>
     <a class="link-card" href="#" onclick="document.getElementById('oosCard').scrollIntoView({behavior:'smooth'});return false;"><div class="li-icon">🚫</div><div class="li-name">Out of Service</div><div class="li-desc">Jump to register below</div></a>
   </div>
 </div>
@@ -186,13 +186,11 @@ function getMonthRange(){
 function computeStats(){
   const {from,to} = getMonthRange();
 
-  // Cost this month
   const monthCosts = costEntries.filter(e=>e.date>=from && e.date<=to);
   const totalCost = monthCosts.reduce((s,e)=>s+(e.totalCost||0),0);
   document.getElementById('statMonthCost').textContent = money(totalCost);
   document.getElementById('statMonthCostSub').textContent = monthCosts.length+' entries logged';
 
-  // Cost by asset chart
   const groups={};
   monthCosts.forEach(e=>{ const k=e.machineName||'Unknown'; groups[k]=(groups[k]||0)+(e.totalCost||0); });
   const sorted=Object.entries(groups).sort((a,b)=>b[1]-a[1]).slice(0,10);
@@ -207,8 +205,6 @@ function computeStats(){
     </div>`).join('');
   }
 
-  // Check completion rate: checks logged this month vs number of machines (rough efficiency proxy:
-  // how many machines got at least one check/service logged in the month)
   const monthRecords = records.filter(r=>r.date>=from && r.date<=to);
   const checkRecords = monthRecords.filter(r=>r.type==='check' || r.type==='service');
   const machinesChecked = new Set(checkRecords.map(r=>r.machineId).filter(Boolean));
@@ -217,9 +213,7 @@ function computeStats(){
   document.getElementById('statCheckEfficiencySub').textContent = machinesChecked.size+' of '+machines.length+' machines checked';
   document.getElementById('statChecksThisMonth').textContent = checkRecords.length;
 
-  // Defect resolution rate this month: resolved / (resolved + still open that were raised in range or before)
   const raisedInRange = defects.filter(d=>d.dateRaised>=from && d.dateRaised<=to);
-  const resolvedInRange = defects.filter(d=>d.status==='resolved' && d.resolvedDate>=from && d.resolvedDate<=to);
   const openNow = defects.filter(d=>d.status==='open');
   const totalConsidered = raisedInRange.length;
   const resolutionRate = totalConsidered ? Math.round((raisedInRange.filter(d=>d.status==='resolved').length/totalConsidered)*100) : (defects.length?100:0);
@@ -228,7 +222,6 @@ function computeStats(){
   document.getElementById('statOpenDefects').textContent = openNow.length;
   document.getElementById('statOverdueDefects').textContent = openNow.filter(d=>daysBetween(d.dateRaised,todayISO())>7).length;
 
-  // Average resolution time (all resolved defects with both dates, all-time, for stability)
   const resolvedWithDates = defects.filter(d=>d.status==='resolved' && d.dateRaised && d.resolvedDate);
   if(resolvedWithDates.length){
     const avgDays = resolvedWithDates.reduce((s,d)=>s+daysBetween(d.dateRaised,d.resolvedDate),0)/resolvedWithDates.length;
