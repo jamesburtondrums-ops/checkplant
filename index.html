@@ -604,9 +604,9 @@ function collectItems(containerId,items){const c=document.getElementById(contain
 items.forEach((item,idx)=>{const boxes=c.querySelectorAll('.check-box[data-idx="'+idx+'"]');let status='Not checked';
 boxes.forEach(b=>{if(b.classList.contains('active'))status=b.textContent.trim();});res.push({name:item,status});});return res;}
 function renderOutstandingDefectsList(){const w=document.getElementById('outstandingDefectsList');if(!w)return;
-const open=defects.filter(d=>d.status==='open');if(!open.length){w.innerHTML='<div class="empty-state">No outstanding defects.</div>';return;}
+const open=defects.filter(d=>d.status==='open').sort((a,b)=>(a.dateRaised||'').localeCompare(b.dateRaised||''));if(!open.length){w.innerHTML='<div class="empty-state">No outstanding defects.</div>';return;}
 w.innerHTML='';open.forEach(d=>{const days=daysBetween(d.dateRaised,todayISO());const row=document.createElement('div');row.className='machine-list-item';row.onclick=()=>openDefectForm(d.id);
-row.innerHTML='<div><div class="mname">'+(d.defectId?('['+escapeHtml(d.defectId)+'] '):'')+escapeHtml(d.machineName)+' — '+escapeHtml(d.itemName)+'</div><div class="mlast">Raised '+d.dateRaised+'</div></div><span class="badge red">'+days+'d</span>';
+const raisedTime=d.raisedAt&&d.raisedAt.toDate?d.raisedAt.toDate().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'';row.innerHTML='<div><div class="mname">'+(d.defectId?('['+escapeHtml(d.defectId)+'] '):'')+escapeHtml(d.machineName)+' — '+escapeHtml(d.itemName)+'</div><div class="mlast">Raised '+d.dateRaised+(raisedTime?(' at '+raisedTime):'')+'</div></div><span class="badge red">'+days+'d</span>';
 w.appendChild(row);});}
 function openDefectForm(id){currentDefect=defects.find(d=>d.id===id);if(!currentDefect)return;
 document.getElementById('defMachineName').value=currentDefect.machineName;document.getElementById('defItemName').value=currentDefect.itemName;
@@ -629,7 +629,7 @@ const hoursNum=Number(hours);const nextDue=hoursNum+SERVICE_HOURS_LIMIT;
 const record={type:'service',machineId:currentServiceMachine.id,subject:currentServiceMachine.name,serialNumber:currentServiceMachine.serialNumber||'',branch:currentServiceMachine.branch||'',technician:techName,date:document.getElementById('svcDate').value,items,notes:document.getElementById('svcNotes').value.trim(),signName,signDate,signatureData:sig.canvas.toDataURL('image/png'),hoursReading:hoursNum,nextServiceDueHours:nextDue,lolerSection,createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending'};
 await db.collection('machines').doc(currentServiceMachine.id).update({currentHours:hoursNum,lastServiceHours:hoursNum,nextServiceDueHours:nextDue});
 if(lolerSection.status!=='na'){await db.collection('machines').doc(currentServiceMachine.id).update({loler:{applies:true,lastExamDate:lolerCertDate||null,nextDueDate:lolerNextDue||null,examinerName:lolerExaminer||''}});}
-if(lolerSection.status==='defect'){const defectId=await getNextDefectId();await db.collection('defects').add({defectId,machineId:currentServiceMachine.id,machineName:currentServiceMachine.name,itemName:'LOLER — Statutory: exam overdue/expired',dateRaised:todayISO(),status:'open',resolvedDate:null,resolvedBy:null,resolutionRecordId:null,severity:'statutory'});}
+if(lolerSection.status==='defect'){const defectId=await getNextDefectId();await db.collection('defects').add({defectId,machineId:currentServiceMachine.id,machineName:currentServiceMachine.name,itemName:'LOLER — Statutory: exam overdue/expired',dateRaised:todayISO(),raisedAt:firebase.firestore.Timestamp.now(),status:'open',resolvedDate:null,resolvedAt:null,resolvedBy:null,resolutionRecordId:null,severity:'statutory'});}
 await saveRecordToFirestore(record);
 }else if(mode==='check'){
 if(!currentCheckCategory){toast('Select a category');return;}if(!currentCheckMachine){toast('Select a machine');return;}
@@ -640,7 +640,7 @@ const cat = categories[currentCheckCategory];
     const items = collectItems('checkItemsList', checkSrc);
 const record={type:'check',categoryKey:currentCheckCategory,machineId:currentCheckMachine.id,subject:cat.label+' — '+currentCheckMachine.name,serialNumber:currentCheckMachine.serialNumber||'',branch:currentCheckMachine.branch||'',technician:signName,date:document.getElementById('chkDate').value,items,notes:document.getElementById('chkNotes').value.trim(),signName,signDate,signatureData:sig.canvas.toDataURL('image/png'),hoursReading:Number(hours),createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending'};
 await db.collection('machines').doc(currentCheckMachine.id).update({currentHours:Number(hours)});
-for(const di of items.filter(i=>i.status==='Defect')){const defectId=await getNextDefectId();await db.collection('defects').add({defectId,machineId:currentCheckMachine.id,machineName:currentCheckMachine.name,itemName:di.name,dateRaised:todayISO(),status:'open',resolvedDate:null,resolvedBy:null,resolutionRecordId:null,severity:'routine'});}
+for(const di of items.filter(i=>i.status==='Defect')){const defectId=await getNextDefectId();await db.collection('defects').add({defectId,machineId:currentCheckMachine.id,machineName:currentCheckMachine.name,itemName:di.name,dateRaised:todayISO(),raisedAt:firebase.firestore.Timestamp.now(),status:'open',resolvedDate:null,resolvedAt:null,resolvedBy:null,resolutionRecordId:null,severity:'routine'});}
 await saveRecordToFirestore(record);
 }else if(mode==='defect'){
 if(!currentDefect){toast('Select a defect');return;}
@@ -649,7 +649,7 @@ if(!signName||!signDate){toast('Enter name and date');return;}if(!sig||!sig.hasS
 const m=machines.find(x=>x.id===currentDefect.machineId);
 const record={type:'defect',defectId:currentDefect.defectId||currentDefect.id,machineId:currentDefect.machineId,subject:currentDefect.machineName+' — '+currentDefect.itemName,serialNumber:m?(m.serialNumber||''):'',branch:m?(m.branch||''):'',technician:signName,date:document.getElementById('defResolvedDate').value,items:[{name:currentDefect.itemName,status:'Resolved'}],notes:workDone,signName,signDate,signatureData:sig.canvas.toDataURL('image/png'),hoursReading:Number(hours),defectRefId:currentDefect.id,createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending'};
 if(m)await db.collection('machines').doc(m.id).update({currentHours:Number(hours)});
-await db.collection('defects').doc(currentDefect.id).update({status:'resolved',resolvedDate:document.getElementById('defResolvedDate').value,resolvedBy:signName,resolutionNotes:workDone});
+await db.collection('defects').doc(currentDefect.id).update({status:'resolved',resolvedDate:document.getElementById('defResolvedDate').value,resolvedAt:firebase.firestore.Timestamp.now(),resolvedBy:signName,resolutionNotes:workDone});
 await saveRecordToFirestore(record);
 if(record.id)await db.collection('defects').doc(currentDefect.id).update({resolutionRecordId:record.id});
 }}
@@ -834,9 +834,12 @@ async function addCategoryItem(key, mode){
     }
 function renderDefectsTable(){const ce=document.getElementById('defectCount');const oc=defects.filter(d=>d.status==='open').length;if(ce)ce.textContent=oc;
 const w=document.getElementById('defectsTableWrap');if(!w)return;if(!defects.length){w.innerHTML='<div class="empty-state">No defects.</div>';return;}
+const sorted=[...defects].sort((a,b)=>(a.dateRaised||'').localeCompare(b.dateRaised||''));
 let h='<table><thead><tr><th>ID</th><th>Machine</th><th>Defect</th><th>Raised</th><th>Days</th><th>Status</th><th>Resolved</th><th>Work Done / Notes</th></tr></thead><tbody>';
-defects.forEach(d=>{const days=d.status==='open'?daysBetween(d.dateRaised,todayISO()):daysBetween(d.dateRaised,d.resolvedDate||todayISO());
-h+='<tr><td style="font-weight:700">'+escapeHtml(d.defectId||'-')+'</td><td>'+escapeHtml(d.machineName)+'</td><td>'+escapeHtml(d.itemName)+'</td><td>'+d.dateRaised+'</td><td>'+days+'</td><td><span class="pill '+d.status+'">'+d.status+'</span></td><td>'+(d.resolvedDate?d.resolvedDate+' by '+escapeHtml(d.resolvedBy||'-'):'-')+'</td><td>'+escapeHtml(d.resolutionNotes||'-')+'</td></tr>';});
+sorted.forEach(d=>{const days=d.status==='open'?daysBetween(d.dateRaised,todayISO()):daysBetween(d.dateRaised,d.resolvedDate||todayISO());
+const raisedTime=d.raisedAt&&d.raisedAt.toDate?d.raisedAt.toDate().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'';
+const resolvedTime=d.resolvedAt&&d.resolvedAt.toDate?d.resolvedAt.toDate().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'';
+h+='<tr><td style="font-weight:700">'+escapeHtml(d.defectId||'-')+'</td><td>'+escapeHtml(d.machineName)+'</td><td>'+escapeHtml(d.itemName)+'</td><td>'+d.dateRaised+(raisedTime?(' '+raisedTime):'')+'</td><td>'+days+'</td><td><span class="pill '+d.status+'">'+d.status+'</span></td><td>'+(d.resolvedDate?d.resolvedDate+(resolvedTime?(' '+resolvedTime):'')+' by '+escapeHtml(d.resolvedBy||'-'):'-')+'</td><td>'+escapeHtml(d.resolutionNotes||'-')+'</td></tr>';});
 h+='</tbody></table>';w.innerHTML=h;}
 function exportDefectsCSV(){if(!defects.length){toast('No defects');return;}let csv='Defect ID,Machine,Defect,Raised,Days,Status,Resolved,By,Work Done Notes\n';
 defects.forEach(d=>{const days=d.status==='open'?daysBetween(d.dateRaised,todayISO()):daysBetween(d.dateRaised,d.resolvedDate||todayISO());
