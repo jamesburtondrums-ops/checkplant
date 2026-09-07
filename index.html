@@ -156,12 +156,12 @@ input:checked+.slider{background:var(--green);}input:checked+.slider:before{tran
 <button class="btn btn-primary btn-block" onclick="completeAndShare('check')">Complete &amp; Share PDF</button></div>
 <div class="screen" id="screen-defect-select">
 <button class="back-link" onclick="goHome()">← Back</button>
-<div class="card"><div class="section-title">🛠️ Select Outstanding Defect</div><div id="outstandingDefectsList"></div></div></div>
+<div class="card"><div class="section-title">🛠️ Select Outstanding Defect</div><p class="progress-note" style="margin:0 0 12px">Oldest open defects are shown first. Select a defect to review its full defect record and original check PDF before completing the resolution.</p><div id="outstandingDefectsList"></div></div></div>
 <div class="screen" id="screen-defect-form">
 <button class="back-link" onclick="showScreen('defect-select')">← Back</button>
 <div class="card"><div class="section-title">🛠️ Defect Resolution</div>
 <div class="row"><div><label>Defect ID</label><input type="text" id="defDefectId" disabled style="font-weight:700;color:var(--navy)"></div><div><label>Machine</label><input type="text" id="defMachineName" disabled></div><div><label>Defect</label><input type="text" id="defItemName" disabled></div></div>
-<div class="row" style="margin-top:12px"><div><label>Date Raised</label><input type="text" id="defDateRaised" disabled></div><div><label>Days Outstanding</label><input type="text" id="defDaysOutstanding" disabled></div></div>
+<div class="row" style="margin-top:12px"><div><label>Date Raised</label><input type="text" id="defDateRaised" disabled></div><div><label>Days Outstanding</label><input type="text" id="defDaysOutstanding" disabled></div></div><button class="btn btn-secondary btn-sm" style="margin-top:12px" type="button" onclick="viewCurrentDefectPDF()">View Full Defect PDF & Notes</button>
 <div class="row" style="margin-top:12px"><div><label>Hours <span class="required-star">*</span></label><input type="number" id="defHours" min="0"></div><div><label>Date Resolved</label><input type="date" id="defResolvedDate"></div></div></div>
 <div class="card"><div class="section-title">Work Carried Out</div><textarea id="defWorkDone"></textarea></div>
 <div class="card"><div class="section-title">Sign Off</div>
@@ -471,6 +471,35 @@ async function getNextDefectId(){
   });
   return 'DEF-' + String(result).padStart(6,'0');
 }
+
+
+function defectItemKey(name){return String(name||'').trim().toLowerCase().replace(/\s+/g,' ');}
+function openMatchingDefects(machineId,itemName){const key=defectItemKey(itemName);return defects.filter(d=>d.machineId===machineId&&d.status==='open'&&defectItemKey(d.itemName)===key);}
+async function createOrLinkCheckDefect(item,record,operatorName){
+  const matches=openMatchingDefects(currentCheckMachine.id,item.name);
+  const reportedAt=new Date().toISOString();
+  const occurrence={reportedAt,reportedDate:record.date,reportedBy:operatorName,inspectionRecordId:record.id||null,inspectionItemName:item.name,condition:'Marked Defect during routine check'};
+  if(matches.length){
+    const existing=matches[0];
+    const repeats=Number(existing.reportCount||1);
+    const message='Existing open defect found:\n\n'+(existing.defectId||existing.id)+' — '+existing.itemName+'\nRaised: '+(existing.dateRaised||'unknown')+'\nPreviously reported: '+repeats+' time'+(repeats===1?'':'s')+'.\n\nOK = add this finding to the existing defect.\nCancel = create a new, separate defect.';
+    if(confirm(message)){
+      await db.collection('defects').doc(existing.id).set({
+        inspectionItemCode:defectItemKey(item.name),inspectionItemName:item.name,
+        reportCount:repeats+1,lastReportedAt:firebase.firestore.Timestamp.now(),lastReportedAtClient:reportedAt,lastReportedDate:record.date,lastReportedBy:operatorName,lastInspectionId:record.id||null,lastObservedCondition:occurrence.condition,
+        repeatReports:firebase.firestore.FieldValue.arrayUnion(occurrence),updatedAt:firebase.firestore.Timestamp.now()
+      },{merge:true});
+      return {action:'linked',defectId:existing.defectId||existing.id};
+    }
+  }
+  const defectId=await getNextDefectId();
+  await db.collection('defects').add({
+    defectId,machineId:currentCheckMachine.id,machineName:currentCheckMachine.name,itemName:item.name,inspectionItemCode:defectItemKey(item.name),inspectionItemName:item.name,
+    dateRaised:todayISO(),raisedAt:firebase.firestore.Timestamp.now(),status:'open',resolvedDate:null,resolvedAt:null,resolvedBy:null,resolutionRecordId:null,severity:'routine',
+    reportCount:1,firstReportedAt:firebase.firestore.Timestamp.now(),firstReportedAtClient:reportedAt,firstReportedBy:operatorName,lastReportedAt:firebase.firestore.Timestamp.now(),lastReportedAtClient:reportedAt,lastReportedDate:record.date,lastReportedBy:operatorName,lastInspectionId:record.id||null,lastObservedCondition:occurrence.condition,repeatReports:[occurrence]
+  });
+  return {action:'created',defectId};
+}
 function initFirestoreListeners(){
 setConn(true,"Connecting...");
 loadPinSetting();
@@ -603,10 +632,11 @@ function clearSig(id){const p=sigPads[id];if(!p)return;p.ctx.clearRect(0,0,p.can
 function collectItems(containerId,items){const c=document.getElementById(containerId);const res=[];
 items.forEach((item,idx)=>{const boxes=c.querySelectorAll('.check-box[data-idx="'+idx+'"]');let status='Not checked';
 boxes.forEach(b=>{if(b.classList.contains('active'))status=b.textContent.trim();});res.push({name:item,status});});return res;}
+function defectRaisedTimestamp(d){if(d.raisedAt&&d.raisedAt.toDate)return d.raisedAt.toDate().getTime();return new Date((d.dateRaised||'1970-01-01')+'T00:00:00').getTime();}
 function renderOutstandingDefectsList(){const w=document.getElementById('outstandingDefectsList');if(!w)return;
-const open=defects.filter(d=>d.status==='open').sort((a,b)=>(a.dateRaised||'').localeCompare(b.dateRaised||''));if(!open.length){w.innerHTML='<div class="empty-state">No outstanding defects.</div>';return;}
+const open=defects.filter(d=>d.status==='open').sort((a,b)=>defectRaisedTimestamp(a)-defectRaisedTimestamp(b));if(!open.length){w.innerHTML='<div class="empty-state">No outstanding defects.</div>';return;}
 w.innerHTML='';open.forEach(d=>{const days=daysBetween(d.dateRaised,todayISO());const row=document.createElement('div');row.className='machine-list-item';row.onclick=()=>openDefectForm(d.id);
-const raisedTime=d.raisedAt&&d.raisedAt.toDate?d.raisedAt.toDate().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'';row.innerHTML='<div><div class="mname">'+(d.defectId?('['+escapeHtml(d.defectId)+'] '):'')+escapeHtml(d.machineName)+' — '+escapeHtml(d.itemName)+'</div><div class="mlast">Raised '+d.dateRaised+(raisedTime?(' at '+raisedTime):'')+'</div></div><span class="badge red">'+days+'d</span>';
+const raisedTime=d.raisedAt&&d.raisedAt.toDate?d.raisedAt.toDate().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'';row.innerHTML='<div><div class="mname">'+(d.defectId?('['+escapeHtml(d.defectId)+'] '):'')+escapeHtml(d.machineName)+' — '+escapeHtml(d.itemName)+'</div><div class="mlast">Raised '+d.dateRaised+(raisedTime?(' at '+raisedTime):'')+(d.reportCount>1?(' · Reported '+d.reportCount+' times'):'')+'</div></div><div style="display:flex;align-items:center;gap:8px"><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();viewDefectPDF(''+d.id+'')">View PDF</button><span class="badge red">'+days+'d</span></div>';
 w.appendChild(row);});}
 function openDefectForm(id){currentDefect=defects.find(d=>d.id===id);if(!currentDefect)return;
 document.getElementById('defMachineName').value=currentDefect.machineName;document.getElementById('defItemName').value=currentDefect.itemName;
@@ -640,7 +670,7 @@ const cat = categories[currentCheckCategory];
     const items = collectItems('checkItemsList', checkSrc);
 const record={type:'check',categoryKey:currentCheckCategory,machineId:currentCheckMachine.id,subject:cat.label+' — '+currentCheckMachine.name,serialNumber:currentCheckMachine.serialNumber||'',branch:currentCheckMachine.branch||'',technician:signName,date:document.getElementById('chkDate').value,items,notes:document.getElementById('chkNotes').value.trim(),signName,signDate,signatureData:sig.canvas.toDataURL('image/png'),hoursReading:Number(hours),createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending'};
 await db.collection('machines').doc(currentCheckMachine.id).update({currentHours:Number(hours)});
-for(const di of items.filter(i=>i.status==='Defect')){const defectId=await getNextDefectId();await db.collection('defects').add({defectId,machineId:currentCheckMachine.id,machineName:currentCheckMachine.name,itemName:di.name,dateRaised:todayISO(),raisedAt:firebase.firestore.Timestamp.now(),status:'open',resolvedDate:null,resolvedAt:null,resolvedBy:null,resolutionRecordId:null,severity:'routine'});}
+for(const di of items.filter(i=>i.status==='Defect')){await createOrLinkCheckDefect(di,record,signName);}
 await saveRecordToFirestore(record);
 }else if(mode==='defect'){
 if(!currentDefect){toast('Select a defect');return;}
@@ -649,12 +679,16 @@ if(!signName||!signDate){toast('Enter name and date');return;}if(!sig||!sig.hasS
 const m=machines.find(x=>x.id===currentDefect.machineId);
 const record={type:'defect',defectId:currentDefect.defectId||currentDefect.id,machineId:currentDefect.machineId,subject:currentDefect.machineName+' — '+currentDefect.itemName,serialNumber:m?(m.serialNumber||''):'',branch:m?(m.branch||''):'',technician:signName,date:document.getElementById('defResolvedDate').value,items:[{name:currentDefect.itemName,status:'Resolved'}],notes:workDone,signName,signDate,signatureData:sig.canvas.toDataURL('image/png'),hoursReading:Number(hours),defectRefId:currentDefect.id,createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending'};
 if(m)await db.collection('machines').doc(m.id).update({currentHours:Number(hours)});
-await db.collection('defects').doc(currentDefect.id).update({status:'resolved',resolvedDate:document.getElementById('defResolvedDate').value,resolvedAt:firebase.firestore.Timestamp.now(),resolvedBy:signName,resolutionNotes:workDone});
+await db.collection('defects').doc(currentDefect.id).update({status:'resolved',resolvedDate:document.getElementById('defResolvedDate').value,resolvedAt:firebase.firestore.Timestamp.now(),resolvedBy:signName,resolutionNotes:workDone,resolutionMachineHours:Number(hours),updatedAt:firebase.firestore.Timestamp.now()});
 await saveRecordToFirestore(record);
 if(record.id)await db.collection('defects').doc(currentDefect.id).update({resolutionRecordId:record.id});
 }}
 async function saveRecordToFirestore(record){try{const ref=await db.collection('records').add(record);record.id=ref.id;toast('Saved');afterRecordCreated(record);generatePDF(record);}catch(err){toast('Save failed');console.error(err);}}
 function afterRecordCreated(record){if(settings.autoSheets&&settings.sheetsWebhookUrl)pushRecordToSheets(record,true);if(settings.autoCsv)downloadSingleRecordCsv(record);}
+function defectPDFLine(doc,text,state){const pageW=doc.internal.pageSize.getWidth(),margin=40;doc.setFontSize(10);doc.setFont(undefined,'normal');const lines=doc.splitTextToSize(String(text||'-'),pageW-margin*2);if(state.y+lines.length*13>760){doc.addPage();state.y=50;}doc.text(lines,margin,state.y);state.y+=lines.length*13+5;}
+function buildDefectPDF(defect){const jsPDF=window.jspdf&&window.jspdf.jsPDF;if(!jsPDF)throw new Error('PDF library is unavailable');const doc=new jsPDF({unit:'pt',format:'a4'}),pageW=doc.internal.pageSize.getWidth(),margin=40,state={y:50};doc.setFillColor(46,46,143);doc.rect(0,0,pageW,74,'F');doc.setFillColor(47,174,78);doc.rect(0,70,pageW,4,'F');doc.setTextColor(255,255,255);doc.setFontSize(20);doc.setFont(undefined,'bold');doc.text('CheckPlant',margin,33);doc.setFontSize(10);doc.text('KCM WASTE MANAGEMENT',margin,50);doc.setFont(undefined,'normal');doc.text('Open Defect Record',margin,64);doc.setTextColor(28,31,38);state.y=100;doc.setFontSize(14);doc.setFont(undefined,'bold');doc.text((defect.defectId||defect.id)+' — '+(defect.itemName||'Defect'),margin,state.y);state.y+=24;defectPDFLine(doc,'Machine: '+(defect.machineName||'-'),state);defectPDFLine(doc,'Date raised: '+(defect.dateRaised||'-'),state);defectPDFLine(doc,'Status: '+(defect.status||'open'),state);defectPDFLine(doc,'Severity: '+(defect.severity||'routine'),state);defectPDFLine(doc,'Reports logged: '+(defect.reportCount||1),state);if(defect.lastReportedDate)defectPDFLine(doc,'Last reported: '+defect.lastReportedDate+(defect.lastReportedBy?' by '+defect.lastReportedBy:''),state);state.y+=8;doc.setFontSize(12);doc.setFont(undefined,'bold');doc.setTextColor(46,46,143);doc.text('Defect Notes and Repeat Reports',margin,state.y);doc.setTextColor(28,31,38);state.y+=18;const reports=Array.isArray(defect.repeatReports)?defect.repeatReports:[];if(reports.length){reports.sort((a,b)=>String(a.reportedAt||'').localeCompare(String(b.reportedAt||''))).forEach((r,i)=>defectPDFLine(doc,(i+1)+'. '+(r.reportedDate||'')+(r.reportedBy?' — '+r.reportedBy:'')+(r.condition?' — '+r.condition:''),state));}else defectPDFLine(doc,'Original report: '+(defect.lastObservedCondition||'No operator notes recorded.'),state);if(defect.resolutionNotes){state.y+=8;doc.setFontSize(12);doc.setFont(undefined,'bold');doc.setTextColor(46,46,143);doc.text('Resolution Notes',margin,state.y);doc.setTextColor(28,31,38);state.y+=18;defectPDFLine(doc,defect.resolutionNotes,state);}doc.setFontSize(8);doc.setTextColor(150,150,150);doc.text('CheckPlant KCM — Generated '+new Date().toLocaleString('en-GB'),margin,800);return doc;}
+function viewDefectPDF(id){try{const d=defects.find(x=>x.id===id);if(!d)return toast('Defect no longer available');const url=buildDefectPDF(d).output('bloburl');window.open(url,'_blank','noopener');}catch(e){console.error(e);toast('Could not open defect PDF');}}
+function viewCurrentDefectPDF(){if(!currentDefect){toast('Select a defect first');return;}viewDefectPDF(currentDefect.id);}
 function generatePDF(record){const jsPDF=window.jspdf.jsPDF;const doc=new jsPDF({unit:'pt',format:'a4'});const pageW=doc.internal.pageSize.getWidth();const margin=40;let y=50;
 doc.setFillColor(46,46,143);doc.rect(0,0,pageW,74,'F');doc.setFillColor(47,174,78);doc.rect(0,70,pageW,4,'F');
 doc.setTextColor(255,255,255);doc.setFontSize(20);doc.setFont(undefined,'bold');doc.text('CheckPlant',margin,33);
