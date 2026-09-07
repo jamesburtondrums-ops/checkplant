@@ -478,7 +478,7 @@ function openMatchingDefects(machineId,itemName){const key=defectItemKey(itemNam
 async function createOrLinkCheckDefect(item,record,operatorName){
   const matches=openMatchingDefects(currentCheckMachine.id,item.name);
   const reportedAt=new Date().toISOString();
-  const occurrence={reportedAt,reportedDate:record.date,reportedBy:operatorName,inspectionRecordId:record.id||null,inspectionItemName:item.name,condition:'Marked Defect during routine check'};
+  const occurrence={reportedAt,reportedDate:record.date,reportedBy:operatorName,inspectionRecordId:record.id||null,inspectionItemName:item.name,condition:item.defectNote||'Marked Defect during routine check'};
   if(matches.length){
     const existing=matches[0];
     const repeats=Number(existing.reportCount||1);
@@ -593,7 +593,8 @@ items.forEach((item,idx)=>{const row=document.createElement('div');row.className
 row.innerHTML='<div>'+escapeHtml(item)+'</div><div class="check-pair"><div class="check-box serviceable" data-idx="'+idx+'" onclick="toggleCheck(this,\'service\')">Serviceable</div><div class="check-box replaced" data-idx="'+idx+'" onclick="toggleCheck(this,\'service\')">Replaced</div></div>';
 l.appendChild(row);});}
 function toggleCheck(el,mode){const idx=el.dataset.idx;const c=mode==='service'?document.getElementById('serviceItemsList'):document.getElementById('checkItemsList');
-const pair=c.querySelectorAll('.check-box[data-idx="'+idx+'"]');pair.forEach(b=>{if(b===el)b.classList.toggle('active');else if(el.classList.contains('active'))b.classList.remove('active');});}
+const pair=c.querySelectorAll('.check-box[data-idx="'+idx+'"]');pair.forEach(b=>{if(b===el)b.classList.toggle('active');else if(el.classList.contains('active'))b.classList.remove('active');});
+if(mode==='check'){const note=c.querySelector('.defect-note-inline[data-idx="'+idx+'"]');const isDefect=el.textContent.trim()==='Defect'&&el.classList.contains('active');if(note){note.classList.toggle('show',isDefect);if(isDefect)setTimeout(()=>note.focus(),50);else note.value='';}}}
 function toggleLolerStatus(el,status){pendingLolerStatus=status;document.querySelectorAll('#svcLolerPanel .check-box').forEach(b=>b.classList.remove('active'));el.classList.add('active');}
 function renderCategoryGrid(){const g=document.getElementById('categoryGrid');if(!g)return;g.innerHTML='';
 Object.entries(categories).forEach(([k,c])=>{const card=document.createElement('div');card.className='cat-card';card.onclick=()=>onCategoryChosen(k);
@@ -610,7 +611,7 @@ function renderCheckItems(){const l=document.getElementById('checkItemsList');l.
       const items = (cat.checkItems && cat.checkItems.length) ? cat.checkItems : cat.items;
 document.getElementById('chkItemCount').textContent=items.length;document.getElementById('chkNoItemsNote').style.display=items.length?'none':'block';
 items.forEach((item,idx)=>{const row=document.createElement('div');row.className='checklist-item';
-row.innerHTML='<div>'+escapeHtml(item)+'</div><div class="check-pair"><div class="check-box serviceable" data-idx="'+idx+'" onclick="toggleCheck(this,\'check\')">Pass</div><div class="check-box replaced" data-idx="'+idx+'" onclick="toggleCheck(this,\'check\')">Defect</div></div>';
+row.innerHTML='<div>'+escapeHtml(item)+'</div><div class="check-pair"><div class="check-box serviceable" data-idx="'+idx+'" onclick="toggleCheck(this,\'check\')">Pass</div><div class="check-box replaced" data-idx="'+idx+'" onclick="toggleCheck(this,\'check\')">Defect</div></div><input class="defect-note-inline" data-idx="'+idx+'" type="text" maxlength="500" placeholder="Defect note — describe what is wrong (optional)">';
 l.appendChild(row);});}
 const sigPads={};
 function initSigPad(canvasId){const canvas=document.getElementById(canvasId);if(!canvas)return;const ctx=canvas.getContext('2d');let saved=null;
@@ -630,13 +631,12 @@ if(sigPads[canvasId]&&sigPads[canvasId]._rh){window.removeEventListener('resize'
 sigPads[canvasId]={canvas,ctx,hasSignature:sigPads[canvasId]?sigPads[canvasId].hasSignature:false,_rh:rh};}
 function clearSig(id){const p=sigPads[id];if(!p)return;p.ctx.clearRect(0,0,p.canvas.width,p.canvas.height);p.hasSignature=false;}
 function collectItems(containerId,items){const c=document.getElementById(containerId);const res=[];
-items.forEach((item,idx)=>{const boxes=c.querySelectorAll('.check-box[data-idx="'+idx+'"]');let status='Not checked';
-boxes.forEach(b=>{if(b.classList.contains('active'))status=b.textContent.trim();});res.push({name:item,status});});return res;}
+items.forEach((item,idx)=>{const boxes=c.querySelectorAll('.check-box[data-idx="'+idx+'"]');let status='Not checked';boxes.forEach(b=>{if(b.classList.contains('active'))status=b.textContent.trim();});let note='';if(containerId==='checkItemsList'){const noteEl=c.querySelector('.defect-note-inline[data-idx="'+idx+'"]');note=noteEl?noteEl.value.trim():'';}res.push({name:item,status,defectNote:note});});return res;}
 function defectRaisedTimestamp(d){if(d.raisedAt&&d.raisedAt.toDate)return d.raisedAt.toDate().getTime();return new Date((d.dateRaised||'1970-01-01')+'T00:00:00').getTime();}
 function renderOutstandingDefectsList(){const w=document.getElementById('outstandingDefectsList');if(!w)return;
 const open=defects.filter(d=>d.status==='open').sort((a,b)=>defectRaisedTimestamp(a)-defectRaisedTimestamp(b));if(!open.length){w.innerHTML='<div class="empty-state">No outstanding defects.</div>';return;}
 w.innerHTML='';open.forEach(d=>{const days=daysBetween(d.dateRaised,todayISO());const row=document.createElement('div');row.className='machine-list-item';row.onclick=()=>openDefectForm(d.id);
-const raisedTime=d.raisedAt&&d.raisedAt.toDate?d.raisedAt.toDate().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'';row.innerHTML='<div><div class="mname">'+(d.defectId?('['+escapeHtml(d.defectId)+'] '):'')+escapeHtml(d.machineName)+' — '+escapeHtml(d.itemName)+'</div><div class="mlast">Raised '+d.dateRaised+(raisedTime?(' at '+raisedTime):'')+(d.reportCount>1?(' · Reported '+d.reportCount+' times'):'')+'</div></div><div style="display:flex;align-items:center;gap:8px"><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();viewDefectPDF(\''+d.id+'\')">View PDF</button><span class="badge red">'+days+'d</span></div>';
+const raisedTime=d.raisedAt&&d.raisedAt.toDate?d.raisedAt.toDate().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'';row.innerHTML='<div><div class="mname">'+(d.defectId?('['+escapeHtml(d.defectId)+'] '):'')+escapeHtml(d.machineName)+' — '+escapeHtml(d.itemName)+'</div><div class="mlast">Raised '+d.dateRaised+(raisedTime?(' at '+raisedTime):'')+(d.reportCount>1?(' · Reported '+d.reportCount+' times'):'')+'</div></div><div style="display:flex;align-items:center;gap:8px"><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();viewDefectPDF(''+d.id+'')">View PDF</button><span class="badge red">'+days+'d</span></div>';
 w.appendChild(row);});}
 function openDefectForm(id){currentDefect=defects.find(d=>d.id===id);if(!currentDefect)return;
 document.getElementById('defMachineName').value=currentDefect.machineName;document.getElementById('defItemName').value=currentDefect.itemName;
