@@ -83,6 +83,15 @@ input:checked+.slider{background:var(--green);}input:checked+.slider:before{tran
 .branch-filter{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;}
 .branch-filter button{padding:7px 14px;border-radius:20px;border:1.5px solid #e5e7eb;background:#fff;cursor:pointer;font-size:.78rem;font-weight:700;}
 .branch-filter button.active{background:var(--navy);border-color:var(--navy);color:#fff;}
+
+button:disabled{opacity:.6;cursor:wait}
+button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focus-visible{outline:3px solid #2563eb;outline-offset:3px}
+.asset-field{display:flex;flex-direction:column;gap:7px;flex:1;min-width:160px}
+.duplicate-notice,#duplicateAssetNotice{color:#92400e;font-weight:600;line-height:1.5}
+#assetSaveMessage{line-height:1.5}
+.mode-card:hover,.machine-list-item:hover{border-color:var(--navy)}
+#recordsTableWrap,#defectsTableWrap{overflow-x:auto}
+@media(max-width:640px){header{align-items:flex-start;gap:12px;flex-direction:column}header nav{display:flex;width:100%;gap:8px}header nav button{flex:1;margin:0;min-height:44px}.tabs{flex-wrap:nowrap;overflow-x:auto;padding-bottom:8px}.tabs button{flex-shrink:0;min-height:44px}.row>*{min-width:0;flex-basis:100%}.machine-list-item{gap:12px}.mode-grid{margin-top:18px}.mode-card{padding:16px}.checklist-item{flex-wrap:wrap}.btn-sm{min-height:40px}}
 </style>
 </head>
 <body>
@@ -98,7 +107,7 @@ input:checked+.slider{background:var(--green);}input:checked+.slider:before{tran
 <div class="mode-card check" onclick="showScreen('check-category')"><h2>✅ Check Mode</h2><p>Safety check for a machine category.</p></div>
 <div class="mode-card defect" onclick="showScreen('defect-select')"><h2>🛠️ Defect Resolution</h2><p>Resolve an outstanding defect.</p></div>
 </div>
-<div class="card"><div class="section-title">🏭 Machine Profiles</div><div id="homeMachineList"></div></div>
+<div class="card"><div class="section-title">🏭 Machine Profiles</div><label for="homeAssetSearch">Find a machine</label><input id="homeAssetSearch" type="search" placeholder="Search name, serial number or branch" oninput="renderHomeMachineList()" style="margin-bottom:14px"><div id="homeMachineList"></div></div>
 <div class="card"><div class="section-title">📅 Upcoming Bookings</div><div id="homeUpcomingBookings"></div></div>
 </div>
 <div class="screen" id="screen-pin-entry">
@@ -201,12 +210,12 @@ input:checked+.slider{background:var(--green);}input:checked+.slider:before{tran
 <p class="progress-note">Shows every machine with a Service, Check, or Defect Resolution logged today (resets at midnight). Live — no refresh needed.</p></div>
 <div id="dailyChecksWrap"></div></div>
 <div id="office-machines" class="office-tab" style="display:none"><div class="card"><div class="section-title">Add New Machine</div>
-<div class="row"><input type="text" id="newMachineName" placeholder="Machine name">
-<input type="text" id="newMachineSerial" placeholder="Serial number">
-<select id="newMachineCategory" style="max-width:220px"></select>
-<select id="newMachineBranch" style="max-width:160px"><option value="">No branch</option><option>Rotherham</option><option>Shires</option><option>Sheffield</option></select></div>
-<button class="btn btn-primary btn-block" style="margin-top:10px" onclick="addMachine()">Add Machine</button></div>
-<div class="branch-filter" id="machineBranchFilter"></div>
+<div class="row"><label class="asset-field">Machine name<input type="text" id="newMachineName" placeholder="e.g. JCB 3CX"></label>
+<label class="asset-field">Serial number / asset number<input type="text" id="newMachineSerial" placeholder="Unique number, if known"></label>
+<label class="asset-field">Category<select id="newMachineCategory"></select></label>
+<label class="asset-field">Branch<select id="newMachineBranch"><option value="">No branch</option><option>Rotherham</option><option>Shires</option><option>Sheffield</option></select></label></div>
+<button class="btn btn-primary btn-block" style="margin-top:10px" id="addMachineButton" onclick="addMachine()">Add Machine</button><p id="assetSaveMessage" role="status" aria-live="polite"></p></div>
+<div class="card"><label for="assetSearch">Find an asset</label><input id="assetSearch" type="search" placeholder="Name, serial number, branch or category" oninput="renderMachineList()"><p id="assetCount" class="progress-note"></p><div id="duplicateAssetNotice"></div></div><div class="branch-filter" id="machineBranchFilter"></div>
 <div id="machineListContainer"></div></div>
 <div id="office-categories" class="office-tab" style="display:none">
 <div class="card"><div class="section-title">Safety Check Categories</div>
@@ -252,7 +261,7 @@ input:checked+.slider{background:var(--green);}input:checked+.slider:before{tran
 <div class="card"><div class="section-title">Backup &amp; Restore</div>
 <button class="btn btn-secondary" onclick="exportData()">Export Backup JSON</button></div></div>
 </div></main>
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 <footer>CheckPlant by KCM Waste Management</footer>
 <script>
 const firebaseConfig={apiKey:"AIzaSyD60Z04IRIvv-EaSyPzoA33fEQ3yT6wsQQ",authDomain:"checkplant-kcm.firebaseapp.com",projectId:"checkplant-kcm",storageBucket:"checkplant-kcm.firebasestorage.app",messagingSenderId:"492245064396",appId:"1:492245064396:web:c79e64b32b9856766bc069"};
@@ -270,43 +279,7 @@ staticplant:{label:"Static Plant (Picking Belt)",emoji:"🏭",lolerApplies:false
 crusher:{label:"Crusher / Screener",emoji:"🪨",lolerApplies:false,items:["Guards over crushing chamber, conveyors, and drive belts intact","Emergency stops tested and accessible","Screen mesh/deck condition — no tears or excessive wear","Hydraulic hoses/rams — no leaks or damage","Outriggers/stabilizers/jacks correctly deployed (mobile units)","Dust suppression system operational","Tracks/wheels and undercarriage condition (mobile units)","Overband magnet/metal detector functioning (if fitted)","Access ladders/platforms secure","Isolation/lockout points clearly labeled and accessible"]},
 baler:{label:"Baler (Cardboard/Tyre)",emoji:"📦",lolerApplies:true,items:["Emergency stop buttons tested — control panel and loading area","Door/access interlocks — chamber cannot open while running","Hydraulic ram guarding — no leaks, smooth operation","Wire feed mechanism guarding — rollers, cutters, tensioners covered","Rotating shafts and pulleys — guards intact","Electrical contactors and wiring enclosed, undamaged","Bale ejection area clear and guarded","Oil level and hydraulic hose condition","Warning labels and signage legible","LOLER thorough examination certificate — checked and in date"]}
 };
-const SEED_MACHINES=[
-{name:"GRAB 1 - TWH 236",serialNumber:"5893",categoryKey:"grab"},
-{name:"GRAB 2 - MHL FUCHS 340",serialNumber:"5530",categoryKey:"grab"},
-{name:"GRAB 3 - MHL FUCHS 320",serialNumber:"1020",categoryKey:"grab"},
-{name:"GRAB 5 - MHL FUCHS 340F",serialNumber:"5940",categoryKey:"grab"},
-{name:"GRAB 6 - MHL FUCHS 320",serialNumber:"1586",categoryKey:"grab"},
-{name:"GRAB 7 - TWH 228",serialNumber:"5727",categoryKey:"grab"},
-{name:"GRAB 8 - TWH 236",serialNumber:"6129",categoryKey:"grab"},
-{name:"GRAB 9 - TWH 224",serialNumber:"6041",categoryKey:"grab"},
-{name:"Loading Telehandler/Bucket TM320",serialNumber:"2742157",categoryKey:"loadingshovel"},
-{name:"Loading Shovel JCB 11",serialNumber:"3191928",categoryKey:"loadingshovel"},
-{name:"Loading Shovel JCB 12",serialNumber:"3191929",categoryKey:"loadingshovel"},
-{name:"Case 821F Loading Shovel",serialNumber:"FNH821F1NFHE12226",categoryKey:"loadingshovel"},
-{name:"Excavator JCB9",serialNumber:"2500405",categoryKey:"excavator"},
-{name:"Excavator JCB10",serialNumber:"2846517",categoryKey:"excavator"},
-{name:"Excavator JS160",serialNumber:"2767718",categoryKey:"excavator"},
-{name:"JCB FLT 1",serialNumber:"1540942",categoryKey:"forklift"},
-{name:"JCB FLT 2",serialNumber:"2253915",categoryKey:"forklift"},
-{name:"JCB FLT 3",serialNumber:"1540677",categoryKey:"forklift"},
-{name:"JCB FLT 4",serialNumber:"2996250",categoryKey:"forklift"},
-{name:"Doppstadt Inventhor Shredder",serialNumber:"22",categoryKey:"shredder"},
-{name:"Doppstadt 2060 Shredder",serialNumber:"35",categoryKey:"shredder"},
-{name:"Terex TBG630 Shredder",serialNumber:"63180",categoryKey:"shredder"},
-{name:"Tana Shark Shredder",serialNumber:"BT0367",categoryKey:"shredder"},
-{name:"Crusher",serialNumber:"89162",categoryKey:"crusher"},
-{name:"Warrior Screen",serialNumber:"12204249",categoryKey:"crusher"},
-{name:"Granulator Shredder",serialNumber:"2009101199",categoryKey:"shredder"},
-{name:"Granulator",serialNumber:"3/0029",categoryKey:"shredder"},
-{name:"Doppstadt Trommel",serialNumber:"364",categoryKey:"crusher"},
-{name:"CAT Engine Trommel Screen",serialNumber:"SN 33411160 / Arr. No 244-3103",categoryKey:"crusher"},
-{name:"Blue MAC",serialNumber:"E171",categoryKey:"staticplant"},
-{name:"Fines Clean Up",serialNumber:"E331",categoryKey:"staticplant"},
-{name:"Nihot",serialNumber:"27147",categoryKey:"staticplant"},
-{name:"Rotaro",serialNumber:"006",categoryKey:"staticplant"},
-{name:"Cardboard Baler - Godswill GB1575TR",serialNumber:"Model GB1575TR",categoryKey:"baler"},
-{name:"Tyre Baler",serialNumber:"361-0004",categoryKey:"baler"}
-];
+// Assets are created explicitly; snapshot listeners never seed asset records.
 
 const BRANCHES=["Rotherham","Shires","Sheffield"];
 const SERVICE_HOURS_LIMIT=500,SERVICE_DUE_SOON_WINDOW=100,LOLER_DUE_SOON_DAYS=30;
@@ -435,31 +408,6 @@ async function ensureCategoriesSeeded(existingDocs){
   return false;
 }
 
-async function ensureMachinesSeeded(existingDocs){
-  const existingKeys = new Set(existingDocs.map(d=>{
-    const data = d.data();
-    return (data.name||'').trim().toLowerCase()+'|'+(data.serialNumber||'').trim().toLowerCase();
-  }));
-  const batch = db.batch();
-  let needsCommit = false;
-  SEED_MACHINES.forEach(seed=>{
-    const key = seed.name.trim().toLowerCase()+'|'+seed.serialNumber.trim().toLowerCase();
-    if(!existingKeys.has(key)){
-      const ref = db.collection('machines').doc();
-      batch.set(ref, {
-        name: seed.name, serialNumber: seed.serialNumber, categoryKey: seed.categoryKey, branch: '',
-        items: [], currentHours: 0, lastServiceHours: 0, nextServiceDueHours: SERVICE_HOURS_LIMIT,
-        loler: { applies: DEFAULT_CATEGORIES[seed.categoryKey] ? DEFAULT_CATEGORIES[seed.categoryKey].lolerApplies : false, lastExamDate: null, nextDueDate: null, examinerName: '' },
-        createdAt: firebase.firestore.Timestamp.now()
-      });
-      needsCommit = true;
-      existingKeys.add(key);
-    }
-  });
-  if(needsCommit){ await batch.commit(); logSync('Seeded '+SEED_MACHINES.length+' machine list — added any missing entries'); return true; }
-  return false;
-}
-
 async function getNextDefectId(){
   const counterRef = db.collection('settings').doc('defectCounter');
   const result = await db.runTransaction(async (tx)=>{
@@ -503,10 +451,8 @@ async function createOrLinkCheckDefect(item,record,operatorName){
 function initFirestoreListeners(){
 setConn(true,"Connecting...");
 loadPinSetting();
-db.collection('machines').orderBy('name').onSnapshot(async s=>{
-  const seeded = await ensureMachinesSeeded(s.docs);
-  if(seeded) return;
-  machines=s.docs.map(d=>({id:d.id,...d.data()}));populateServiceMachineSelect();populateBookingMachineSelect();renderMachineList();renderHomeMachineList();renderOverdueAlerts();renderCalendar();renderDailyChecks();setConn(true,"Connected");
+db.collection('machines').orderBy('name').onSnapshot({includeMetadataChanges:true},s=>{
+  machines=s.docs.map(d=>({id:d.id,...d.data()}));populateServiceMachineSelect();populateBookingMachineSelect();renderMachineList();renderHomeMachineList();renderOverdueAlerts();renderCalendar();renderDailyChecks();setConn(!s.metadata.fromCache,s.metadata.fromCache?"Offline / cached assets":s.metadata.hasPendingWrites?"Saving changes…":"Assets synced");
 },e=>setConn(false,"Error: "+e.message));
 db.collection('categories').onSnapshot(async s=>{
   const seeded = await ensureCategoriesSeeded(s.docs);
@@ -542,7 +488,8 @@ w.innerHTML=h;}
 function machineHoursStatus(m){const s=(m.currentHours||0)-(m.lastServiceHours||0);if(s>=SERVICE_HOURS_LIMIT)return{label:'Overdue',cls:'red'};if(s>=SERVICE_HOURS_LIMIT-SERVICE_DUE_SOON_WINDOW)return{label:'Due soon',cls:'amber'};return{label:'OK',cls:'green'};}
 function machineNextServiceDue(m){return m.nextServiceDueHours!=null ? m.nextServiceDueHours : ((m.lastServiceHours||0)+SERVICE_HOURS_LIMIT);}
 function renderHomeMachineList(){const w=document.getElementById('homeMachineList');if(!w)return;w.innerHTML='';if(!machines.length){w.innerHTML='<p class="progress-note">No machines yet.</p>';return;}
-machines.forEach(m=>{const ls=records.find(r=>r.type==='service'&&r.machineId===m.id);const st=machineHoursStatus(m);const row=document.createElement('div');row.className='machine-list-item';row.onclick=()=>openMachineProfile(m.id);
+const visible=machines.filter(m=>assetMatchesSearch(m,'homeAssetSearch'));if(!visible.length){w.innerHTML='<p class="empty-state">No matching machines.</p>';return;}
+visible.forEach(m=>{const ls=records.find(r=>r.type==='service'&&r.machineId===m.id);const st=machineHoursStatus(m);const row=document.createElement('div');row.className='machine-list-item';row.onclick=()=>openMachineProfile(m.id);row.tabIndex=0;row.setAttribute('role','button');row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openMachineProfile(m.id);}};
 row.innerHTML='<div><div class="mname">'+escapeHtml(m.name)+(m.serialNumber?' <span style="color:var(--grey);font-weight:400">(S/N: '+escapeHtml(m.serialNumber)+')</span>':'')+'</div><div class="mlast">'+(ls?'Last serviced '+ls.date+' by '+escapeHtml(ls.signName||'-'):'No service yet')+'</div><div class="mmeta">'+escapeHtml(m.branch||'No branch')+' · '+(categories[m.categoryKey]?categories[m.categoryKey].label:'Uncategorised')+' · '+(m.currentHours||0)+' hrs · next due '+machineNextServiceDue(m)+' hrs</div></div><span class="badge '+st.cls+'">'+st.label+'</span>';
 w.appendChild(row);});}
 function renderHomeUpcomingBookings(){const w=document.getElementById('homeUpcomingBookings');if(!w)return;const t=todayISO();const up=bookings.filter(b=>b.date>=t).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,6);
@@ -756,28 +703,81 @@ function switchOfficeTab(tab){document.querySelectorAll('.tabs button').forEach(
 document.querySelectorAll('.office-tab').forEach(el=>el.style.display='none');document.getElementById('office-'+tab).style.display='block';
 if(tab==='daily')renderDailyChecks();if(tab==='machines')renderMachineList();if(tab==='categories')renderCategoryList();if(tab==='defects')renderDefectsTable();
 if(tab==='calendar')renderCalendar();if(tab==='records')renderRecordsTable();if(tab==='sheets')renderSheetsStatus();}
-function populateNewMachineCategorySelect(){const sel=document.getElementById('newMachineCategory');if(!sel)return;const cv=sel.value;sel.innerHTML='';
+function populateNewMachineCategorySelect(){const sel=document.getElementById('newMachineCategory');if(!sel)return;const cv=sel.value;sel.innerHTML='<option value="">Choose category</option>';
 Object.entries(categories).forEach(([k,c])=>{const o=document.createElement('option');o.value=k;o.textContent=c.emoji+' '+c.label;sel.appendChild(o);});sel.value=cv;}
 function renderMachineBranchFilter(){const w=document.getElementById('machineBranchFilter');if(!w)return;
 w.innerHTML='<button class="'+(officeMachineBranchFilter==='all'?'active':'')+'" onclick="setMachineBranchFilter(\'all\')">All</button>'+BRANCHES.map(b=>'<button class="'+(officeMachineBranchFilter===b?'active':'')+'" onclick="setMachineBranchFilter(\''+b+'\')">'+b+'</button>').join('');}
 function setMachineBranchFilter(b){officeMachineBranchFilter=b;renderMachineBranchFilter();renderMachineList();}
-async function addMachine(){const input=document.getElementById('newMachineName');const name=input.value.trim();const serialInput=document.getElementById('newMachineSerial');const serialNumber=serialInput.value.trim();const categoryKey=document.getElementById('newMachineCategory').value;const branch=document.getElementById('newMachineBranch').value;
-if(!name){toast('Enter a name');return;}
-await db.collection('machines').add({name,serialNumber,items:[],categoryKey,branch,currentHours:0,lastServiceHours:0,nextServiceDueHours:SERVICE_HOURS_LIMIT,loler:{applies:categories[categoryKey]?categories[categoryKey].lolerApplies:false,lastExamDate:null,nextDueDate:null,examinerName:''},createdAt:firebase.firestore.Timestamp.now()});
-input.value='';serialInput.value='';toast('Machine added');}
-async function deleteMachine(id){if(!confirm('Delete this machine?'))return;await db.collection('machines').doc(id).delete();}
-async function updateMachineField(id,field,value){await db.collection('machines').doc(id).update({[field]:value});}
+
+function normaliseAssetValue(value){return String(value||'').normalize('NFKC').trim().toLowerCase().replace(/\s+/g,' ');}
+function serialKey(value){return normaliseAssetValue(value).replace(/[\s-]/g,'');}
+function sameAsset(a,b){
+  const sa=serialKey(a.serialNumber),sb=serialKey(b.serialNumber);
+  if(sa&&sb)return sa===sb;
+  return normaliseAssetValue(a.name)===normaliseAssetValue(b.name)&&normaliseAssetValue(a.branch)===normaliseAssetValue(b.branch);
+}
+function assetMatchesSearch(m,id){const q=normaliseAssetValue(document.getElementById(id)?.value);return !q||normaliseAssetValue([m.name,m.serialNumber,m.branch,categories[m.categoryKey]?.label].join(' ')).includes(q);}
+let addingMachine=false;
+async function writeMachineIdentity(ref,patch,isNew){
+  // All identity changes from this client share a transaction revision.
+  // Read it before the server query so a concurrent create forces a retry.
+  const lock=db.collection('settings').doc('machineIdentityRevision');
+  return db.runTransaction(async tx=>{
+    const revision=await tx.get(lock);
+    const current=isNew?null:await tx.get(ref);
+    if(!isNew&&!current.exists)throw new Error('This asset no longer exists. Reload the asset list.');
+    const candidate={...(current?current.data():{}),...patch};
+    const snapshot=await db.collection('machines').get({source:'server'});
+    const match=snapshot.docs.find(d=>d.id!==ref.id&&sameAsset(candidate,d.data()));
+    if(match)throw new Error('An asset already matches: '+match.data().name+'. Open its profile instead.');
+    if(isNew)tx.set(ref,patch);else tx.update(ref,patch);
+    tx.set(lock,{revision:(revision.exists?Number(revision.data().revision)||0:0)+1});
+  });
+}
+async function addMachine(){
+  if(addingMachine)return;
+  const input=document.getElementById('newMachineName'),serialInput=document.getElementById('newMachineSerial');
+  const name=input.value.trim(),serialNumber=serialInput.value.trim();
+  const categoryKey=document.getElementById('newMachineCategory').value,branch=document.getElementById('newMachineBranch').value;
+  const message=document.getElementById('assetSaveMessage'),button=document.getElementById('addMachineButton');
+  message.textContent='';
+  if(!name||!categoryKey){message.textContent='Enter a machine name and choose a category.';return;}
+  addingMachine=true;button.disabled=true;button.textContent='Saving asset…';
+  try{
+    await writeMachineIdentity(db.collection('machines').doc(),{name,serialNumber,items:[],categoryKey,branch,currentHours:0,lastServiceHours:0,nextServiceDueHours:SERVICE_HOURS_LIMIT,loler:{applies:!!categories[categoryKey]?.lolerApplies,lastExamDate:null,nextDueDate:null,examinerName:''},createdAt:firebase.firestore.Timestamp.now()},true);
+    input.value='';serialInput.value='';message.textContent='Asset saved successfully.';toast('Machine added');
+  }catch(error){message.textContent='Asset not saved. '+error.message;toast('Asset not saved — see the message below the form.');}
+  finally{addingMachine=false;button.disabled=false;button.textContent='Add Machine';}
+}
+async function deleteMachine(id){
+  toast('Asset deletion is disabled to protect linked history. Review duplicates before removing any records.');
+}
+async function updateMachineField(id,field,value){
+  if(['currentHours','lastServiceHours','nextServiceDueHours'].includes(field)&&(!Number.isFinite(value)||value<0)){toast('Hours must be a valid number, zero or higher.');renderMachineList();return;}
+  try{
+    const ref=db.collection('machines').doc(id);
+    if(['name','serialNumber','branch'].includes(field))await writeMachineIdentity(ref,{[field]:String(value).trim()},false);
+    else await ref.update({[field]:value});
+    toast('Asset updated');
+  }catch(error){toast('Update not saved: '+error.message);renderMachineList();}
+}
 function renderMachineList(){renderMachineBranchFilter();const w=document.getElementById('machineListContainer');w.innerHTML='';
-const filtered=officeMachineBranchFilter==='all'?machines:machines.filter(m=>m.branch===officeMachineBranchFilter);
+const filtered=machines.filter(m=>(officeMachineBranchFilter==='all'||m.branch===officeMachineBranchFilter)&&assetMatchesSearch(m,'assetSearch'));
+document.getElementById('assetCount').textContent=filtered.length+' of '+machines.length+' assets';
+const duplicates=machines.filter(m=>machines.some(other=>other.id!==m.id&&sameAsset(m,other)));
+document.getElementById('duplicateAssetNotice').textContent=duplicates.length?duplicates.length+' assets need duplicate review. Existing records are preserved; compare serial numbers and history before deciding which asset to keep.':'';
 if(!filtered.length){w.innerHTML='<div class="card"><div class="empty-state">No machines.</div></div>';return;}
 filtered.forEach(m=>{const card=document.createElement('div');card.className='card';
 const catOpts=Object.entries(categories).map(([k,c])=>'<option value="'+k+'" '+(m.categoryKey===k?'selected':'')+'>'+c.emoji+' '+c.label+'</option>').join('');
-const brOpts=BRANCHES.map(b=>'<option value="'+b+'" '+(m.branch===b?'selected':'')+'>'+b+'</option>').join('');
+const brOpts='<option value="" '+(!m.branch?'selected':'')+'>No branch</option>'+BRANCHES.map(b=>'<option value="'+b+'" '+(m.branch===b?'selected':'')+'>'+b+'</option>').join('');
 card.innerHTML='<div style="display:flex;justify-content:space-between"><b>'+escapeHtml(m.name)+'</b><div><button class="btn btn-secondary btn-sm" onclick="openMachineProfile(\''+m.id+'\')">Profile</button> <button class="icon-btn" onclick="deleteMachine(\''+m.id+'\')">🗑</button></div></div>'+
 '<div class="row" style="margin-top:8px"><input type="text" value="'+escapeAttr(m.serialNumber||'')+'" placeholder="Serial number" onchange="updateMachineField(\''+m.id+'\',\'serialNumber\',this.value)"></div>'+
 '<div class="row" style="margin-top:8px"><select onchange="updateMachineField(\''+m.id+'\',\'categoryKey\',this.value)">'+catOpts+'</select><select onchange="updateMachineField(\''+m.id+'\',\'branch\',this.value)">'+brOpts+'</select></div>'+
 '<div class="row" style="margin-top:8px"><input type="number" value="'+(m.currentHours||0)+'" onchange="updateMachineField(\''+m.id+'\',\'currentHours\',Number(this.value))"><input type="number" value="'+(m.lastServiceHours||0)+'" onchange="updateMachineField(\''+m.id+'\',\'lastServiceHours\',Number(this.value))"><input type="number" value="'+(m.nextServiceDueHours!=null?m.nextServiceDueHours:((m.lastServiceHours||0)+SERVICE_HOURS_LIMIT))+'" title="Next service due (hrs)" onchange="updateMachineField(\''+m.id+'\',\'nextServiceDueHours\',Number(this.value))"></div>'+
 '<div class="row" style="margin-top:8px"><select onchange="updateMachineLolerApplies(\''+m.id+'\',this.value)"><option value="true" '+(m.loler&&m.loler.applies?'selected':'')+'>LOLER: Yes</option><option value="false" '+(!(m.loler&&m.loler.applies)?'selected':'')+'>LOLER: No</option></select><input type="date" value="'+(m.loler&&m.loler.nextDueDate?m.loler.nextDueDate:'')+'" onchange="updateMachineLolerField(\''+m.id+'\',\'nextDueDate\',this.value)"></div>';
+if(duplicates.some(d=>d.id===m.id)){const notice=document.createElement('p');notice.className='duplicate-notice';notice.textContent='Possible duplicate — check serial number and history';card.prepend(notice);}
+const labels=['Serial number','Category','Branch','Current hours','Last service hours','Next service due (hours)','LOLER applies','LOLER next due'];
+card.querySelectorAll('input,select').forEach((control,i)=>{const label=document.createElement('label');label.className='asset-field';control.replaceWith(label);label.append(document.createTextNode(labels[i]),control);});
 w.appendChild(card);});}
 async function updateMachineLolerApplies(id,val){const applies=val==='true';const m=machines.find(x=>x.id===id);await db.collection('machines').doc(id).update({loler:{...(m.loler||{}),applies}});}
 async function updateMachineLolerField(id,field,val){const m=machines.find(x=>x.id===id);await db.collection('machines').doc(id).update({loler:{...(m.loler||{}),[field]:val}});}
