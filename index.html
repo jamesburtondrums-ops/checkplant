@@ -269,6 +269,14 @@ firebase.initializeApp(firebaseConfig);
 const db=firebase.firestore();
 function setConn(o,t){document.getElementById('connDot').className='conn-dot '+(o?'online':'offline');document.getElementById('connText').textContent=t;}
 function isFireExtinguisherItem(name){return /fire\s*extinguisher/i.test(String(name||''));}
+const REQUIRED_SERVICE_ITEMS=["Filters Changed","Oils Topped up/ Changed"];
+function serviceItemsWithRequired(categoryKey,items){
+  const list=Array.isArray(items)?[...items]:[];
+  if(categoryKey==='staticplant') return list;
+  const existing=new Set(list.map(item=>String(item||'').trim().toLowerCase()));
+  REQUIRED_SERVICE_ITEMS.forEach(item=>{if(!existing.has(item.toLowerCase()))list.push(item);});
+  return list;
+}
 const DEFAULT_CATEGORIES={
 grab:{label:"Grab (Material Handler)",emoji:"🧲",lolerApplies:true,items:["Grab tines/jaws condition","Hydraulic hoses & fittings","Rotation motor & bearing","Grab wear plates","Wire ropes/chains (if fitted)","Boom & dipper condition","Cab glazing & mirrors","Warning lights & alarms","Tyres/tracks condition"]},
 forklift:{label:"Forklift / Reach Truck",emoji:"🚜",lolerApplies:true,items:["Forks & carriage condition","Mast & chains","Hydraulic hoses & leaks","Tyres condition & pressure","Horn & reverse alarm","Lights & beacon working","Seatbelt operation","Brakes (parking & foot)","Battery/fuel level & connections","Overhead guard condition","Load capacity plate visible","Mirrors & visibility aids"]},
@@ -384,7 +392,10 @@ async function ensureCategoriesSeeded(existingDocs){
   const existingKeys = new Set(existingDocs.map(d=>d.id));
   Object.entries(DEFAULT_CATEGORIES).forEach(([key, defaultCat])=>{
     if(!existingKeys.has(key)){
-      batch.set(db.collection('categories').doc(key), defaultCat);
+      batch.set(db.collection('categories').doc(key), {
+        ...defaultCat,
+        serviceItems:serviceItemsWithRequired(key,defaultCat.items)
+      });
       needsCommit = true;
       logSync('Seeded missing category: '+key);
     }
@@ -392,17 +403,23 @@ async function ensureCategoriesSeeded(existingDocs){
   existingDocs.forEach(docSnap=>{
     const key = docSnap.id;
     const defaultCat = DEFAULT_CATEGORIES[key];
-    if(!defaultCat) return;
     const data = docSnap.data();
     const patch = {};
-    if(data.lolerApplies === undefined) patch.lolerApplies = defaultCat.lolerApplies;
-    if(data.label === undefined) patch.label = defaultCat.label;
-    if(data.emoji === undefined) patch.emoji = defaultCat.emoji;
-    if(data.items === undefined) patch.items = defaultCat.items;
-    else if(Array.isArray(data.items)){
-      const cleanedItems=data.items.filter(item=>!isFireExtinguisherItem(item));
-      if(cleanedItems.length!==data.items.length) patch.items=cleanedItems;
+    if(defaultCat){
+      if(data.lolerApplies === undefined) patch.lolerApplies = defaultCat.lolerApplies;
+      if(data.label === undefined) patch.label = defaultCat.label;
+      if(data.emoji === undefined) patch.emoji = defaultCat.emoji;
+      if(data.items === undefined) patch.items = defaultCat.items;
+      else if(Array.isArray(data.items)){
+        const cleanedItems=data.items.filter(item=>!isFireExtinguisherItem(item));
+        if(cleanedItems.length!==data.items.length) patch.items=cleanedItems;
+      }
     }
+    const serviceBase=(Array.isArray(data.serviceItems)&&data.serviceItems.length)
+      ? data.serviceItems
+      : (Array.isArray(data.items)?data.items:(defaultCat?defaultCat.items:[]));
+    const requiredServiceItems=serviceItemsWithRequired(key,serviceBase);
+    if(JSON.stringify(requiredServiceItems)!==JSON.stringify(serviceBase)) patch.serviceItems=requiredServiceItems;
     if(Object.keys(patch).length){
       batch.update(db.collection('categories').doc(key), patch);
       needsCommit = true;
