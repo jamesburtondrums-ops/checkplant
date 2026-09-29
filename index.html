@@ -268,11 +268,12 @@ const firebaseConfig={apiKey:"AIzaSyD60Z04IRIvv-EaSyPzoA33fEQ3yT6wsQQ",authDomai
 firebase.initializeApp(firebaseConfig);
 const db=firebase.firestore();
 function setConn(o,t){document.getElementById('connDot').className='conn-dot '+(o?'online':'offline');document.getElementById('connText').textContent=t;}
+function isFireExtinguisherItem(name){return /fire\s*extinguisher/i.test(String(name||''));}
 const DEFAULT_CATEGORIES={
-grab:{label:"Grab (Material Handler)",emoji:"🧲",lolerApplies:true,items:["Grab tines/jaws condition","Hydraulic hoses & fittings","Rotation motor & bearing","Grab wear plates","Wire ropes/chains (if fitted)","Boom & dipper condition","Cab glazing & mirrors","Warning lights & alarms","Tyres/tracks condition","Fire extinguisher present & in date"]},
+grab:{label:"Grab (Material Handler)",emoji:"🧲",lolerApplies:true,items:["Grab tines/jaws condition","Hydraulic hoses & fittings","Rotation motor & bearing","Grab wear plates","Wire ropes/chains (if fitted)","Boom & dipper condition","Cab glazing & mirrors","Warning lights & alarms","Tyres/tracks condition"]},
 forklift:{label:"Forklift / Reach Truck",emoji:"🚜",lolerApplies:true,items:["Forks & carriage condition","Mast & chains","Hydraulic hoses & leaks","Tyres condition & pressure","Horn & reverse alarm","Lights & beacon working","Seatbelt operation","Brakes (parking & foot)","Battery/fuel level & connections","Overhead guard condition","Load capacity plate visible","Mirrors & visibility aids"]},
-loadingshovel:{label:"Loading Shovel",emoji:"🚛",lolerApplies:false,items:["Bucket condition & pins","Hydraulic rams & hoses","Tyres condition & pressure","Brakes function","Lights & beacon","Reverse alarm/camera","Steering function","Engine oil/coolant levels","Cab glazing & mirrors","Fire extinguisher present & in date"]},
-excavator:{label:"Excavator",emoji:"🚧",lolerApplies:true,items:["Bucket teeth condition","Boom & dipper pins","Hydraulic hoses & rams","Tracks/undercarriage condition","Slew ring & bearing","Lights & beacon","Reverse alarm/camera","Cab glazing & mirrors","Fire extinguisher present & in date","Fuel/oil leaks check"]},
+loadingshovel:{label:"Loading Shovel",emoji:"🚛",lolerApplies:false,items:["Bucket condition & pins","Hydraulic rams & hoses","Tyres condition & pressure","Brakes function","Lights & beacon","Reverse alarm/camera","Steering function","Engine oil/coolant levels","Cab glazing & mirrors"]},
+excavator:{label:"Excavator",emoji:"🚧",lolerApplies:true,items:["Bucket teeth condition","Boom & dipper pins","Hydraulic hoses & rams","Tracks/undercarriage condition","Slew ring & bearing","Lights & beacon","Reverse alarm/camera","Cab glazing & mirrors","Fuel/oil leaks check"]},
 cherrypicker:{label:"Cherry Picker / Scissor Lift",emoji:"🏗️",lolerApplies:true,items:["Guard rails & gate condition","Platform floor condition","Emergency lowering function","Outriggers/stabilisers","Hydraulic hoses & leaks","Controls (platform & base)","Tyres/wheels condition","Harness anchor points","Warning decals & load chart visible","Battery/fuel level"]},
 shredder:{label:"Industrial Shredder",emoji:"⚙️",lolerApplies:false,items:["Emergency stop button/pull-cord tested and functional","Feed hopper guard/interlock in place and engaged","Reverse/jam-clear function operating correctly","Blade/rotor condition — no visible damage or excessive wear","Hydraulic ram/pusher — no leaks, smooth operation","Access doors/guards interlocked — machine cannot run when open","Dust/fire suppression system present and functional (if fitted)","Warning labels and signage legible","Noise/vibration abnormal levels check","Housekeeping — clear of debris/blockages around infeed and discharge"]},
 staticplant:{label:"Static Plant (Picking Belt)",emoji:"🏭",lolerApplies:false,items:["Pull-cord emergency stops working along full belt length","Head/tail drum guards fitted and secure","Nip point and trap point guarding intact","Belt tracking/alignment correct, no excessive wear or fraying","Side guards and handrails/platforms secure","Adequate lighting at picking stations","Dust suppression/extraction functioning","No loose material build-up (spillage/carryback) creating slip hazard","Coupling guards on drives fitted","Siren/hooter sounds before start-up"]},
@@ -398,6 +399,10 @@ async function ensureCategoriesSeeded(existingDocs){
     if(data.label === undefined) patch.label = defaultCat.label;
     if(data.emoji === undefined) patch.emoji = defaultCat.emoji;
     if(data.items === undefined) patch.items = defaultCat.items;
+    else if(Array.isArray(data.items)){
+      const cleanedItems=data.items.filter(item=>!isFireExtinguisherItem(item));
+      if(cleanedItems.length!==data.items.length) patch.items=cleanedItems;
+    }
     if(Object.keys(patch).length){
       batch.update(db.collection('categories').doc(key), patch);
       needsCommit = true;
@@ -424,6 +429,7 @@ async function getNextDefectId(){
 function defectItemKey(name){return String(name||'').trim().toLowerCase().replace(/\s+/g,' ');}
 function openMatchingDefects(machineId,itemName){const key=defectItemKey(itemName);return defects.filter(d=>d.machineId===machineId&&d.status==='open'&&defectItemKey(d.itemName)===key);}
 async function createOrLinkCheckDefect(item,record,operatorName){
+  if(isFireExtinguisherItem(item&&item.name)) return {action:'ignored',defectId:null};
   const matches=openMatchingDefects(currentCheckMachine.id,item.name);
   const reportedAt=new Date().toISOString();
   const occurrence={reportedAt,reportedDate:record.date,reportedBy:operatorName,inspectionRecordId:record.id||null,inspectionItemName:item.name,condition:item.defectNote||'Marked Defect during routine check'};
@@ -461,7 +467,7 @@ db.collection('categories').onSnapshot(async s=>{
   renderCategoryGrid();renderCategoryList();populateNewMachineCategorySelect();
 },e=>setConn(false,"Cat error: "+e.message));
 db.collection('records').orderBy('createdAt','desc').onSnapshot(s=>{records=s.docs.map(d=>({id:d.id,...d.data()}));renderRecordsTable();renderHomeMachineList();renderDailyChecks();},e=>setConn(false,"Rec error: "+e.message));
-db.collection('defects').orderBy('dateRaised','desc').onSnapshot(s=>{defects=s.docs.map(d=>({id:d.id,...d.data()}));renderDefectsTable();renderOutstandingDefectsList();},e=>setConn(false,"Def error: "+e.message));
+db.collection('defects').orderBy('dateRaised','desc').onSnapshot(s=>{defects=s.docs.map(d=>({id:d.id,...d.data()})).filter(d=>!isFireExtinguisherItem(d.itemName||d.inspectionItemName));renderDefectsTable();renderOutstandingDefectsList();},e=>setConn(false,"Def error: "+e.message));
 db.collection('bookings').orderBy('date').onSnapshot(s=>{bookings=s.docs.map(d=>({id:d.id,...d.data()}));renderCalendar();renderHomeUpcomingBookings();},e=>setConn(false,"Book error: "+e.message));
 }
 function showScreen(n){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById('screen-'+n).classList.add('active');if(n==='backoffice')switchOfficeTab('daily');window.scrollTo(0,0);}
