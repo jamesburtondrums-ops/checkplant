@@ -272,7 +272,8 @@ function isFireExtinguisherItem(name){return /fire\s*extinguisher/i.test(String(
 const REQUIRED_SERVICE_ITEMS=["Filters Changed","Oils Topped up/ Changed"];
 function serviceItemsWithRequired(categoryKey,items){
   const list=Array.isArray(items)?[...items]:[];
-  if(categoryKey==='staticplant') return list;
+  const requiredKeys=new Set(REQUIRED_SERVICE_ITEMS.map(item=>item.toLowerCase()));
+  if(categoryKey==='staticplant') return list.filter(item=>!requiredKeys.has(String(item||'').trim().toLowerCase()));
   const existing=new Set(list.map(item=>String(item||'').trim().toLowerCase()));
   REQUIRED_SERVICE_ITEMS.forEach(item=>{if(!existing.has(item.toLowerCase()))list.push(item);});
   return list;
