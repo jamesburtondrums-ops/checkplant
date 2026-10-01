@@ -187,6 +187,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focu
 <div class="row" style="margin-top:12px"><div><label>Current Hour Meter Reading <span class="required-star">*</span></label><input type="number" id="svcHours" min="0"></div></div></div>
 <div class="card"><div class="section-title">Serviceable Items <span class="badge" id="svcItemCount">0</span></div>
 <div id="serviceItemsList"></div><p class="progress-note" id="svcNoItemsNote" style="display:none">No items set.</p></div>
+<button class="btn btn-primary btn-block" id="openServiceJobBtn" onclick="openServiceJob()" style="margin-bottom:16px">Mark Service Live &amp; Start Timer</button>
 <div class="loler-panel" id="svcLolerPanel">
 <div class="section-title loler">⚖️ LOLER Thorough Examination — Statutory (kept separate)</div>
 <p class="progress-note">Verifies a valid LOLER certificate exists. Mark N/A only if never used for lifting.</p>
@@ -206,7 +207,6 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focu
 <div class="row"><div><label>Name <span class="required-star">*</span></label><input type="text" id="svcSignName"></div><div><label>Date <span class="required-star">*</span></label><input type="date" id="svcSignDate"></div></div>
 <canvas class="sigPad" id="sigPadService"></canvas>
 <button class="btn btn-secondary" onclick="clearSig('sigPadService')">Clear Signature</button></div>
-<button class="btn btn-primary btn-block" id="openServiceJobBtn" onclick="openServiceJob()">Mark Service Live & Start Timer</button>
 <button class="btn btn-primary btn-block" id="completeServiceJobBtn" style="display:none" onclick="completeAndShare('service')">Complete Service &amp; Share PDF</button></div>
 <div class="screen" id="screen-check-category">
 <button class="back-link" onclick="goHome()">← Back</button>
