@@ -1118,7 +1118,7 @@ function renderEngineerLiveJobs(){
   const w=document.getElementById('engineerLiveJobs');if(!w)return;const count=document.getElementById('liveJobCount');if(count)count.textContent=liveJobs.length;
   if(!liveJobs.length){w.innerHTML='<div class="empty-state">No live jobs.</div>';return;}
   const sorted=[...liveJobs].sort((a,b)=>(a.status==='active'?0:1)-(b.status==='active'?0:1)||(tsToMs(a.startedAt)-tsToMs(b.startedAt)));
-  w.innerHTML=sorted.map(j=>'<div class="live-job '+(j.status==='paused'?'paused':'')+'" onclick="openLiveJobByType(\''+j.id+'\')"><div style="display:flex;justify-content:space-between;gap:12px"><div><div class="mname">'+(j.jobType==='service'?'🔧 Service — ':'🧰 Ad-Hoc — ')+escapeHtml(j.machineName||'Machine')+(j.jobCategory?' — '+escapeHtml(j.jobCategory):'')+'</div><div class="mmeta">'+escapeHtml(j.engineerName||'Engineer')+' · '+(j.status==='paused'?'PAUSED':j.status==='assigned'?'ASSIGNED':'IN PROGRESS')+' · '+escapeHtml(j.jobId||'')+'</div></div><div class="live-job-time" data-live-job-time="'+j.id+'">'+formatDuration(liveElapsedMs(j))+'</div></div></div>').join('');
+  w.innerHTML=sorted.map(j=>'<div class="live-job '+(j.status==='paused'?'paused':'')+'" onclick="openLiveJobByType(\''+j.id+'\')"><div style="display:flex;justify-content:space-between;gap:12px"><div><div class="mname">'+(j.jobType==='service'?'🔧 Service — ':'🧰 Ad-Hoc — ')+escapeHtml(j.machineName||'Machine')+(j.jobCategory?' — '+escapeHtml(j.jobCategory):'')+'</div><div class="mmeta">'+escapeHtml(j.engineerName||'Engineer')+' · '+(j.status==='paused'?'PAUSED':j.status==='assigned'?'ASSIGNED':j.status==='planned'?'PLANNED '+escapeHtml(j.plannedDate||j.date||''):'IN PROGRESS')+' · '+escapeHtml(j.jobId||'')+'</div></div><div class="live-job-time" data-live-job-time="'+j.id+'">'+formatDuration(liveElapsedMs(j))+'</div></div></div>').join('');
   updateHubJobTimers();
 }
 function updateHubJobTimers(){document.querySelectorAll('[data-live-job-time]').forEach(el=>{const j=liveJobs.find(x=>x.id===el.dataset.liveJobTime);if(j)el.textContent=formatDuration(liveElapsedMs(j));});}
@@ -1142,7 +1142,7 @@ async function pauseOutstandingBeforeStarting(newLabel){
 async function claimAssignedJob(j){
   if(!currentEngineer)return false;
   if(j.engineerId&&j.engineerId!==currentEngineer.id){toast('This job is assigned to '+(j.engineerName||'another engineer'));return false;}
-  if(j.status!=='assigned')return true;
+  if(j.status!=='assigned'&&j.status!=='planned')return true;
   if(!(await pauseOutstandingBeforeStarting(j.jobType==='service'?'this service':'this job')))return false;
   await db.collection('liveJobs').doc(j.id).update({status:'active',engineerId:currentEngineer.id,engineerName:currentEngineer.name,startedAt:firebase.firestore.Timestamp.now(),activeStartedAt:firebase.firestore.Timestamp.now(),updatedAt:firebase.firestore.Timestamp.now()});
   return true;
@@ -1161,7 +1161,7 @@ async function openAdHocJob(){
 }
 async function openExistingLiveJob(id){
   if(!currentEngineer)return requestEngineerSignIn();const j=liveJobs.find(x=>x.id===id);if(!j)return toast('Live job no longer available');
-  if(j.status==='assigned'&&!(await claimAssignedJob(j)))return;
+  if((j.status==='assigned'||j.status==='planned')&&!(await claimAssignedJob(j)))return;
   currentLiveJob=j;currentAdHocMachine=machines.find(m=>m.id===j.machineId)||null;populateAdHocMachines();populateAdHocCategories();
   document.getElementById('adhocMachine').value=j.machineId;document.getElementById('adhocDate').value=j.date||todayISO();document.getElementById('adhocHours').value=j.hoursReading!=null?j.hoursReading:'';
   document.getElementById('adhocCategory').value=j.jobCategory||'';document.getElementById('adhocEngineer').value=j.engineerName||currentEngineer.name;document.getElementById('adhocOutcome').value=j.outcome||'';
@@ -1248,7 +1248,7 @@ function renderServiceProgressHistory(){
 }
 async function openLiveJobByType(id){
   const j=liveJobs.find(x=>x.id===id);if(!j)return toast('Live job no longer available');
-  if(j.status==='assigned'&&!(await claimAssignedJob(j)))return;
+  if((j.status==='assigned'||j.status==='planned')&&!(await claimAssignedJob(j)))return;
   if(j.jobType==='service'){
     if(!currentEngineer)return requestEngineerSignIn();currentServiceMachine=machines.find(m=>m.id===j.machineId)||null;if(!currentServiceMachine)return toast('Machine not found');
     currentServiceLiveJob=j;document.getElementById('serviceMachineSelect').value=j.machineId;onServiceMachineChosen();currentServiceLiveJob=j;
@@ -1260,7 +1260,7 @@ function renderEngineerActivityOverview(){
   const by={};engineers.forEach(e=>by[e.id]={engineer:e,jobs:[]});liveJobs.forEach(j=>{const key=j.engineerId||('name:'+String(j.engineerName||'Unassigned'));if(!by[key])by[key]={engineer:{name:j.engineerName||'Unassigned'},jobs:[]};by[key].jobs.push(j);});
   const groups=Object.values(by).filter(g=>g.jobs.length).sort((a,b)=>String(a.engineer.name).localeCompare(String(b.engineer.name)));
   if(!groups.length){w.innerHTML='<div class="empty-state">No engineers currently have live or paused jobs.</div>';return;}
-  w.innerHTML=groups.map(g=>'<div class="card"><div class="section-title">'+escapeHtml(g.engineer.name)+' <span class="badge '+(g.jobs.some(j=>j.status==='active')?'amber':'grey')+'">'+g.jobs.length+' job'+(g.jobs.length===1?'':'s')+'</span></div>'+g.jobs.sort((a,b)=>(a.status==='active'?0:1)-(b.status==='active'?0:1)).map(j=>'<div class="machine-list-item" onclick="openLiveJobByType(\''+j.id+'\')"><div><div class="mname">'+(j.jobType==='service'?'🔧 Service':'🧰 Ad-Hoc')+' — '+escapeHtml(j.machineName||'Machine')+'</div><div class="mmeta">'+(j.status==='paused'?'PAUSED':j.status==='assigned'?'ASSIGNED':'LIVE')+' · '+escapeHtml(j.jobId||'')+(j.jobCategory?' · '+escapeHtml(j.jobCategory):'')+'</div></div><div class="live-job-time" data-live-job-time="'+j.id+'">'+formatDuration(liveElapsedMs(j))+'</div></div>').join('')+'</div>').join('');
+  w.innerHTML=groups.map(g=>'<div class="card"><div class="section-title">'+escapeHtml(g.engineer.name)+' <span class="badge '+(g.jobs.some(j=>j.status==='active')?'amber':'grey')+'">'+g.jobs.length+' job'+(g.jobs.length===1?'':'s')+'</span></div>'+g.jobs.sort((a,b)=>(a.status==='active'?0:1)-(b.status==='active'?0:1)).map(j=>'<div class="machine-list-item" onclick="openLiveJobByType(\''+j.id+'\')"><div><div class="mname">'+(j.jobType==='service'?'🔧 Service':'🧰 Ad-Hoc')+' — '+escapeHtml(j.machineName||'Machine')+'</div><div class="mmeta">'+(j.status==='paused'?'PAUSED':j.status==='assigned'?'ASSIGNED':j.status==='planned'?'PLANNED '+escapeHtml(j.plannedDate||j.date||''):'LIVE')+' · '+escapeHtml(j.jobId||'')+(j.jobCategory?' · '+escapeHtml(j.jobCategory):'')+'</div></div><div class="live-job-time" data-live-job-time="'+j.id+'">'+formatDuration(liveElapsedMs(j))+'</div></div>').join('')+'</div>').join('');
 }
 async function addEngineer(){
   const name=document.getElementById('newEngineerName').value.trim(),pin=document.getElementById('newEngineerPin').value.trim();
