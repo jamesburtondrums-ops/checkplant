@@ -585,7 +585,7 @@ const hl=document.getElementById('serviceHistoryList');
 if(mr.length<=1){hl.innerHTML='<div class="empty-state">No earlier services.</div>';}else{hl.innerHTML='';mr.slice(1).forEach(r=>{const d=document.createElement('div');d.className='history-item';
 d.innerHTML='<div>'+r.date+' <button class="btn btn-secondary btn-sm" onclick="reprintRecord(\''+r.id+'\')">PDF</button></div>';hl.appendChild(d);});}
 showScreen('machine-profile');}
-function startServiceFromProfile(){const id=currentProfileMachineId;showScreen('service-select');document.getElementById('serviceMachineSelect').value=id;onServiceMachineChosen();}
+function startServiceFromProfile(){const id=currentProfileMachineId;if(!currentEngineer){requestEngineerSignIn();toast('Engineer sign-in required for Service Mode');return;}showScreen('service-select');document.getElementById('serviceMachineSelect').value=id;onServiceMachineChosen();}
 function populateServiceMachineSelect(){const sel=document.getElementById('serviceMachineSelect');if(!sel)return;const cv=sel.value;sel.innerHTML='<option value="">-- Choose machine --</option>';
 machines.forEach(m=>{const o=document.createElement('option');o.value=m.id;o.textContent=m.name+(m.serialNumber?' (S/N: '+m.serialNumber+')':'')+' ('+(m.branch||'no branch')+')';sel.appendChild(o);});sel.value=cv;
 document.getElementById('noMachinesNote').style.display=machines.length?'none':'block';}
@@ -596,9 +596,9 @@ function machineChecklistItems(m){
 }
 function onServiceMachineChosen(){const id=document.getElementById('serviceMachineSelect').value;if(!id)return;currentServiceMachine=machines.find(m=>m.id===id);
 document.getElementById('serviceMachineName').textContent=currentServiceMachine.name+(currentServiceMachine.serialNumber?' (S/N: '+currentServiceMachine.serialNumber+')':'');
-document.getElementById('svcTechName').value='';document.getElementById('svcDate').value=todayISO();
+document.getElementById('svcTechName').value=currentEngineer?currentEngineer.name:'';document.getElementById('svcTechName').readOnly=!!currentEngineer;document.getElementById('svcDate').value=todayISO();
 document.getElementById('svcHours').value=currentServiceMachine.currentHours||'';document.getElementById('svcNotes').value='';
-document.getElementById('svcSignName').value='';document.getElementById('svcSignDate').value=todayISO();
+document.getElementById('svcSignName').value=currentEngineer?currentEngineer.name:'';document.getElementById('svcSignName').readOnly=!!currentEngineer;document.getElementById('svcSignDate').value=todayISO();
 document.getElementById('lolerCertDate').value='';document.getElementById('lolerNextDue').value='';document.getElementById('lolerExaminer').value='';
 pendingLolerStatus='pass';document.querySelectorAll('#svcLolerPanel .check-box').forEach(b=>b.classList.remove('active'));
 const ls=records.find(r=>r.type==='service'&&r.machineId===id);const since=(currentServiceMachine.currentHours||0)-(currentServiceMachine.lastServiceHours||0);
@@ -664,6 +664,7 @@ document.getElementById('defSignName').value='';document.getElementById('defSign
 showScreen('defect-form');setTimeout(()=>initSigPad('sigPadDefect'),50);}
 async function completeAndShare(mode){
 if(mode==='service'){
+if(!currentEngineer){toast('Engineer sign-in required');requestEngineerSignIn();return;}
 if(!currentServiceMachine){toast('Select a machine first');return;}
 const techName=document.getElementById('svcTechName').value.trim();const signName=document.getElementById('svcSignName').value.trim();
 const signDate=document.getElementById('svcSignDate').value;const hours=document.getElementById('svcHours').value;const sig=sigPads['sigPadService'];
@@ -1054,13 +1055,18 @@ function pdfForExport(record){
   return doc;
 }
 async function exportAllPDFs(){
-  if(!records.length)return toast('No records to export');if(!window.JSZip)return toast('ZIP library unavailable — refresh and try again');
+  if(!records.length&&!defects.length)return toast('No PDFs to export');if(!window.JSZip)return toast('ZIP library unavailable — refresh and try again');
   const zip=new JSZip();let n=0;
   for(const r of records){
     const m=machines.find(x=>x.id===r.machineId);const typeFolder=safeFolderName((m&&categories[m.categoryKey]?.label)||r.categoryKey||'Uncategorised');
     const machineFolder=safeFolderName((m&&m.name)||r.machineName||r.subject||'Unknown Machine');const checkFolder=recordCheckType(r);
     const doc=pdfForExport(r);const bytes=doc.output('arraybuffer');const id=safeFolderName(r.recordId||r.id);const file=safeFolderName(r.date||'undated')+'_'+id+'.pdf';
     zip.folder(typeFolder).folder(machineFolder).folder(checkFolder).file(file,bytes);n++;
+  }
+  for(const d of defects){
+    const m=machines.find(x=>x.id===d.machineId);const typeFolder=safeFolderName((m&&categories[m.categoryKey]?.label)||'Uncategorised');
+    const machineFolder=safeFolderName((m&&m.name)||d.machineName||'Unknown Machine');const doc=buildDefectPDF(d);const id=safeFolderName(d.defectId||d.id);
+    zip.folder(typeFolder).folder(machineFolder).folder('Defect Records').file(safeFolderName(d.dateRaised||'undated')+'_'+id+'.pdf',doc.output('arraybuffer'));n++;
   }
   const blob=await zip.generateAsync({type:'blob'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='CheckPlant_All_PDFs_'+todayISO()+'.zip';a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);toast('Exported '+n+' PDFs');
 }
