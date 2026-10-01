@@ -211,7 +211,7 @@ async function createAssignedJob(){
  const ref=db.collection('settings').doc('managerJobSequence');
  const n=await db.runTransaction(async tx=>{const s=await tx.get(ref),v=(s.exists?(s.data().value||0):0)+1;tx.set(ref,{value:v},{merge:true});return v;});
  const prefix=jobType==='service'?'SVC':'AHJ',jobId='CP-'+prefix+'-M'+String(n).padStart(5,'0');
- await db.collection('liveJobs').add({jobId,jobType,status:'assigned',machineId:m.id,machineName:m.name,serialNumber:m.serialNumber||'',branch:m.branch||'',jobCategory:category,engineerId:e.id,engineerName:e.name,accumulatedMs:0,progressNotes:[],assignedAt:firebase.firestore.Timestamp.now(),createdAt:firebase.firestore.Timestamp.now(),updatedAt:firebase.firestore.Timestamp.now()});
+ await db.collection('liveJobs').add({jobId,jobType,status:'assigned',machineId:m.id,machineName:m.name,serialNumber:m.serialNumber||'',branch:m.branch||'',hoursReading:Number(m.currentHours)||0,date:todayISO(),jobCategory:category,engineerId:e.id,engineerName:e.name,accumulatedMs:0,progressNotes:[],assignedAt:firebase.firestore.Timestamp.now(),createdAt:firebase.firestore.Timestamp.now(),updatedAt:firebase.firestore.Timestamp.now()});
  document.getElementById('assignCategory').value='';toast('Job assigned to '+e.name);
 }
 async function reassignJob(id){
