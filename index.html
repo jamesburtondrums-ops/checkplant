@@ -176,7 +176,13 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focu
 <div id="lastServiceHint"></div></div></div>
 <div class="screen" id="screen-service-form">
 <button class="back-link" onclick="showScreen('service-select')">← Back</button>
-<div class="card"><div class="section-title">Service Checklist — <span id="serviceMachineName"></span></div>
+<div id="serviceTimerPanel" class="timer-panel" style="display:none">
+<div class="progress-note" id="serviceTimerStatus">LIVE SERVICE</div>
+<div class="timer-big" id="serviceTimer">00:00:00</div>
+<div class="progress-note" id="serviceStartedAt"></div>
+<div class="row" style="margin-top:12px"><button class="btn btn-secondary btn-block" id="servicePauseBtn" onclick="pauseServiceJob()">Pause Service</button><button class="btn btn-primary btn-block" id="serviceResumeBtn" style="display:none" onclick="resumeServiceJob()">Resume Service</button></div>
+</div>
+<div class="card"><div class="section-title">Service Checklist — <span id="serviceMachineName"></span> <span id="serviceLiveId" class="badge navy" style="display:none"></span></div>
 <div class="row"><div><label>Technician</label><input type="text" id="svcTechName"></div><div><label>Date</label><input type="date" id="svcDate"></div></div>
 <div class="row" style="margin-top:12px"><div><label>Current Hour Meter Reading <span class="required-star">*</span></label><input type="number" id="svcHours" min="0"></div></div></div>
 <div class="card"><div class="section-title">Serviceable Items <span class="badge" id="svcItemCount">0</span></div>
@@ -192,11 +198,16 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focu
 <div class="row" style="margin-top:12px"><div><label>Cert Date</label><input type="date" id="lolerCertDate"></div><div><label>Next Due</label><input type="date" id="lolerNextDue"></div></div>
 <div class="row" style="margin-top:12px"><div><label>Examiner</label><input type="text" id="lolerExaminer"></div></div></div>
 <div class="card"><div class="section-title">Notes</div><textarea id="svcNotes"></textarea></div>
+<div class="card" id="serviceProgressCard" style="display:none"><div class="section-title">Service Progress Notes</div>
+<p class="progress-note">Add updates before pausing or when recording work completed so far.</p>
+<div id="serviceProgressHistory"></div><textarea id="serviceProgressNote" placeholder="Add a service progress note..."></textarea>
+<button class="btn btn-secondary btn-block" onclick="addServiceProgressNote()">Add Progress Note</button></div>
 <div class="card"><div class="section-title">Sign Off</div>
 <div class="row"><div><label>Name <span class="required-star">*</span></label><input type="text" id="svcSignName"></div><div><label>Date <span class="required-star">*</span></label><input type="date" id="svcSignDate"></div></div>
 <canvas class="sigPad" id="sigPadService"></canvas>
 <button class="btn btn-secondary" onclick="clearSig('sigPadService')">Clear Signature</button></div>
-<button class="btn btn-primary btn-block" onclick="completeAndShare('service')">Complete &amp; Share PDF</button></div>
+<button class="btn btn-primary btn-block" id="openServiceJobBtn" onclick="openServiceJob()">Mark Service Live & Start Timer</button>
+<button class="btn btn-primary btn-block" id="completeServiceJobBtn" style="display:none" onclick="completeAndShare('service')">Complete Service &amp; Share PDF</button></div>
 <div class="screen" id="screen-check-category">
 <button class="back-link" onclick="goHome()">← Back</button>
 <div class="card"><div class="section-title">✅ Select Machine Category</div><div class="cat-grid" id="categoryGrid"></div></div></div>
@@ -252,6 +263,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focu
 <button data-tab="defects" onclick="switchOfficeTab('defects')">Outstanding Defects</button>
 <button data-tab="calendar" onclick="switchOfficeTab('calendar')">Service Calendar</button>
 <button data-tab="vor" onclick="switchOfficeTab('vor')">VOR / OOS</button>
+<button data-tab="engineeractivity" onclick="switchOfficeTab('engineeractivity')">Engineer Activity</button>
 <button data-tab="records" onclick="switchOfficeTab('records')">Records</button>
 <button data-tab="sheets" onclick="switchOfficeTab('sheets')">Google Sheets CSV</button>
 <button data-tab="security" onclick="switchOfficeTab('security')">Security</button>
@@ -285,6 +297,11 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focu
 <div id="calMonthLabel" style="flex:2;text-align:center;font-weight:800"></div>
 <button class="btn btn-secondary btn-sm" onclick="calMonthOffset++;renderCalendar()">Next →</button></div>
 <div class="cal-grid" id="calDowRow"></div><div class="cal-grid" id="calGrid"></div></div></div>
+<div id="office-engineeractivity" class="office-tab" style="display:none">
+<div class="card"><div class="section-title">👷 Engineer Activity <span class="badge amber" id="engineerActivityCount">0</span></div>
+<p class="progress-note">Live and paused Service and Ad-Hoc jobs, grouped by engineer.</p>
+<div id="engineerActivityOverview"></div></div>
+</div>
 <div id="office-vor" class="office-tab" style="display:none">
 <div class="card"><div class="section-title">🚫 Vehicle / Plant Off Road Register <span class="badge red" id="vorCount">0</span></div>
 <p class="progress-note">Machines placed into VOR cannot be selected for operator safety checks. Returning a machine to service requires remediation notes.</p>
@@ -364,7 +381,7 @@ if(settings.autoSheets === undefined) settings.autoSheets = true;
 if(settings.autoCsv === undefined) settings.autoCsv = false;
 localStorage.setItem('cpsettings', JSON.stringify(settings));
 let syncLog=JSON.parse(localStorage.getItem('cpsynclog')||'[]');
-let currentServiceMachine=null,currentCheckCategory=null,currentCheckMachine=null,currentProfileMachineId=null,currentDefect=null,currentEngineer=null,currentAdHocMachine=null,currentLiveJob=null,liveTimerInterval=null;
+let currentServiceMachine=null,currentCheckCategory=null,currentCheckMachine=null,currentProfileMachineId=null,currentDefect=null,currentEngineer=null,currentAdHocMachine=null,currentLiveJob=null,currentServiceLiveJob=null,liveTimerInterval=null,serviceTimerInterval=null;
 let nextDefectSeq = null;
 let officeMachineBranchFilter='all',recordsBranchFilter='all',calMonthOffset=0,pendingLolerStatus='pass';
 let backOfficeUnlocked = false;
@@ -542,7 +559,7 @@ db.collection('machines').orderBy('name').onSnapshot({includeMetadataChanges:tru
   machines=s.docs.map(d=>({id:d.id,...d.data()}));populateServiceMachineSelect();populateBookingMachineSelect();populateAdHocMachines();renderMachineList();renderHomeMachineList();renderOverdueAlerts();renderCalendar();renderDailyChecks();renderVORRegister();setConn(!s.metadata.fromCache,s.metadata.fromCache?"Offline / cached assets":s.metadata.hasPendingWrites?"Saving changes…":"Assets synced");
 },e=>setConn(false,"Error: "+e.message));
 db.collection('engineers').orderBy('name').onSnapshot(s=>{engineers=s.docs.map(d=>({id:d.id,...d.data()}));renderEngineerAdmin();},e=>console.error("Engineer list error",e));
-db.collection('liveJobs').onSnapshot(s=>{liveJobs=s.docs.map(d=>({id:d.id,...d.data()})).filter(j=>j.status!=='completed');renderEngineerLiveJobs();if(currentLiveJob){const fresh=liveJobs.find(j=>j.id===currentLiveJob.id);if(fresh){currentLiveJob=fresh;renderLiveJobState();}}},e=>console.error("Live jobs error",e));
+db.collection('liveJobs').onSnapshot(s=>{liveJobs=s.docs.map(d=>({id:d.id,...d.data()})).filter(j=>j.status!=='completed');renderEngineerLiveJobs();renderEngineerActivityOverview();if(currentLiveJob){const fresh=liveJobs.find(j=>j.id===currentLiveJob.id);if(fresh){currentLiveJob=fresh;renderLiveJobState();}}if(currentServiceLiveJob){const freshSvc=liveJobs.find(j=>j.id===currentServiceLiveJob.id);if(freshSvc){currentServiceLiveJob=freshSvc;renderServiceLiveState();}}},e=>console.error("Live jobs error",e));
 db.collection('categories').onSnapshot(async s=>{
   const seeded = await ensureCategoriesSeeded(s.docs);
   if(seeded) return;
@@ -614,7 +631,7 @@ function machineChecklistItems(m){
       if(cat) return (cat.serviceItems && cat.serviceItems.length) ? cat.serviceItems : cat.items;
       return m.items;
 }
-function onServiceMachineChosen(){const id=document.getElementById('serviceMachineSelect').value;if(!id)return;currentServiceMachine=machines.find(m=>m.id===id);
+function onServiceMachineChosen(){const id=document.getElementById('serviceMachineSelect').value;if(!id)return;currentServiceMachine=machines.find(m=>m.id===id);currentServiceLiveJob=null;stopServiceTimer();
 document.getElementById('serviceMachineName').textContent=currentServiceMachine.name+(currentServiceMachine.serialNumber?' (S/N: '+currentServiceMachine.serialNumber+')':'');
 document.getElementById('svcTechName').value=currentEngineer?currentEngineer.name:'';document.getElementById('svcTechName').readOnly=!!currentEngineer;document.getElementById('svcDate').value=todayISO();
 document.getElementById('svcHours').value=currentServiceMachine.currentHours||'';document.getElementById('svcNotes').value='';
@@ -625,7 +642,7 @@ const ls=records.find(r=>r.type==='service'&&r.machineId===id);const since=(curr
 document.getElementById('lastServiceHint').innerHTML='<p class="progress-note">'+(ls?'Last serviced '+ls.date:'No previous service')+'. Hours since reset: '+since+' (resets to 0 now). Next service due will be set to current hours + 500.</p>';
 renderServiceItems();const ck=currentServiceMachine.categoryKey;const la=ck&&categories[ck]?categories[ck].lolerApplies:true;
 document.getElementById('svcLolerPanel').style.display='block';if(!la){document.querySelector('#svcLolerPanel .check-box[data-loler="na"]').click();}
-showScreen('service-form');setTimeout(()=>initSigPad('sigPadService'),50);}
+renderServiceLiveState();showScreen('service-form');setTimeout(()=>initSigPad('sigPadService'),50);}
 function renderServiceItems(){const l=document.getElementById('serviceItemsList');l.innerHTML='';const items=machineChecklistItems(currentServiceMachine);
 document.getElementById('svcItemCount').textContent=items.length;document.getElementById('svcNoItemsNote').style.display=items.length?'none':'block';
 items.forEach((item,idx)=>{const row=document.createElement('div');row.className='checklist-item';
@@ -686,6 +703,7 @@ async function completeAndShare(mode){
 if(mode==='service'){
 if(!currentEngineer){toast('Engineer sign-in required');requestEngineerSignIn();return;}
 if(!currentServiceMachine){toast('Select a machine first');return;}
+if(!currentServiceLiveJob){toast('Mark the service live before completing it');return;}
 const techName=document.getElementById('svcTechName').value.trim();const signName=document.getElementById('svcSignName').value.trim();
 const signDate=document.getElementById('svcSignDate').value;const hours=document.getElementById('svcHours').value;const sig=sigPads['sigPadService'];
 if(!signName||!signDate){toast('Enter name and date');return;}if(!sig||!sig.hasSignature){toast('Draw signature');return;}if(hours===''){toast('Enter hours');return;}
@@ -693,10 +711,13 @@ const items=collectItems('serviceItemsList',machineChecklistItems(currentService
 const lolerCertDate=document.getElementById('lolerCertDate').value,lolerNextDue=document.getElementById('lolerNextDue').value,lolerExaminer=document.getElementById('lolerExaminer').value.trim();
 const lolerSection={status:pendingLolerStatus,certDate:lolerCertDate,nextDueDate:lolerNextDue,examinerName:lolerExaminer};
 const hoursNum=Number(hours);const nextDue=hoursNum+SERVICE_HOURS_LIMIT;
-const record={recordId:await getNextRecordId('service'),type:'service',machineId:currentServiceMachine.id,subject:currentServiceMachine.name,serialNumber:currentServiceMachine.serialNumber||'',branch:currentServiceMachine.branch||'',technician:techName,date:document.getElementById('svcDate').value,items,notes:document.getElementById('svcNotes').value.trim(),signName,signDate,signatureData:sig.canvas.toDataURL('image/png'),hoursReading:hoursNum,nextServiceDueHours:nextDue,lolerSection,createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending'};
+const svcCompletedAt=Date.now();let svcDurationMs=Number(currentServiceLiveJob.accumulatedMs)||0;if(currentServiceLiveJob.status==='active')svcDurationMs+=Math.max(0,svcCompletedAt-tsToMs(currentServiceLiveJob.activeStartedAt));
+const record={recordId:currentServiceLiveJob.jobId,type:'service',machineId:currentServiceMachine.id,subject:currentServiceMachine.name,serialNumber:currentServiceMachine.serialNumber||'',branch:currentServiceMachine.branch||'',technician:techName,date:document.getElementById('svcDate').value,items,notes:document.getElementById('svcNotes').value.trim(),signName,signDate,signatureData:sig.canvas.toDataURL('image/png'),hoursReading:hoursNum,nextServiceDueHours:nextDue,lolerSection,startedAt:currentServiceLiveJob.startedAt,completedAt:firebase.firestore.Timestamp.fromMillis(svcCompletedAt),jobDurationMs:svcDurationMs,jobDurationFormatted:formatDuration(svcDurationMs),progressNotes:currentServiceLiveJob.progressNotes||[],createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending'};
 await db.collection('machines').doc(currentServiceMachine.id).update({currentHours:hoursNum,lastServiceHours:hoursNum,nextServiceDueHours:nextDue});
 if(lolerSection.status!=='na'){await db.collection('machines').doc(currentServiceMachine.id).update({loler:{applies:true,lastExamDate:lolerCertDate||null,nextDueDate:lolerNextDue||null,examinerName:lolerExaminer||''}});}
 if(lolerSection.status==='defect'){const defectId=await getNextDefectId();await db.collection('defects').add({defectId,machineId:currentServiceMachine.id,machineName:currentServiceMachine.name,itemName:'LOLER — Statutory: exam overdue/expired',dateRaised:todayISO(),raisedAt:firebase.firestore.Timestamp.now(),status:'open',resolvedDate:null,resolvedAt:null,resolvedBy:null,resolutionRecordId:null,severity:'statutory'});}
+await db.collection('liveJobs').doc(currentServiceLiveJob.id).update({status:'completed',completedAt:firebase.firestore.Timestamp.fromMillis(svcCompletedAt),jobDurationMs:svcDurationMs,updatedAt:firebase.firestore.Timestamp.now()});
+stopServiceTimer();currentServiceLiveJob=null;
 await saveRecordToFirestore(record);
 }else if(mode==='check'){
 if(!currentCheckCategory){toast('Select a category');return;}if(!currentCheckMachine){toast('Select a machine');return;}
@@ -736,7 +757,7 @@ doc.setTextColor(28,31,38);doc.setFontSize(13);doc.setFont(undefined,'bold');doc
 doc.setFontSize(10);doc.setFont(undefined,'normal');doc.text((record.recordId?('Record ID: '+record.recordId+'   '):'')+(record.defectId?('Defect ID: '+record.defectId+'   '):'')+'Date: '+record.date+'  Branch: '+(record.branch||'-')+(record.serialNumber?'  S/N: '+record.serialNumber:''),margin,y);
 doc.text('By: '+(record.technician||record.signName),margin+280,y);y+=16;
 if(record.hoursReading!=null){doc.text('Hours: '+record.hoursReading+(record.nextServiceDueHours!=null?'  Next service due: '+record.nextServiceDueHours+' hrs':''),margin,y);y+=16;}
-if(record.type==='adhoc'&&record.jobDurationFormatted){doc.text('Job duration: '+record.jobDurationFormatted,margin,y);y+=16;}
+if((record.type==='adhoc'||record.type==='service')&&record.jobDurationFormatted){doc.text((record.type==='service'?'Service duration: ':'Job duration: ')+record.jobDurationFormatted,margin,y);y+=16;}
 y+=8;doc.setDrawColor(220,220,220);doc.line(margin,y,pageW-margin,y);y+=20;
 doc.setFontSize(12);doc.setFont(undefined,'bold');doc.setTextColor(46,46,143);
 doc.text(record.type==='service'?'Serviceable Items':record.type==='check'?'Safety Checklist':record.type==='adhoc'?'Job Details':'Defect Details',margin,y);doc.setTextColor(28,31,38);y+=10;
@@ -797,7 +818,7 @@ pushRecordToSheets({type:'check',subject:'Test row',technician:'Test',date:today
 function switchOfficeTab(tab){document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
 document.querySelectorAll('.office-tab').forEach(el=>el.style.display='none');document.getElementById('office-'+tab).style.display='block';
 if(tab==='daily')renderDailyChecks();if(tab==='machines')renderMachineList();if(tab==='categories')renderCategoryList();if(tab==='defects')renderDefectsTable();
-if(tab==='calendar')renderCalendar();if(tab==='vor')renderVORRegister();if(tab==='records')renderRecordsTable();if(tab==='sheets')renderSheetsStatus();if(tab==='security')renderEngineerAdmin();}
+if(tab==='calendar')renderCalendar();if(tab==='vor')renderVORRegister();if(tab==='engineeractivity')renderEngineerActivityOverview();if(tab==='records')renderRecordsTable();if(tab==='sheets')renderSheetsStatus();if(tab==='security')renderEngineerAdmin();}
 function populateNewMachineCategorySelect(){const sel=document.getElementById('newMachineCategory');if(!sel)return;const cv=sel.value;sel.innerHTML='<option value="">Choose category</option>';
 Object.entries(categories).forEach(([k,c])=>{const o=document.createElement('option');o.value=k;o.textContent=c.emoji+' '+c.label;sel.appendChild(o);});sel.value=cv;}
 function renderMachineBranchFilter(){const w=document.getElementById('machineBranchFilter');if(!w)return;
@@ -1057,7 +1078,7 @@ function renderEngineerLiveJobs(){
   const w=document.getElementById('engineerLiveJobs');if(!w)return;const count=document.getElementById('liveJobCount');if(count)count.textContent=liveJobs.length;
   if(!liveJobs.length){w.innerHTML='<div class="empty-state">No live jobs.</div>';return;}
   const sorted=[...liveJobs].sort((a,b)=>(a.status==='active'?0:1)-(b.status==='active'?0:1)||(tsToMs(a.startedAt)-tsToMs(b.startedAt)));
-  w.innerHTML=sorted.map(j=>'<div class="live-job '+(j.status==='paused'?'paused':'')+'" onclick="openExistingLiveJob(\''+j.id+'\')"><div style="display:flex;justify-content:space-between;gap:12px"><div><div class="mname">'+escapeHtml(j.machineName||'Machine')+' — '+escapeHtml(j.jobCategory||'Ad-Hoc Job')+'</div><div class="mmeta">'+escapeHtml(j.engineerName||'Engineer')+' · '+(j.status==='paused'?'PAUSED':'IN PROGRESS')+' · '+escapeHtml(j.jobId||'')+'</div></div><div class="live-job-time" data-live-job-time="'+j.id+'">'+formatDuration(liveElapsedMs(j))+'</div></div></div>').join('');
+  w.innerHTML=sorted.map(j=>'<div class="live-job '+(j.status==='paused'?'paused':'')+'" onclick="openLiveJobByType(\''+j.id+'\')"><div style="display:flex;justify-content:space-between;gap:12px"><div><div class="mname">'+(j.jobType==='service'?'🔧 Service — ':'🧰 Ad-Hoc — ')+escapeHtml(j.machineName||'Machine')+(j.jobCategory?' — '+escapeHtml(j.jobCategory):'')+'</div><div class="mmeta">'+escapeHtml(j.engineerName||'Engineer')+' · '+(j.status==='paused'?'PAUSED':'IN PROGRESS')+' · '+escapeHtml(j.jobId||'')+'</div></div><div class="live-job-time" data-live-job-time="'+j.id+'">'+formatDuration(liveElapsedMs(j))+'</div></div></div>').join('');
   updateHubJobTimers();
 }
 function updateHubJobTimers(){document.querySelectorAll('[data-live-job-time]').forEach(el=>{const j=liveJobs.find(x=>x.id===el.dataset.liveJobTime);if(j)el.textContent=formatDuration(liveElapsedMs(j));});}
@@ -1068,8 +1089,8 @@ async function openAdHocJob(){
   const hours=document.getElementById('adhocHours').value,jobCategory=document.getElementById('adhocCategory').value,date=document.getElementById('adhocDate').value||todayISO();
   if(hours==='')return toast('Enter machine hours');if(!jobCategory)return toast('Choose a job category');
   const jobId=await getNextRecordId('adhoc');const now=firebase.firestore.Timestamp.now();
-  const ref=await db.collection('liveJobs').add({jobId,status:'active',machineId:m.id,machineName:m.name,serialNumber:m.serialNumber||'',branch:m.branch||'',hoursReading:Number(hours),jobCategory,date,engineerId:currentEngineer.id,engineerName:currentEngineer.name,startedAt:now,activeStartedAt:now,accumulatedMs:0,progressNotes:[],createdAt:now,updatedAt:now});
-  currentLiveJob={id:ref.id,jobId,status:'active',machineId:m.id,machineName:m.name,serialNumber:m.serialNumber||'',branch:m.branch||'',hoursReading:Number(hours),jobCategory,date,engineerId:currentEngineer.id,engineerName:currentEngineer.name,startedAt:now,activeStartedAt:now,accumulatedMs:0,progressNotes:[]};
+  const ref=await db.collection('liveJobs').add({jobId,jobType:'adhoc',status:'active',machineId:m.id,machineName:m.name,serialNumber:m.serialNumber||'',branch:m.branch||'',hoursReading:Number(hours),jobCategory,date,engineerId:currentEngineer.id,engineerName:currentEngineer.name,startedAt:now,activeStartedAt:now,accumulatedMs:0,progressNotes:[],createdAt:now,updatedAt:now});
+  currentLiveJob={id:ref.id,jobId,jobType:'adhoc',status:'active',machineId:m.id,machineName:m.name,serialNumber:m.serialNumber||'',branch:m.branch||'',hoursReading:Number(hours),jobCategory,date,engineerId:currentEngineer.id,engineerName:currentEngineer.name,startedAt:now,activeStartedAt:now,accumulatedMs:0,progressNotes:[]};
   setAdHocFieldsLocked(true);renderLiveJobState();toast('Job opened — timer started');
 }
 function openExistingLiveJob(id){
@@ -1113,6 +1134,64 @@ async function submitAdHocJob(markVOR){
   await db.collection('liveJobs').doc(currentLiveJob.id).update({status:'completed',outcome,finalNotes:notes,completedAt:firebase.firestore.Timestamp.fromMillis(completedAt),jobDurationMs:durationMs,updatedAt:firebase.firestore.Timestamp.now(),vorRaised:!!markVOR});
   afterRecordCreated(record);generatePDF(record);if(markVOR)toast('Job completed — machine is now VOR / Out Of Service');else toast('Job completed in '+formatDuration(durationMs));
   stopLiveTimer();currentAdHocMachine=null;currentLiveJob=null;
+}
+
+function stopServiceTimer(){if(serviceTimerInterval){clearInterval(serviceTimerInterval);serviceTimerInterval=null;}}
+function startServiceTimer(){stopServiceTimer();const tick=()=>{const el=document.getElementById('serviceTimer');if(el&&currentServiceLiveJob)el.textContent=formatDuration(liveElapsedMs(currentServiceLiveJob));};tick();serviceTimerInterval=setInterval(tick,1000);}
+function renderServiceLiveState(){
+  const live=!!currentServiceLiveJob,panel=document.getElementById('serviceTimerPanel');if(!panel)return;
+  panel.style.display=live?'block':'none';document.getElementById('serviceProgressCard').style.display=live?'block':'none';document.getElementById('openServiceJobBtn').style.display=live?'none':'block';document.getElementById('completeServiceJobBtn').style.display=live?'block':'none';
+  const badge=document.getElementById('serviceLiveId');badge.style.display=live?'inline-block':'none';badge.textContent=live?(currentServiceLiveJob.jobId||'LIVE'):'';
+  if(!live){stopServiceTimer();return;}
+  const paused=currentServiceLiveJob.status==='paused';document.getElementById('servicePauseBtn').style.display=paused?'none':'block';document.getElementById('serviceResumeBtn').style.display=paused?'block':'none';
+  document.getElementById('serviceTimerStatus').textContent=paused?'PAUSED SERVICE':'LIVE SERVICE — TIMER RUNNING';
+  const started=tsToMs(currentServiceLiveJob.startedAt);document.getElementById('serviceStartedAt').textContent=started?'Started '+new Date(started).toLocaleString('en-GB'):'';
+  renderServiceProgressHistory();startServiceTimer();
+}
+async function openServiceJob(){
+  if(!currentEngineer)return requestEngineerSignIn();if(!currentServiceMachine)return toast('Select a machine first');
+  const hours=document.getElementById('svcHours').value;if(hours==='')return toast('Enter current machine hours before starting service');
+  const existing=liveJobs.find(j=>j.jobType==='service'&&j.machineId===currentServiceMachine.id&&j.status!=='completed');
+  if(existing){currentServiceLiveJob=existing;renderServiceLiveState();return toast('This service is already live');}
+  const jobId=await getNextRecordId('service'),now=firebase.firestore.Timestamp.now();
+  const ref=await db.collection('liveJobs').add({jobId,jobType:'service',status:'active',machineId:currentServiceMachine.id,machineName:currentServiceMachine.name,serialNumber:currentServiceMachine.serialNumber||'',branch:currentServiceMachine.branch||'',hoursReading:Number(hours),date:document.getElementById('svcDate').value||todayISO(),engineerId:currentEngineer.id,engineerName:currentEngineer.name,startedAt:now,activeStartedAt:now,accumulatedMs:0,progressNotes:[],createdAt:now,updatedAt:now});
+  currentServiceLiveJob={id:ref.id,jobId,jobType:'service',status:'active',machineId:currentServiceMachine.id,machineName:currentServiceMachine.name,serialNumber:currentServiceMachine.serialNumber||'',branch:currentServiceMachine.branch||'',hoursReading:Number(hours),date:document.getElementById('svcDate').value||todayISO(),engineerId:currentEngineer.id,engineerName:currentEngineer.name,startedAt:now,activeStartedAt:now,accumulatedMs:0,progressNotes:[]};
+  renderServiceLiveState();toast('Service marked live — timer started');
+}
+async function pauseServiceJob(){
+  if(!currentServiceLiveJob||currentServiceLiveJob.status!=='active')return;
+  const note=document.getElementById('serviceProgressNote').value.trim();if(!note)return toast('Add a progress note before pausing the service');
+  const now=Date.now(),activeStart=tsToMs(currentServiceLiveJob.activeStartedAt),added=Math.max(0,now-activeStart),entry={text:note,by:currentEngineer?currentEngineer.name:'Engineer',at:new Date().toISOString(),event:'paused'};
+  await db.collection('liveJobs').doc(currentServiceLiveJob.id).update({status:'paused',accumulatedMs:(Number(currentServiceLiveJob.accumulatedMs)||0)+added,activeStartedAt:null,progressNotes:firebase.firestore.FieldValue.arrayUnion(entry),updatedAt:firebase.firestore.Timestamp.now()});
+  document.getElementById('serviceProgressNote').value='';toast('Service paused — timer stopped');
+}
+async function resumeServiceJob(){
+  if(!currentServiceLiveJob||currentServiceLiveJob.status!=='paused')return;
+  await db.collection('liveJobs').doc(currentServiceLiveJob.id).update({status:'active',activeStartedAt:firebase.firestore.Timestamp.now(),engineerId:currentEngineer.id,engineerName:currentEngineer.name,updatedAt:firebase.firestore.Timestamp.now()});toast('Service resumed');
+}
+async function addServiceProgressNote(){
+  if(!currentServiceLiveJob)return;const note=document.getElementById('serviceProgressNote').value.trim();if(!note)return toast('Enter a progress note');
+  const entry={text:note,by:currentEngineer?currentEngineer.name:'Engineer',at:new Date().toISOString(),event:'note'};
+  await db.collection('liveJobs').doc(currentServiceLiveJob.id).update({progressNotes:firebase.firestore.FieldValue.arrayUnion(entry),updatedAt:firebase.firestore.Timestamp.now()});document.getElementById('serviceProgressNote').value='';toast('Service progress note saved');
+}
+function renderServiceProgressHistory(){
+  const w=document.getElementById('serviceProgressHistory');if(!w)return;const notes=Array.isArray(currentServiceLiveJob&&currentServiceLiveJob.progressNotes)?currentServiceLiveJob.progressNotes:[];
+  w.innerHTML=notes.length?notes.map(n=>'<div class="history-item"><div>'+escapeHtml(n.text||'')+'</div><div class="mmeta">'+escapeHtml(n.by||'')+' · '+(n.at?new Date(n.at).toLocaleString('en-GB'):'')+(n.event==='paused'?' · Service paused':'')+'</div></div>').join(''):'<p class="progress-note">No service progress notes yet.</p>';
+}
+function openLiveJobByType(id){
+  const j=liveJobs.find(x=>x.id===id);if(!j)return toast('Live job no longer available');
+  if(j.jobType==='service'){
+    if(!currentEngineer)return requestEngineerSignIn();currentServiceMachine=machines.find(m=>m.id===j.machineId)||null;if(!currentServiceMachine)return toast('Machine not found');
+    currentServiceLiveJob=j;document.getElementById('serviceMachineSelect').value=j.machineId;onServiceMachineChosen();currentServiceLiveJob=j;
+    document.getElementById('svcHours').value=j.hoursReading!=null?j.hoursReading:'';document.getElementById('svcTechName').value=j.engineerName||currentEngineer.name;document.getElementById('svcSignName').value=j.engineerName||currentEngineer.name;renderServiceLiveState();showScreen('service-form');
+  }else openExistingLiveJob(id);
+}
+function renderEngineerActivityOverview(){
+  const w=document.getElementById('engineerActivityOverview');if(!w)return;const count=document.getElementById('engineerActivityCount');if(count)count.textContent=liveJobs.length;
+  const by={};engineers.forEach(e=>by[e.id]={engineer:e,jobs:[]});liveJobs.forEach(j=>{const key=j.engineerId||('name:'+String(j.engineerName||'Unassigned'));if(!by[key])by[key]={engineer:{name:j.engineerName||'Unassigned'},jobs:[]};by[key].jobs.push(j);});
+  const groups=Object.values(by).filter(g=>g.jobs.length).sort((a,b)=>String(a.engineer.name).localeCompare(String(b.engineer.name)));
+  if(!groups.length){w.innerHTML='<div class="empty-state">No engineers currently have live or paused jobs.</div>';return;}
+  w.innerHTML=groups.map(g=>'<div class="card"><div class="section-title">'+escapeHtml(g.engineer.name)+' <span class="badge '+(g.jobs.some(j=>j.status==='active')?'amber':'grey')+'">'+g.jobs.length+' job'+(g.jobs.length===1?'':'s')+'</span></div>'+g.jobs.sort((a,b)=>(a.status==='active'?0:1)-(b.status==='active'?0:1)).map(j=>'<div class="machine-list-item" onclick="openLiveJobByType(\''+j.id+'\')"><div><div class="mname">'+(j.jobType==='service'?'🔧 Service':'🧰 Ad-Hoc')+' — '+escapeHtml(j.machineName||'Machine')+'</div><div class="mmeta">'+(j.status==='paused'?'PAUSED':'LIVE')+' · '+escapeHtml(j.jobId||'')+(j.jobCategory?' · '+escapeHtml(j.jobCategory):'')+'</div></div><div class="live-job-time" data-live-job-time="'+j.id+'">'+formatDuration(liveElapsedMs(j))+'</div></div>').join('')+'</div>').join('');
 }
 async function addEngineer(){
   const name=document.getElementById('newEngineerName').value.trim(),pin=document.getElementById('newEngineerPin').value.trim();
