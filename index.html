@@ -741,6 +741,7 @@ if(mode==='service'){
 if(!currentEngineer){toast('Engineer sign-in required');requestEngineerSignIn();return;}
 if(!currentServiceMachine){toast('Select a machine first');return;}
 if(!currentServiceLiveJob){toast('Mark the service live before completing it');return;}
+if(!engineerIsLead(currentServiceLiveJob)){toast('Only the lead engineer can complete this service');return;}
 const techName=document.getElementById('svcTechName').value.trim();const signName=document.getElementById('svcSignName').value.trim();
 const signDate=document.getElementById('svcSignDate').value;const hours=document.getElementById('svcHours').value;const sig=sigPads['sigPadService'];
 if(!signName||!signDate){toast('Enter name and date');return;}if(!sig||!sig.hasSignature){toast('Draw signature');return;}if(hours===''){toast('Enter hours');return;}
@@ -1106,18 +1107,21 @@ function stopLiveTimer(){if(liveTimerInterval){clearInterval(liveTimerInterval);
 function startLiveTimer(){stopLiveTimer();const tick=()=>{const el=document.getElementById('adhocTimer');if(el&&currentLiveJob)el.textContent=formatDuration(liveElapsedMs(currentLiveJob));};tick();liveTimerInterval=setInterval(tick,1000);}
 function renderLiveJobState(){
   const live=!!currentLiveJob,panel=document.getElementById('adhocTimerPanel');if(!panel)return;
-  panel.style.display=live?'block':'none';document.getElementById('adhocProgressCard').style.display=live?'block':'none';document.getElementById('openAdhocJobBtn').style.display=live?'none':'block';document.getElementById('completeAdhocJobBtn').style.display=live?'block':'none';
+  panel.style.display=live?'block':'none';document.getElementById('adhocProgressCard').style.display=live?'block':'none';document.getElementById('openAdhocJobBtn').style.display=live?'none':'block';document.getElementById('completeAdhocJobBtn').style.display=live&&engineerIsLead(currentLiveJob)?'block':'none';
   const idBadge=document.getElementById('adhocLiveId');idBadge.style.display=live?'inline-block':'none';idBadge.textContent=live?(currentLiveJob.jobId||'LIVE'):'';
   if(!live){stopLiveTimer();return;}
-  const paused=currentLiveJob.status==='paused';document.getElementById('adhocPauseBtn').style.display=paused?'none':'block';document.getElementById('adhocResumeBtn').style.display=paused?'block':'none';
+  const paused=currentLiveJob.status==='paused',lead=engineerIsLead(currentLiveJob);document.getElementById('adhocPauseBtn').style.display=lead&&!paused?'block':'none';document.getElementById('adhocResumeBtn').style.display=lead&&paused?'block':'none';
   document.getElementById('adhocTimerStatus').textContent=paused?'PAUSED':'LIVE JOB — TIMER RUNNING';
   const started=tsToMs(currentLiveJob.startedAt);document.getElementById('adhocStartedAt').textContent=started?'Started '+new Date(started).toLocaleString('en-GB'):'';
   renderProgressHistory();startLiveTimer();
 }
+function engineerIsLead(j){return !!(currentEngineer&&j&&j.engineerId===currentEngineer.id);}
+function engineerIsSupport(j){return !!(currentEngineer&&j&&Array.isArray(j.supportEngineerIds)&&j.supportEngineerIds.includes(currentEngineer.id));}
 function engineerCanSeeJob(j){
   if(!currentEngineer)return false;
-  if(j.status==='active'||j.status==='paused')return j.engineerId===currentEngineer.id;
-  return true;
+  if(j.status==='active'||j.status==='paused')return engineerIsLead(j)||engineerIsSupport(j);
+  if(j.status==='assigned'||j.status==='planned')return engineerIsLead(j)||engineerIsSupport(j);
+  return false;
 }
 function renderEngineerLiveJobs(){
   const w=document.getElementById('engineerLiveJobs');if(!w)return;
@@ -1125,7 +1129,7 @@ function renderEngineerLiveJobs(){
   const count=document.getElementById('liveJobCount');if(count)count.textContent=visible.length;
   if(!visible.length){w.innerHTML='<div class="empty-state">No jobs available.</div>';return;}
   const sorted=[...visible].sort((a,b)=>(a.status==='active'?0:1)-(b.status==='active'?0:1)||(tsToMs(a.startedAt)-tsToMs(b.startedAt)));
-  w.innerHTML=sorted.map(j=>'<div class="live-job '+(j.status==='paused'?'paused':'')+'" onclick="openLiveJobByType(\''+j.id+'\')"><div style="display:flex;justify-content:space-between;gap:12px"><div><div class="mname">'+(j.jobType==='service'?'🔧 Service — ':'🧰 Ad-Hoc — ')+escapeHtml(j.machineName||'Machine')+(j.jobCategory?' — '+escapeHtml(j.jobCategory):'')+'</div><div class="mmeta">'+escapeHtml(j.engineerName||'Engineer')+' · '+(j.status==='paused'?'PAUSED':j.status==='assigned'?'ASSIGNED':j.status==='planned'?'PLANNED '+escapeHtml(j.plannedDate||j.date||''):'IN PROGRESS')+' · '+escapeHtml(j.jobId||'')+'</div></div><div class="live-job-time" data-live-job-time="'+j.id+'">'+formatDuration(liveElapsedMs(j))+'</div></div></div>').join('');
+  w.innerHTML=sorted.map(j=>'<div class="live-job '+(j.status==='paused'?'paused':'')+'" onclick="openLiveJobByType(\''+j.id+'\')"><div style="display:flex;justify-content:space-between;gap:12px"><div><div class="mname">'+(j.jobType==='service'?'🔧 Service — ':'🧰 Ad-Hoc — ')+escapeHtml(j.machineName||'Machine')+(j.jobCategory?' — '+escapeHtml(j.jobCategory):'')+'</div><div class="mmeta">'+escapeHtml(j.engineerName||'Engineer')+(engineerIsSupport(j)?' · SUPPORT':' · LEAD')+' · '+(j.status==='paused'?'PAUSED':j.status==='assigned'?'ASSIGNED':j.status==='planned'?'PLANNED '+escapeHtml(j.plannedDate||j.date||''):'IN PROGRESS')+' · '+escapeHtml(j.jobId||'')+'</div></div><div class="live-job-time" data-live-job-time="'+j.id+'">'+formatDuration(liveElapsedMs(j))+'</div></div></div>').join('');
   updateHubJobTimers();
 }
 function updateHubJobTimers(){document.querySelectorAll('[data-live-job-time]').forEach(el=>{const j=liveJobs.find(x=>x.id===el.dataset.liveJobTime);if(j)el.textContent=formatDuration(liveElapsedMs(j));});}
@@ -1148,7 +1152,7 @@ async function pauseOutstandingBeforeStarting(newLabel){
 }
 async function claimAssignedJob(j){
   if(!currentEngineer)return false;
-  if(j.engineerId&&j.engineerId!==currentEngineer.id){toast('This job is assigned to '+(j.engineerName||'another engineer'));return false;}
+  if(j.engineerId&&j.engineerId!==currentEngineer.id){toast('Only the lead engineer '+(j.engineerName||'')+' can start this job');return false;}
   if(j.status!=='assigned'&&j.status!=='planned')return true;
   if(!(await pauseOutstandingBeforeStarting(j.jobType==='service'?'this service':'this job')))return false;
   await db.collection('liveJobs').doc(j.id).update({status:'active',engineerId:currentEngineer.id,engineerName:currentEngineer.name,startedAt:firebase.firestore.Timestamp.now(),activeStartedAt:firebase.firestore.Timestamp.now(),updatedAt:firebase.firestore.Timestamp.now()});
@@ -1168,7 +1172,7 @@ async function openAdHocJob(){
 }
 async function openExistingLiveJob(id){
   if(!currentEngineer)return requestEngineerSignIn();const j=liveJobs.find(x=>x.id===id);if(!j)return toast('Live job no longer available');
-  if((j.status==='active'||j.status==='paused')&&j.engineerId!==currentEngineer.id)return toast('This started job is locked to '+(j.engineerName||'its assigned engineer'));
+  if((j.status==='active'||j.status==='paused')&&!engineerIsLead(j)&&!engineerIsSupport(j))return toast('This started job is locked to '+(j.engineerName||'its assigned engineer'));
   if((j.status==='assigned'||j.status==='planned')&&!(await claimAssignedJob(j)))return;
   currentLiveJob=j;currentAdHocMachine=machines.find(m=>m.id===j.machineId)||null;populateAdHocMachines();populateAdHocCategories();
   document.getElementById('adhocMachine').value=j.machineId;document.getElementById('adhocDate').value=j.date||todayISO();document.getElementById('adhocHours').value=j.hoursReading!=null?j.hoursReading:'';
@@ -1176,14 +1180,14 @@ async function openExistingLiveJob(id){
   document.getElementById('adhocNotes').value=j.finalNotes||'';document.getElementById('adhocProgressNote').value='';adHocDamage=!!j.isDamage;document.getElementById('damageFields').style.display=adHocDamage?'block':'none';document.getElementById('damageDriver').value=j.damageDriver||'';document.getElementById('damageIncident').value=j.damageIncident||'';document.getElementById('damageToggleBtn').textContent=adHocDamage?'Damage Marked — Remove Damage Flag':'Mark as Damage';setAdHocFieldsLocked(true);renderLiveJobState();showScreen('adhoc-form');
 }
 async function pauseLiveJob(){
-  if(!currentLiveJob||currentLiveJob.status!=='active')return;
+  if(!currentLiveJob||currentLiveJob.status!=='active')return;if(!engineerIsLead(currentLiveJob))return toast('Only the lead engineer can pause this job');
   const note=document.getElementById('adhocProgressNote').value.trim();if(!note)return toast('Add a progress note before pausing the job');
   const now=Date.now(),activeStart=tsToMs(currentLiveJob.activeStartedAt),added=Math.max(0,now-activeStart),entry={text:note,by:currentEngineer?currentEngineer.name:'Engineer',at:new Date().toISOString(),event:'paused'};
   await db.collection('liveJobs').doc(currentLiveJob.id).update({status:'paused',accumulatedMs:(Number(currentLiveJob.accumulatedMs)||0)+added,activeStartedAt:null,progressNotes:firebase.firestore.FieldValue.arrayUnion(entry),updatedAt:firebase.firestore.Timestamp.now()});
   document.getElementById('adhocProgressNote').value='';toast('Job paused — timer stopped');
 }
 async function resumeLiveJob(){
-  if(!currentLiveJob||currentLiveJob.status!=='paused')return;
+  if(!currentLiveJob||currentLiveJob.status!=='paused')return;if(!engineerIsLead(currentLiveJob))return toast('Only the lead engineer can resume this job');
   await db.collection('liveJobs').doc(currentLiveJob.id).update({status:'active',activeStartedAt:firebase.firestore.Timestamp.now(),engineerId:currentEngineer.id,engineerName:currentEngineer.name,updatedAt:firebase.firestore.Timestamp.now()});toast('Job resumed');
 }
 async function addLiveJobProgressNote(){
@@ -1197,6 +1201,7 @@ function renderProgressHistory(){
 }
 async function submitAdHocJob(markVOR){
   if(!currentEngineer)return requestEngineerSignIn();
+  if(currentLiveJob&&!engineerIsLead(currentLiveJob))return toast('Only the lead engineer can complete or VOR this job');
   if(!currentLiveJob){if(markVOR){await openAdHocJob();if(!currentLiveJob)return;}else return toast('Open the job first to start the timer');}
   const m=machines.find(x=>x.id===currentLiveJob.machineId);if(!m)return toast('Machine not found');
   const outcome=document.getElementById('adhocOutcome').value,notes=document.getElementById('adhocNotes').value.trim();
@@ -1215,10 +1220,10 @@ function stopServiceTimer(){if(serviceTimerInterval){clearInterval(serviceTimerI
 function startServiceTimer(){stopServiceTimer();const tick=()=>{const el=document.getElementById('serviceTimer');if(el&&currentServiceLiveJob)el.textContent=formatDuration(liveElapsedMs(currentServiceLiveJob));};tick();serviceTimerInterval=setInterval(tick,1000);}
 function renderServiceLiveState(){
   const live=!!currentServiceLiveJob,panel=document.getElementById('serviceTimerPanel');if(!panel)return;
-  panel.style.display=live?'block':'none';document.getElementById('serviceProgressCard').style.display=live?'block':'none';document.getElementById('openServiceJobBtn').style.display=live?'none':'block';document.getElementById('completeServiceJobBtn').style.display=live?'block':'none';
+  panel.style.display=live?'block':'none';document.getElementById('serviceProgressCard').style.display=live?'block':'none';document.getElementById('openServiceJobBtn').style.display=live?'none':'block';document.getElementById('completeServiceJobBtn').style.display=live&&engineerIsLead(currentServiceLiveJob)?'block':'none';
   const badge=document.getElementById('serviceLiveId');badge.style.display=live?'inline-block':'none';badge.textContent=live?(currentServiceLiveJob.jobId||'LIVE'):'';
   if(!live){stopServiceTimer();return;}
-  const paused=currentServiceLiveJob.status==='paused';document.getElementById('servicePauseBtn').style.display=paused?'none':'block';document.getElementById('serviceResumeBtn').style.display=paused?'block':'none';
+  const paused=currentServiceLiveJob.status==='paused',lead=engineerIsLead(currentServiceLiveJob);document.getElementById('servicePauseBtn').style.display=lead&&!paused?'block':'none';document.getElementById('serviceResumeBtn').style.display=lead&&paused?'block':'none';
   document.getElementById('serviceTimerStatus').textContent=paused?'PAUSED SERVICE':'LIVE SERVICE — TIMER RUNNING';
   const started=tsToMs(currentServiceLiveJob.startedAt);document.getElementById('serviceStartedAt').textContent=started?'Started '+new Date(started).toLocaleString('en-GB'):'';
   renderServiceProgressHistory();startServiceTimer();
@@ -1235,14 +1240,14 @@ async function openServiceJob(){
   renderServiceLiveState();toast('Service marked live — timer started');
 }
 async function pauseServiceJob(){
-  if(!currentServiceLiveJob||currentServiceLiveJob.status!=='active')return;
+  if(!currentServiceLiveJob||currentServiceLiveJob.status!=='active')return;if(!engineerIsLead(currentServiceLiveJob))return toast('Only the lead engineer can pause this service');
   const note=document.getElementById('serviceProgressNote').value.trim();if(!note)return toast('Add a progress note before pausing the service');
   const now=Date.now(),activeStart=tsToMs(currentServiceLiveJob.activeStartedAt),added=Math.max(0,now-activeStart),entry={text:note,by:currentEngineer?currentEngineer.name:'Engineer',at:new Date().toISOString(),event:'paused'};
   await db.collection('liveJobs').doc(currentServiceLiveJob.id).update({status:'paused',accumulatedMs:(Number(currentServiceLiveJob.accumulatedMs)||0)+added,activeStartedAt:null,progressNotes:firebase.firestore.FieldValue.arrayUnion(entry),updatedAt:firebase.firestore.Timestamp.now()});
   document.getElementById('serviceProgressNote').value='';toast('Service paused — timer stopped');
 }
 async function resumeServiceJob(){
-  if(!currentServiceLiveJob||currentServiceLiveJob.status!=='paused')return;
+  if(!currentServiceLiveJob||currentServiceLiveJob.status!=='paused')return;if(!engineerIsLead(currentServiceLiveJob))return toast('Only the lead engineer can resume this service');
   await db.collection('liveJobs').doc(currentServiceLiveJob.id).update({status:'active',activeStartedAt:firebase.firestore.Timestamp.now(),engineerId:currentEngineer.id,engineerName:currentEngineer.name,updatedAt:firebase.firestore.Timestamp.now()});toast('Service resumed');
 }
 async function addServiceProgressNote(){
@@ -1256,7 +1261,7 @@ function renderServiceProgressHistory(){
 }
 async function openLiveJobByType(id){
   const j=liveJobs.find(x=>x.id===id);if(!j)return toast('Live job no longer available');
-  if((j.status==='active'||j.status==='paused')&&j.engineerId!==currentEngineer.id)return toast('This started job is locked to '+(j.engineerName||'its assigned engineer'));
+  if((j.status==='active'||j.status==='paused')&&!engineerIsLead(j)&&!engineerIsSupport(j))return toast('This started job is locked to '+(j.engineerName||'its assigned engineer'));
   if((j.status==='assigned'||j.status==='planned')&&!(await claimAssignedJob(j)))return;
   if(j.jobType==='service'){
     if(!currentEngineer)return requestEngineerSignIn();currentServiceMachine=machines.find(m=>m.id===j.machineId)||null;if(!currentServiceMachine)return toast('Machine not found');
