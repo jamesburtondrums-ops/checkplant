@@ -109,6 +109,11 @@ th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;}
 </div>
 
 <div class="card">
+  <div class="section-title">Driver / Operator Check Times</div>
+  <div id="checkTimeOverview"></div>
+</div>
+
+<div class="card">
   <div class="section-title">Monthly Cost by Asset (Top 10) <span style="font-size:.72rem;font-weight:600;color:var(--grey)">■ Internal &nbsp; <span style="color:var(--amber)">■</span> External</span></div>
   <div class="chart-bar-wrap" id="costChart"></div>
 </div>
@@ -181,7 +186,7 @@ function initListeners(){
 
   db.collection('records').onSnapshot(s=>{
     records=s.docs.map(d=>({id:d.id,...d.data()}));
-    computeStats();renderDamageInvestigations();
+    computeStats();renderDamageInvestigations();renderCheckTimeOverview();
   }, e=>setConn(false,'Records error: '+e.message));
 
   db.collection('defects').orderBy('dateRaised','desc').onSnapshot(s=>{
@@ -270,6 +275,16 @@ function renderDamageInvestigations(){
  const byDriver={};d.forEach(r=>{const k=(r.damageDriver||'Unassigned / unknown').trim();if(!byDriver[k])byDriver[k]={count:0,assets:new Set()};byDriver[k].count++;byDriver[k].assets.add(r.machineName||'Unknown');});
  const summary=Object.entries(byDriver).sort((a,b)=>b[1].count-a[1].count).map(([name,v])=>'<div class="alert-row"><span><strong>'+escapeHtml(name)+'</strong></span><span>'+v.count+' damage job'+(v.count===1?'':'s')+' · '+v.assets.size+' asset'+(v.assets.size===1?'':'s')+'</span></div>').join('');
  w.innerHTML=summary+'<hr style="margin:14px 0">'+d.slice(0,20).map(r=>'<div class="alert-row"><span>'+escapeHtml(r.machineName)+' · '+escapeHtml(r.damageDriver||'Unknown driver')+'</span><span>'+escapeHtml(r.damageIncident||r.notes||'Damage investigation required')+'</span></div>').join('');
+}
+
+function formatCheckMinutes(ms){const min=(Number(ms)||0)/60000;return min<1?Math.round((Number(ms)||0)/1000)+' sec':min.toFixed(1)+' min'}
+function renderCheckTimeOverview(){
+ const w=document.getElementById('checkTimeOverview');if(!w)return;const checks=records.filter(r=>r.type==='check'&&Number(r.checkDurationMs)>0);
+ if(!checks.length){w.innerHTML='<div class="empty-state">No timed machine checks completed yet.</div>';return;}
+ const byDriver={};checks.forEach(r=>{const k=(r.signName||r.technician||'Unknown operator').trim();if(!byDriver[k])byDriver[k]={count:0,total:0};byDriver[k].count++;byDriver[k].total+=Number(r.checkDurationMs)||0;});
+ const driverRows=Object.entries(byDriver).sort((a,b)=>(b[1].total/b[1].count)-(a[1].total/a[1].count)).map(([name,v])=>'<div class="alert-row"><span><strong>'+escapeHtml(name)+'</strong> · '+v.count+' check'+(v.count===1?'':'s')+'</span><span>Avg '+formatCheckMinutes(v.total/v.count)+'</span></div>').join('');
+ const recent=[...checks].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,15).map(r=>'<div class="alert-row"><span>'+escapeHtml(r.machineName||r.subject||'Machine')+' · '+escapeHtml(r.signName||r.technician||'Unknown')+'</span><span>'+formatCheckMinutes(r.checkDurationMs)+'</span></div>').join('');
+ w.innerHTML='<div class="section-title" style="font-size:.9rem">Average by Driver / Operator</div>'+driverRows+'<div class="section-title" style="font-size:.9rem;margin-top:14px">Recent Timed Checks</div>'+recent;
 }
 function renderAssetCostHours(){
  const w=document.getElementById('assetCostHoursChart');if(!w)return;const g={};
