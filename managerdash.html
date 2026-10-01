@@ -121,11 +121,14 @@ th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;}
 <div class="card">
   <div class="section-title">Engineering Job Assignment</div>
   <div class="row">
-    <select id="assignJobType" onchange="updateAssignmentForm()"><option value="adhoc">Ad-Hoc Job</option><option value="service">Service</option><option value="defect">Outstanding Defect</option></select>
-    <select id="assignMachine" onchange="updateDefectOptions()"><option value="">-- Machine --</option></select>
+    <select id="assignJobType" onchange="updateAssignmentForm()">
+      <option value="adhoc">Ad-Hoc Job</option>
+      <option value="service">Service</option>
+      <option value="defect">Outstanding Defect</option>
+    </select>
+    <select id="assignMachine" onchange="updateDefectOptions()"><option value="">-- Select asset --</option></select>
     <select id="assignDefect" style="display:none"><option value="">-- Select defect --</option></select>
-    <select id="assignEngineer"><option value="">-- Engineer --</option></select>
-    <input id="assignCategory" type="text" placeholder="Job category / instruction">
+    <select id="assignEngineer"><option value="">-- Select engineer --</option></select>
     <button class="btn btn-secondary" onclick="createAssignedJob()">Assign Job</button>
   </div>
   <div id="liveAssignmentBoard" style="margin-top:16px"></div>
@@ -210,9 +213,9 @@ function initListeners(){
 function renderAssignmentSelectors(){
  const ms=document.getElementById('assignMachine'),es=document.getElementById('assignEngineer');if(!ms||!es)return;
  const currentMachine=ms.value,currentEngineer=es.value;
- ms.innerHTML='<option value="">-- Machine --</option>'+machines.map(m=>'<option value="'+m.id+'">'+escapeHtml(m.name)+'</option>').join('');
+ ms.innerHTML='<option value="">-- Select asset --</option>'+machines.map(m=>'<option value="'+m.id+'">'+escapeHtml(m.name)+'</option>').join('');
  if(machines.some(m=>m.id===currentMachine))ms.value=currentMachine;
- es.innerHTML='<option value="">-- Engineer --</option>'+engineers.filter(e=>e.active!==false).map(e=>'<option value="'+e.id+'">'+escapeHtml(e.name)+'</option>').join('');
+ es.innerHTML='<option value="">-- Select engineer --</option>'+engineers.filter(e=>e.active!==false).map(e=>'<option value="'+e.id+'">'+escapeHtml(e.name)+'</option>').join('');
  if(engineers.some(e=>e.id===currentEngineer))es.value=currentEngineer;
  updateAssignmentForm();
 }
@@ -220,8 +223,6 @@ function updateAssignmentForm(){
  const type=document.getElementById('assignJobType').value,isDefect=type==='defect';
  document.getElementById('assignDefect').style.display=isDefect?'block':'none';
  document.getElementById('assignMachine').style.display='block';
- document.getElementById('assignCategory').style.display=type==='service'?'none':'block';
- document.getElementById('assignCategory').placeholder=isDefect?'Additional instruction (optional)':'Job category / instruction';
  updateDefectOptions();
 }
 function defectFullLabel(d){
@@ -250,15 +251,15 @@ async function createAssignedJob(){
    const machineId=document.getElementById('assignMachine').value;if(!machineId)return toast('Choose a machine first');
    const defectDocId=document.getElementById('assignDefect').value,d=defects.find(x=>x.id===defectDocId&&x.machineId===machineId);if(!d||d.status!=='open')return toast('Choose an outstanding defect for this machine');
    const existing=liveJobs.find(j=>j.defectRefId===d.id&&j.status!=='completed');if(existing)return toast('This defect is already assigned');
-   const m=machines.find(x=>x.id===d.machineId),jobId='CP-AHJ-M'+String(n).padStart(5,'0'),extra=document.getElementById('assignCategory').value.trim();
-   await db.collection('liveJobs').add({jobId,jobType:'adhoc',status:'assigned',machineId:d.machineId||'',machineName:d.machineName||(m?m.name:''),serialNumber:m?(m.serialNumber||''):'',branch:m?(m.branch||''):'',hoursReading:m?(Number(m.currentHours)||0):0,date:todayISO(),jobCategory:'Outstanding Defect — '+(d.itemName||d.inspectionItemName||'Repair')+(extra?' — '+extra:''),engineerId:e.id,engineerName:e.name,defectRefId:d.id,defectId:d.defectId||'',defectItemName:d.itemName||d.inspectionItemName||'',defectDateRaised:d.dateRaised||'',source:'managerdash_defect_assignment',accumulatedMs:0,progressNotes:[],assignedAt:firebase.firestore.Timestamp.now(),createdAt:firebase.firestore.Timestamp.now(),updatedAt:firebase.firestore.Timestamp.now()});
+   const m=machines.find(x=>x.id===d.machineId),jobId='CP-AHJ-M'+String(n).padStart(5,'0');
+   await db.collection('liveJobs').add({jobId,jobType:'adhoc',status:'assigned',machineId:d.machineId||'',machineName:d.machineName||(m?m.name:''),serialNumber:m?(m.serialNumber||''):'',branch:m?(m.branch||''):'',hoursReading:m?(Number(m.currentHours)||0):0,date:todayISO(),jobCategory:'Outstanding Defect — '+(d.itemName||d.inspectionItemName||'Repair'),engineerId:e.id,engineerName:e.name,defectRefId:d.id,defectId:d.defectId||'',defectItemName:d.itemName||d.inspectionItemName||'',defectDateRaised:d.dateRaised||'',source:'managerdash_defect_assignment',accumulatedMs:0,progressNotes:[],assignedAt:firebase.firestore.Timestamp.now(),createdAt:firebase.firestore.Timestamp.now(),updatedAt:firebase.firestore.Timestamp.now()});
    await db.collection('defects').doc(d.id).set({assignedEngineerId:e.id,assignedEngineerName:e.name,assignedJobId:jobId,assignedAt:firebase.firestore.Timestamp.now()},{merge:true});
-   document.getElementById('assignCategory').value='';toast((d.defectId||'Defect')+' assigned to '+e.name);return;
+   toast((d.defectId||'Defect')+' assigned to '+e.name);return;
  }
  const machineId=document.getElementById('assignMachine').value,m=machines.find(x=>x.id===machineId);if(!m)return toast('Choose a machine');
- const category=document.getElementById('assignCategory').value.trim(),prefix=jobType==='service'?'SVC':'AHJ',jobId='CP-'+prefix+'-M'+String(n).padStart(5,'0');
- await db.collection('liveJobs').add({jobId,jobType,status:'assigned',machineId:m.id,machineName:m.name,serialNumber:m.serialNumber||'',branch:m.branch||'',hoursReading:Number(m.currentHours)||0,date:todayISO(),jobCategory:category,engineerId:e.id,engineerName:e.name,accumulatedMs:0,progressNotes:[],assignedAt:firebase.firestore.Timestamp.now(),createdAt:firebase.firestore.Timestamp.now(),updatedAt:firebase.firestore.Timestamp.now()});
- document.getElementById('assignCategory').value='';toast('Job assigned to '+e.name);
+ const prefix=jobType==='service'?'SVC':'AHJ',jobId='CP-'+prefix+'-M'+String(n).padStart(5,'0');
+ await db.collection('liveJobs').add({jobId,jobType,status:'assigned',machineId:m.id,machineName:m.name,serialNumber:m.serialNumber||'',branch:m.branch||'',hoursReading:Number(m.currentHours)||0,date:todayISO(),jobCategory:jobType==='service'?'Service':'Ad-Hoc Job',engineerId:e.id,engineerName:e.name,accumulatedMs:0,progressNotes:[],assignedAt:firebase.firestore.Timestamp.now(),createdAt:firebase.firestore.Timestamp.now(),updatedAt:firebase.firestore.Timestamp.now()});
+ toast('Job assigned to '+e.name);
 }
 async function reassignJob(id){
  const sel=document.getElementById('reassign-'+id),engineerId=sel&&sel.value,e=engineers.find(x=>x.id===engineerId);if(!e)return;
