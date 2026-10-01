@@ -70,9 +70,18 @@ th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;}
 <body>
 <header>
   <div class="brand"><span class="app-name">ManagerDash</span><span class="company-name">KCM Waste Management</span></div>
+  <button class="btn btn-secondary btn-sm" onclick="lockManagerDash()">Lock</button>
 </header>
-<div class="sync-banner"><span class="conn-dot online" id="connDot"></span><span id="connText">Connecting...</span></div>
-<main>
+<div class="sync-banner"><span class="conn-dot online" id="connDot"></span><span id="connText">Locked</span></div>
+<div id="managerPinGate" style="max-width:360px;margin:70px auto;padding:24px">
+  <div class="card" style="text-align:center">
+    <div class="section-title">ManagerDash Locked</div>
+    <p class="progress-note">Enter manager PIN to continue.</p>
+    <input type="password" id="managerPinInput" maxlength="4" inputmode="numeric" pattern="[0-9]*" style="text-align:center;font-size:1.8rem;letter-spacing:.45em;padding:16px" onkeydown="if(event.key==='Enter')unlockManagerDash()">
+    <button class="btn btn-primary" style="width:100%;margin-top:14px" onclick="unlockManagerDash()">Unlock ManagerDash</button>
+  </div>
+</div>
+<main id="managerMain" style="display:none">
 
 <div class="card">
   <div class="section-title">Quick Links</div>
@@ -187,6 +196,20 @@ function jobDuration(ms){let s=Math.floor((Number(ms)||0)/1000),h=Math.floor(s/3
 function updateManagerJobTimers(){document.querySelectorAll('[data-manager-job-time]').forEach(el=>{const j=liveJobs.find(x=>x.id===el.dataset.managerJobTime);if(j)el.textContent=j.status==='active'?jobDuration(jobElapsedMs(j)):j.status==='paused'?jobDuration(jobElapsedMs(j)):'—';});}
 setInterval(updateManagerJobTimers,1000);
 
+const MANAGER_PIN='1994';
+let managerUnlocked=false,managerListenersStarted=false;
+function unlockManagerDash(){
+ const input=document.getElementById('managerPinInput'),pin=input?input.value.trim():'';
+ if(pin!==MANAGER_PIN){toast('Incorrect manager PIN');if(input){input.value='';input.focus();}return;}
+ managerUnlocked=true;sessionStorage.setItem('managerDashUnlocked','1');
+ document.getElementById('managerPinGate').style.display='none';document.getElementById('managerMain').style.display='block';
+ if(!managerListenersStarted){managerListenersStarted=true;initListeners();}
+}
+function lockManagerDash(){sessionStorage.removeItem('managerDashUnlocked');managerUnlocked=false;location.reload();}
+function bootManagerDash(){
+ if(sessionStorage.getItem('managerDashUnlocked')==='1'){managerUnlocked=true;document.getElementById('managerPinGate').style.display='none';document.getElementById('managerMain').style.display='block';managerListenersStarted=true;initListeners();}
+ else{const el=document.getElementById('managerPinInput');if(el)setTimeout(()=>el.focus(),50);}
+}
 function initListeners(){
   setConn(true,'Connecting...');
   document.getElementById('monthPicker').value = todayISO().slice(0,7);const pjd=document.getElementById('plannedJobDate');if(pjd&&!pjd.value)pjd.value=todayISO();
@@ -459,7 +482,7 @@ function renderResolutions(){
 }
 
 document.getElementById('monthPicker').addEventListener('change', computeStats);
-initListeners();
+bootManagerDash();
 </script>
 </body>
 </html>
