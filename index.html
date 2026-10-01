@@ -216,10 +216,21 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focu
 <button class="back-link" onclick="goHome()">← Back</button>
 <div class="card"><div class="section-title">✅ Select Machine Category</div><div class="cat-grid" id="categoryGrid"></div></div></div>
 <div class="screen" id="screen-check-form">
-<button class="back-link" onclick="showScreen('check-category')">← Back</button>
+<button class="back-link" onclick="cancelTimedCheck()">← Back</button>
 <div class="card"><div class="section-title">Safety Check — <span id="checkCategoryName"></span></div>
 <div class="row"><div><label>Machine <span class="required-star">*</span></label><select id="chkMachineSelect" onchange="onCheckMachineChosen()"><option value="">-- Choose machine --</option></select></div><div><label>Date</label><input type="date" id="chkDate"></div></div>
 <div class="row" style="margin-top:12px"><div><label>Hours <span class="required-star">*</span></label><input type="number" id="chkHours" min="0"></div></div></div>
+<div id="checkStartPrompt" class="card" style="display:none;text-align:center;border:2px solid var(--navy)">
+<div class="section-title">Check this machine?</div>
+<p class="progress-note">Starting the check will begin the timer. The timer stops when the completed check is submitted.</p>
+<button class="btn btn-primary btn-block" onclick="startTimedMachineCheck()">Check this machine? Start Check</button>
+</div>
+<div id="activeCheckTimer" class="timer-panel" style="display:none">
+<div class="progress-note">CHECK IN PROGRESS</div>
+<div class="timer-big" id="checkTimerDisplay">00:00:00</div>
+<div class="progress-note" id="checkStartedAt"></div>
+</div>
+<div id="checkWorkArea" style="display:none">
 <div class="card"><div class="section-title">Safety Checklist <span class="badge" id="chkItemCount">0</span></div>
 <div id="checkItemsList"></div><p class="progress-note" id="chkNoItemsNote" style="display:none">No items set.</p></div>
 <div class="card"><div class="section-title">Notes</div><textarea id="chkNotes"></textarea></div>
@@ -227,7 +238,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focu
 <div class="row"><div><label>Name <span class="required-star">*</span></label><input type="text" id="chkSignName"></div><div><label>Date <span class="required-star">*</span></label><input type="date" id="chkSignDate"></div></div>
 <canvas class="sigPad" id="sigPadCheck"></canvas>
 <button class="btn btn-secondary" onclick="clearSig('sigPadCheck')">Clear Signature</button></div>
-<button class="btn btn-primary btn-block" onclick="completeAndShare('check')">Complete &amp; Share PDF</button></div>
+<button class="btn btn-primary btn-block" onclick="completeAndShare('check')">Complete &amp; Share PDF</button>
+</div></div>
 <div class="screen" id="screen-defect-select">
 <button class="back-link" onclick="goHome()">← Back</button>
 <div class="card"><div class="section-title">🛠️ Select Outstanding Defect</div><p class="progress-note" style="margin:0 0 12px">Oldest open defects are shown first. Select a defect to review its full defect record and original check PDF before completing the resolution.</p><div id="outstandingDefectsList"></div></div></div>
@@ -386,7 +398,7 @@ if(settings.autoSheets === undefined) settings.autoSheets = true;
 if(settings.autoCsv === undefined) settings.autoCsv = false;
 localStorage.setItem('cpsettings', JSON.stringify(settings));
 let syncLog=JSON.parse(localStorage.getItem('cpsynclog')||'[]');
-let currentServiceMachine=null,currentCheckCategory=null,currentCheckMachine=null,currentProfileMachineId=null,currentDefect=null,currentEngineer=null,currentAdHocMachine=null,currentLiveJob=null,currentServiceLiveJob=null,liveTimerInterval=null,serviceTimerInterval=null,adHocDamage=false;
+let currentServiceMachine=null,currentCheckCategory=null,currentCheckMachine=null,currentProfileMachineId=null,currentDefect=null,currentEngineer=null,currentAdHocMachine=null,currentLiveJob=null,currentServiceLiveJob=null,liveTimerInterval=null,serviceTimerInterval=null,adHocDamage=false,checkStartedAtMs=null,checkTimerInterval=null;
 let nextDefectSeq = null;
 let officeMachineBranchFilter='all',recordsBranchFilter='all',calMonthOffset=0,pendingLolerStatus='pass';
 let backOfficeUnlocked = false;
@@ -664,12 +676,31 @@ card.innerHTML='<div class="emoji">'+c.emoji+'</div><div class="label">'+escapeH
 function onCategoryChosen(key){currentCheckCategory=key;document.getElementById('checkCategoryName').textContent=categories[key].label;
 const sel=document.getElementById('chkMachineSelect');sel.innerHTML='<option value="">-- Choose machine --</option>';
 machines.filter(m=>m.categoryKey===key&&!m.outOfService).forEach(m=>{const o=document.createElement('option');o.value=m.id;o.textContent=m.name+(m.serialNumber?' (S/N: '+m.serialNumber+')':'');sel.appendChild(o);});
-currentCheckMachine=null;document.getElementById('chkDate').value=todayISO();document.getElementById('chkHours').value='';
+currentCheckMachine=null;stopCheckTimer();checkStartedAtMs=null;document.getElementById('chkDate').value=todayISO();document.getElementById('chkHours').value='';
 document.getElementById('chkNotes').value='';document.getElementById('chkSignName').value='';document.getElementById('chkSignDate').value=todayISO();
-renderCheckItems();showScreen('check-form');setTimeout(()=>initSigPad('sigPadCheck'),50);}
-function onCheckMachineChosen(){const id=document.getElementById('chkMachineSelect').value;currentCheckMachine=machines.find(m=>m.id===id)||null;
-if(currentCheckMachine&&currentCheckMachine.outOfService){toast('This machine is VOR / Out Of Service and cannot be checked');currentCheckMachine=null;document.getElementById('chkMachineSelect').value='';return;}
-if(currentCheckMachine)document.getElementById('chkHours').value=currentCheckMachine.currentHours||'';}
+document.getElementById('checkStartPrompt').style.display='none';document.getElementById('activeCheckTimer').style.display='none';document.getElementById('checkWorkArea').style.display='none';
+renderCheckItems();showScreen('check-form');}
+function onCheckMachineChosen(){
+ stopCheckTimer();checkStartedAtMs=null;document.getElementById('activeCheckTimer').style.display='none';document.getElementById('checkWorkArea').style.display='none';
+ const id=document.getElementById('chkMachineSelect').value;currentCheckMachine=machines.find(m=>m.id===id)||null;
+ if(currentCheckMachine&&currentCheckMachine.outOfService){toast('This machine is VOR / Out Of Service and cannot be checked');currentCheckMachine=null;document.getElementById('chkMachineSelect').value='';document.getElementById('checkStartPrompt').style.display='none';return;}
+ if(currentCheckMachine){document.getElementById('chkHours').value=currentCheckMachine.currentHours||'';document.getElementById('checkStartPrompt').style.display='block';}
+ else document.getElementById('checkStartPrompt').style.display='none';
+}
+
+function stopCheckTimer(){if(checkTimerInterval){clearInterval(checkTimerInterval);checkTimerInterval=null;}}
+function updateCheckTimer(){const el=document.getElementById('checkTimerDisplay');if(el&&checkStartedAtMs)el.textContent=formatDuration(Date.now()-checkStartedAtMs);}
+function startTimedMachineCheck(){
+ if(!currentCheckMachine)return toast('Select a machine first');
+ const hours=document.getElementById('chkHours').value;if(hours==='')return toast('Enter machine hours first');
+ checkStartedAtMs=Date.now();document.getElementById('checkStartPrompt').style.display='none';document.getElementById('activeCheckTimer').style.display='block';document.getElementById('checkWorkArea').style.display='block';
+ document.getElementById('chkMachineSelect').disabled=true;document.getElementById('chkHours').disabled=true;document.getElementById('checkStartedAt').textContent='Started '+new Date(checkStartedAtMs).toLocaleString('en-GB');
+ updateCheckTimer();checkTimerInterval=setInterval(updateCheckTimer,1000);setTimeout(()=>initSigPad('sigPadCheck'),50);
+}
+function cancelTimedCheck(){
+ if(checkStartedAtMs&&document.getElementById('checkWorkArea').style.display!=='none'&&!confirm('Leave this check? The current timer and unfinished check will be discarded.'))return;
+ stopCheckTimer();checkStartedAtMs=null;const ms=document.getElementById('chkMachineSelect'),h=document.getElementById('chkHours');if(ms)ms.disabled=false;if(h)h.disabled=false;showScreen('check-category');
+}
 function renderCheckItems(){const l=document.getElementById('checkItemsList');l.innerHTML='';const cat = categories[currentCheckCategory];
       const items = (cat.checkItems && cat.checkItems.length) ? cat.checkItems : cat.items;
 document.getElementById('chkItemCount').textContent=items.length;document.getElementById('chkNoItemsNote').style.display=items.length?'none':'block';
@@ -726,15 +757,17 @@ await db.collection('liveJobs').doc(currentServiceLiveJob.id).update({status:'co
 stopServiceTimer();currentServiceLiveJob=null;
 await saveRecordToFirestore(record);
 }else if(mode==='check'){
-if(!currentCheckCategory){toast('Select a category');return;}if(!currentCheckMachine){toast('Select a machine');return;}
+if(!currentCheckCategory){toast('Select a category');return;}if(!currentCheckMachine){toast('Select a machine');return;}if(!checkStartedAtMs){toast('Start the machine check first');return;}
 const signName=document.getElementById('chkSignName').value.trim(),signDate=document.getElementById('chkSignDate').value,hours=document.getElementById('chkHours').value,sig=sigPads['sigPadCheck'];
 if(!signName||!signDate){toast('Enter name and date');return;}if(!sig||!sig.hasSignature){toast('Draw signature');return;}if(hours===''){toast('Enter hours');return;}
 const cat = categories[currentCheckCategory];
     const checkSrc = (cat.checkItems && cat.checkItems.length) ? cat.checkItems : cat.items;
     const items = collectItems('checkItemsList', checkSrc);
-const record={recordId:await getNextRecordId('check'),type:'check',categoryKey:currentCheckCategory,machineId:currentCheckMachine.id,subject:cat.label+' — '+currentCheckMachine.name,serialNumber:currentCheckMachine.serialNumber||'',branch:currentCheckMachine.branch||'',technician:signName,date:document.getElementById('chkDate').value,items,notes:document.getElementById('chkNotes').value.trim(),signName,signDate,signatureData:sig.canvas.toDataURL('image/png'),hoursReading:Number(hours),createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending'};
+const checkCompletedAtMs=Date.now(),checkDurationMs=Math.max(0,checkCompletedAtMs-checkStartedAtMs);
+const record={recordId:await getNextRecordId('check'),type:'check',categoryKey:currentCheckCategory,machineId:currentCheckMachine.id,machineName:currentCheckMachine.name,subject:cat.label+' — '+currentCheckMachine.name,serialNumber:currentCheckMachine.serialNumber||'',branch:currentCheckMachine.branch||'',technician:signName,date:document.getElementById('chkDate').value,items,notes:document.getElementById('chkNotes').value.trim(),signName,signDate,signatureData:sig.canvas.toDataURL('image/png'),hoursReading:Number(hours),checkStartedAt:firebase.firestore.Timestamp.fromMillis(checkStartedAtMs),checkCompletedAt:firebase.firestore.Timestamp.fromMillis(checkCompletedAtMs),checkDurationMs,checkDurationFormatted:formatDuration(checkDurationMs),createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending'};
 await db.collection('machines').doc(currentCheckMachine.id).update({currentHours:Number(hours)});
 for(const di of items.filter(i=>i.status==='Defect')){await createOrLinkCheckDefect(di,record,signName);}
+stopCheckTimer();checkStartedAtMs=null;document.getElementById('chkMachineSelect').disabled=false;document.getElementById('chkHours').disabled=false;
 await saveRecordToFirestore(record);
 }else if(mode==='defect'){
 if(!currentDefect){toast('Select a defect');return;}
@@ -764,6 +797,7 @@ doc.setFontSize(10);doc.setFont(undefined,'normal');doc.text((record.recordId?('
 doc.text('By: '+(record.technician||record.signName),margin+280,y);y+=16;
 if(record.hoursReading!=null){doc.text('Hours: '+record.hoursReading+(record.nextServiceDueHours!=null?'  Next service due: '+record.nextServiceDueHours+' hrs':''),margin,y);y+=16;}
 if((record.type==='adhoc'||record.type==='service')&&record.jobDurationFormatted){doc.text((record.type==='service'?'Service duration: ':'Job duration: ')+record.jobDurationFormatted,margin,y);y+=16;}
+if(record.type==='check'&&record.checkDurationFormatted){doc.text('Check duration: '+record.checkDurationFormatted,margin,y);y+=16;}
 y+=8;doc.setDrawColor(220,220,220);doc.line(margin,y,pageW-margin,y);y+=20;
 doc.setFontSize(12);doc.setFont(undefined,'bold');doc.setTextColor(46,46,143);
 doc.text(record.type==='service'?'Serviceable Items':record.type==='check'?'Safety Checklist':record.type==='adhoc'?'Job Details':'Defect Details',margin,y);doc.setTextColor(28,31,38);y+=10;
