@@ -113,6 +113,25 @@ th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;}
   <div class="chart-bar-wrap" id="costChart"></div>
 </div>
 
+<div class="card">
+  <div class="section-title">Engineering Job Assignment</div>
+  <div class="row">
+    <select id="assignJobType"><option value="adhoc">Ad-Hoc Job</option><option value="service">Service</option></select>
+    <select id="assignMachine"><option value="">-- Machine --</option></select>
+    <select id="assignEngineer"><option value="">-- Engineer --</option></select>
+    <input id="assignCategory" type="text" placeholder="Job category / instruction">
+    <button class="btn btn-secondary" onclick="createAssignedJob()">Assign New Job</button>
+  </div>
+  <div id="liveAssignmentBoard" style="margin-top:16px"></div>
+</div>
+<div class="card">
+  <div class="section-title">Damage Investigations</div>
+  <div id="damageInvestigations"></div>
+</div>
+<div class="card">
+  <div class="section-title">Asset Cost & Labour Overview</div>
+  <div class="chart-bar-wrap" id="assetCostHoursChart"></div>
+</div>
 <div class="card" id="oosCard">
   <div class="section-title">Out of Service / Inoperable Register</div>
   <div class="row">
@@ -140,7 +159,7 @@ function setConn(o,t){document.getElementById('connDot').className='conn-dot '+(
 let machines=[];
 let records=[];
 let defects=[];
-let costEntries=[];
+let costEntries=[];let liveJobs=[];let engineers=[];
 
 function todayISO(){return new Date().toISOString().slice(0,10);}
 function escapeHtml(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
@@ -154,14 +173,14 @@ function initListeners(){
 
   db.collection('machines').orderBy('name').onSnapshot(s=>{
     machines=s.docs.map(d=>({id:d.id,...d.data()}));
-    populateOOSSelect();
+    populateOOSSelect();renderAssignmentSelectors();
     renderOOSList();
     computeStats();
   }, e=>setConn(false,'Machines error: '+e.message));
 
   db.collection('records').onSnapshot(s=>{
     records=s.docs.map(d=>({id:d.id,...d.data()}));
-    computeStats();
+    computeStats();renderDamageInvestigations();
   }, e=>setConn(false,'Records error: '+e.message));
 
   db.collection('defects').orderBy('dateRaised','desc').onSnapshot(s=>{
@@ -173,10 +192,49 @@ function initListeners(){
 
   db.collection('costEntries').onSnapshot(s=>{
     costEntries=s.docs.map(d=>({id:d.id,...d.data()}));
-    computeStats();
-  }, e=>{ /* CostLog may not be deployed yet - fail quietly */ });
+    computeStats();renderAssetCostHours();
+  }, e=>{});
+  db.collection('engineers').orderBy('name').onSnapshot(s=>{engineers=s.docs.map(d=>({id:d.id,...d.data()}));renderAssignmentSelectors();renderAssignmentBoard();},e=>{});
+  db.collection('liveJobs').onSnapshot(s=>{liveJobs=s.docs.map(d=>({id:d.id,...d.data()})).filter(j=>j.status!=='completed');renderAssignmentBoard();},e=>{});
+
 }
 
+
+function renderAssignmentSelectors(){
+ const ms=document.getElementById('assignMachine'),es=document.getElementById('assignEngineer');if(!ms||!es)return;
+ ms.innerHTML='<option value="">-- Machine --</option>'+machines.map(m=>'<option value="'+m.id+'">'+escapeHtml(m.name)+'</option>').join('');
+ es.innerHTML='<option value="">-- Engineer --</option>'+engineers.filter(e=>e.active!==false).map(e=>'<option value="'+e.id+'">'+escapeHtml(e.name)+'</option>').join('');
+}
+async function createAssignedJob(){
+ const machineId=document.getElementById('assignMachine').value,engineerId=document.getElementById('assignEngineer').value,jobType=document.getElementById('assignJobType').value,category=document.getElementById('assignCategory').value.trim();
+ const m=machines.find(x=>x.id===machineId),e=engineers.find(x=>x.id===engineerId);if(!m||!e)return toast('Choose machine and engineer');
+ const ref=db.collection('settings').doc('managerJobSequence');
+ const n=await db.runTransaction(async tx=>{const s=await tx.get(ref),v=(s.exists?(s.data().value||0):0)+1;tx.set(ref,{value:v},{merge:true});return v;});
+ const prefix=jobType==='service'?'SVC':'AHJ',jobId='CP-'+prefix+'-M'+String(n).padStart(5,'0');
+ await db.collection('liveJobs').add({jobId,jobType,status:'assigned',machineId:m.id,machineName:m.name,serialNumber:m.serialNumber||'',branch:m.branch||'',jobCategory:category,engineerId:e.id,engineerName:e.name,accumulatedMs:0,progressNotes:[],assignedAt:firebase.firestore.Timestamp.now(),createdAt:firebase.firestore.Timestamp.now(),updatedAt:firebase.firestore.Timestamp.now()});
+ document.getElementById('assignCategory').value='';toast('Job assigned to '+e.name);
+}
+async function reassignJob(id){
+ const sel=document.getElementById('reassign-'+id),engineerId=sel&&sel.value,e=engineers.find(x=>x.id===engineerId);if(!e)return;
+ await db.collection('liveJobs').doc(id).update({engineerId:e.id,engineerName:e.name,updatedAt:firebase.firestore.Timestamp.now()});toast('Job reassigned');
+}
+function renderAssignmentBoard(){
+ const w=document.getElementById('liveAssignmentBoard');if(!w)return;if(!liveJobs.length){w.innerHTML='<div class="empty-state">No outstanding engineering jobs.</div>';return;}
+ w.innerHTML=liveJobs.map(j=>'<div class="alert-row"><span><strong>'+escapeHtml(j.jobId||'')+'</strong> · '+escapeHtml(j.machineName||'')+' · '+(j.jobType==='service'?'Service':'Ad-Hoc')+' · '+escapeHtml(j.status||'')+'</span><span><select id="reassign-'+j.id+'" onchange="reassignJob(\''+j.id+'\')">'+engineers.filter(e=>e.active!==false).map(e=>'<option value="'+e.id+'" '+(e.id===j.engineerId?'selected':'')+'>'+escapeHtml(e.name)+'</option>').join('')+'</select></span></div>').join('');
+}
+function renderDamageInvestigations(){
+ const w=document.getElementById('damageInvestigations');if(!w)return;const d=records.filter(r=>r.type==='adhoc'&&r.isDamage);
+ if(!d.length){w.innerHTML='<div class="empty-state">No damage jobs recorded.</div>';return;}
+ const byDriver={};d.forEach(r=>{const k=(r.damageDriver||'Unassigned / unknown').trim();if(!byDriver[k])byDriver[k]={count:0,assets:new Set()};byDriver[k].count++;byDriver[k].assets.add(r.machineName||'Unknown');});
+ const summary=Object.entries(byDriver).sort((a,b)=>b[1].count-a[1].count).map(([name,v])=>'<div class="alert-row"><span><strong>'+escapeHtml(name)+'</strong></span><span>'+v.count+' damage job'+(v.count===1?'':'s')+' · '+v.assets.size+' asset'+(v.assets.size===1?'':'s')+'</span></div>').join('');
+ w.innerHTML=summary+'<hr style="margin:14px 0">'+d.slice(0,20).map(r=>'<div class="alert-row"><span>'+escapeHtml(r.machineName)+' · '+escapeHtml(r.damageDriver||'Unknown driver')+'</span><span>'+escapeHtml(r.damageIncident||r.notes||'Damage investigation required')+'</span></div>').join('');
+}
+function renderAssetCostHours(){
+ const w=document.getElementById('assetCostHoursChart');if(!w)return;const g={};
+ costEntries.filter(e=>(e.workSource||'internal')==='internal').forEach(e=>{const k=e.machineName||'Unknown';if(!g[k])g[k]={cost:0,hours:0};g[k].cost+=Number(e.totalCost)||0;g[k].hours+=Number(e.labourHours||e.authorisedHours)||0;});
+ const a=Object.entries(g).sort((x,y)=>y[1].cost-x[1].cost);if(!a.length){w.innerHTML='<div class="empty-state">No authorised job costs yet.</div>';return;}
+ const max=Math.max(...a.map(x=>x[1].cost),1);w.innerHTML=a.map(([k,v])=>'<div class="chart-bar-row"><div class="chart-bar-label">'+escapeHtml(k)+'</div><div class="chart-bar-track"><div class="chart-bar-fill" style="width:'+(v.cost/max*100)+'%"></div></div><div class="chart-bar-val">'+money(v.cost)+' · '+v.hours.toFixed(1)+'h</div></div>').join('');
+}
 function loadAll(){ computeStats(); renderResolutions(); toast('Refreshed'); }
 
 function getMonthRange(){
