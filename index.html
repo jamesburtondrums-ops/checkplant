@@ -107,7 +107,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focu
 <main>
 <div class="screen active" id="screen-home">
 <h1 style="color:var(--navy)">CheckPlant</h1><p>Plant machinery servicing &amp; safety check records</p>
-<div id="overdueAlerts"></div>
+
 <div class="mode-grid">
 <div class="mode-card service" onclick="requestEngineerSignIn()"><h2>🔐 Engineer Sign In</h2><p>Engineer-only service mode and ad-hoc job cards.</p></div>
 <div class="mode-card check" onclick="showScreen('check-category')"><h2>✅ Check Mode</h2><p>Safety check for a machine category.</p></div>
@@ -136,6 +136,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focu
 <button class="back-link" onclick="engineerSignOut()">← Sign Out</button>
 <div class="card"><div class="section-title">Engineer — <span id="engineerSignedInName"></span></div>
 <p class="progress-note">Service and repair activity logged here is linked to your engineer account.</p></div>
+<div id="overdueAlerts"></div>
 <div class="mode-grid" style="grid-template-columns:repeat(2,1fr)">
 <div class="mode-card service" onclick="startService()"><h2>🔧 Service Mode</h2><p>Scheduled service checklist, hours, LOLER and sign-off.</p></div>
 <div class="mode-card defect" onclick="startAdHocJob()"><h2>🧰 Ad-Hoc Job Card</h2><p>Record repairs, parts ordered and defects requiring VOR.</p></div>
