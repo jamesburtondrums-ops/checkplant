@@ -117,8 +117,8 @@ th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;}
   <div class="section-title">Engineering Job Assignment</div>
   <div class="row">
     <select id="assignJobType" onchange="updateAssignmentForm()"><option value="adhoc">Ad-Hoc Job</option><option value="service">Service</option><option value="defect">Outstanding Defect</option></select>
-    <select id="assignMachine"><option value="">-- Machine --</option></select>
-    <select id="assignDefect" style="display:none"><option value="">-- Outstanding defect --</option></select>
+    <select id="assignMachine" onchange="updateDefectOptions()"><option value="">-- Machine --</option></select>
+    <select id="assignDefect" style="display:none"><option value="">-- Select defect --</option></select>
     <select id="assignEngineer"><option value="">-- Engineer --</option></select>
     <input id="assignCategory" type="text" placeholder="Job category / instruction">
     <button class="btn btn-secondary" onclick="createAssignedJob()">Assign Job</button>
@@ -188,7 +188,7 @@ function initListeners(){
     defects=s.docs.map(d=>({id:d.id,...d.data()}));
     computeStats();
     renderResolutions();
-    
+    renderAssignmentSelectors();
     setConn(true,'Connected');
   }, e=>setConn(false,'Defects error: '+e.message));
 
@@ -197,31 +197,53 @@ function initListeners(){
     computeStats();renderAssetCostHours();
   }, e=>{});
   db.collection('engineers').orderBy('name').onSnapshot(s=>{engineers=s.docs.map(d=>({id:d.id,...d.data()}));renderAssignmentSelectors();renderAssignmentBoard();},e=>{});
-  db.collection('liveJobs').onSnapshot(s=>{liveJobs=s.docs.map(d=>({id:d.id,...d.data()})).filter(j=>j.status!=='completed');renderAssignmentBoard();},e=>{});
+  db.collection('liveJobs').onSnapshot(s=>{liveJobs=s.docs.map(d=>({id:d.id,...d.data()})).filter(j=>j.status!=='completed');renderAssignmentBoard();updateDefectOptions();},e=>{});
 
 }
 
 
 function renderAssignmentSelectors(){
- const ms=document.getElementById('assignMachine'),es=document.getElementById('assignEngineer'),ds=document.getElementById('assignDefect');if(!ms||!es)return;
+ const ms=document.getElementById('assignMachine'),es=document.getElementById('assignEngineer');if(!ms||!es)return;
+ const currentMachine=ms.value,currentEngineer=es.value;
  ms.innerHTML='<option value="">-- Machine --</option>'+machines.map(m=>'<option value="'+m.id+'">'+escapeHtml(m.name)+'</option>').join('');
+ if(machines.some(m=>m.id===currentMachine))ms.value=currentMachine;
  es.innerHTML='<option value="">-- Engineer --</option>'+engineers.filter(e=>e.active!==false).map(e=>'<option value="'+e.id+'">'+escapeHtml(e.name)+'</option>').join('');
- if(ds){const open=defects.filter(d=>d.status==='open'&&!liveJobs.some(j=>j.defectRefId===d.id&&j.status!=='completed'));ds.innerHTML='<option value="">-- Outstanding defect --</option>'+open.map(d=>'<option value="'+d.id+'">'+escapeHtml((d.defectId||d.id)+' — '+(d.machineName||'')+' — '+(d.itemName||d.inspectionItemName||'Defect'))+'</option>').join('');}
+ if(engineers.some(e=>e.id===currentEngineer))es.value=currentEngineer;
  updateAssignmentForm();
 }
 function updateAssignmentForm(){
  const type=document.getElementById('assignJobType').value,isDefect=type==='defect';
  document.getElementById('assignDefect').style.display=isDefect?'block':'none';
- document.getElementById('assignMachine').style.display=isDefect?'none':'block';
+ document.getElementById('assignMachine').style.display='block';
  document.getElementById('assignCategory').style.display=type==='service'?'none':'block';
  document.getElementById('assignCategory').placeholder=isDefect?'Additional instruction (optional)':'Job category / instruction';
+ updateDefectOptions();
+}
+function defectFullLabel(d){
+ const parts=[];
+ if(d.defectId)parts.push(d.defectId);
+ if(d.itemName||d.inspectionItemName)parts.push(d.itemName||d.inspectionItemName);
+ if(d.inspectionItemCode)parts.push('Code: '+d.inspectionItemCode);
+ if(d.severity)parts.push('Severity: '+d.severity);
+ if(d.lastObservedCondition)parts.push('Condition: '+d.lastObservedCondition);
+ if(d.dateRaised)parts.push('Raised: '+d.dateRaised);
+ return parts.join(' — ');
+}
+function updateDefectOptions(){
+ const type=document.getElementById('assignJobType').value,ds=document.getElementById('assignDefect');if(!ds)return;
+ if(type!=='defect'){ds.innerHTML='<option value="">-- Select defect --</option>';return;}
+ const machineId=document.getElementById('assignMachine').value;
+ if(!machineId){ds.innerHTML='<option value="">-- Select machine first --</option>';return;}
+ const open=defects.filter(d=>d.status==='open'&&d.machineId===machineId&&!liveJobs.some(j=>j.defectRefId===d.id&&j.status!=='completed'));
+ ds.innerHTML=open.length?'<option value="">-- Select defect --</option>'+open.map(d=>'<option value="'+d.id+'">'+escapeHtml(defectFullLabel(d))+'</option>').join(''):'<option value="">-- No unassigned open defects for this machine --</option>';
 }
 async function createAssignedJob(){
  const engineerId=document.getElementById('assignEngineer').value,jobType=document.getElementById('assignJobType').value,e=engineers.find(x=>x.id===engineerId);if(!e)return toast('Choose an engineer');
  const ref=db.collection('settings').doc('managerJobSequence');
  const n=await db.runTransaction(async tx=>{const s=await tx.get(ref),v=(s.exists?(s.data().value||0):0)+1;tx.set(ref,{value:v},{merge:true});return v;});
  if(jobType==='defect'){
-   const defectDocId=document.getElementById('assignDefect').value,d=defects.find(x=>x.id===defectDocId);if(!d||d.status!=='open')return toast('Choose an outstanding defect');
+   const machineId=document.getElementById('assignMachine').value;if(!machineId)return toast('Choose a machine first');
+   const defectDocId=document.getElementById('assignDefect').value,d=defects.find(x=>x.id===defectDocId&&x.machineId===machineId);if(!d||d.status!=='open')return toast('Choose an outstanding defect for this machine');
    const existing=liveJobs.find(j=>j.defectRefId===d.id&&j.status!=='completed');if(existing)return toast('This defect is already assigned');
    const m=machines.find(x=>x.id===d.machineId),jobId='CP-AHJ-M'+String(n).padStart(5,'0'),extra=document.getElementById('assignCategory').value.trim();
    await db.collection('liveJobs').add({jobId,jobType:'adhoc',status:'assigned',machineId:d.machineId||'',machineName:d.machineName||(m?m.name:''),serialNumber:m?(m.serialNumber||''):'',branch:m?(m.branch||''):'',hoursReading:m?(Number(m.currentHours)||0):0,date:todayISO(),jobCategory:'Outstanding Defect — '+(d.itemName||d.inspectionItemName||'Repair')+(extra?' — '+extra:''),engineerId:e.id,engineerName:e.name,defectRefId:d.id,defectId:d.defectId||'',defectItemName:d.itemName||d.inspectionItemName||'',defectDateRaised:d.dateRaised||'',source:'managerdash_defect_assignment',accumulatedMs:0,progressNotes:[],assignedAt:firebase.firestore.Timestamp.now(),createdAt:firebase.firestore.Timestamp.now(),updatedAt:firebase.firestore.Timestamp.now()});
