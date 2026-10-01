@@ -247,6 +247,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focu
 <div class="card"><div class="section-title">✅ Report Complete</div>
 <p class="progress-note" style="margin-bottom:14px">Your report has been saved. View it inline or download a copy.</p>
 <div class="row"><button class="btn btn-primary btn-block" onclick="viewPDF()">👁 View PDF</button><button class="btn btn-secondary btn-block" onclick="downloadPDF()">⬇ Download PDF</button></div>
+<button class="btn btn-primary btn-block" id="backToEngineerJobsBtn" style="margin-top:12px;display:none" onclick="backToEngineerJobs()">Back to Engineer Live Jobs</button>
 </div></div>
 <div class="screen" id="screen-machine-profile">
 <button class="back-link" onclick="goHome()">← Back</button>
@@ -575,6 +576,7 @@ db.collection('bookings').orderBy('date').onSnapshot(s=>{bookings=s.docs.map(d=>
 }
 function showScreen(n){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById('screen-'+n).classList.add('active');if(n==='backoffice')switchOfficeTab('daily');window.scrollTo(0,0);}
 function goHome(){showScreen('home');}
+function backToEngineerJobs(){if(currentEngineer){renderEngineerLiveJobs();showScreen('engineer-hub');}else requestEngineerSignIn();}
 function requestEngineerSignIn(){if(currentEngineer){showScreen('engineer-hub');return;}showScreen('engineer-pin');const el=document.getElementById('engineerPinInput');el.value='';setTimeout(()=>el.focus(),100);}
 function submitEngineerPin(){const pin=document.getElementById('engineerPinInput').value.trim();const match=engineers.find(e=>e.active!==false&&String(e.pin||'')===pin);if(!match){toast(engineers.length?'Incorrect engineer PIN':'No engineer PINs configured — add one in Back Office > Security');return;}currentEngineer=match;document.getElementById('engineerSignedInName').textContent=match.name;document.getElementById('adhocEngineer').value=match.name;renderEngineerLiveJobs();showScreen('engineer-hub');toast('Signed in as '+match.name);}
 function engineerSignOut(){stopLiveTimer();currentEngineer=null;currentServiceMachine=null;currentAdHocMachine=null;currentLiveJob=null;goHome();}
@@ -786,7 +788,7 @@ doc.setDrawColor(180,180,180);doc.line(margin,y,margin+200,y);doc.setFontSize(8)
 doc.setFontSize(8);doc.setTextColor(150,150,150);doc.text('CheckPlant KCM — '+new Date().toLocaleString('en-GB'),margin,800);
 lastGeneratedDoc = doc;
 lastGeneratedRecord = record;
-showScreen('pdf-ready');
+const backBtn=document.getElementById('backToEngineerJobsBtn');if(backBtn)backBtn.style.display=(lastGeneratedRecord&&(lastGeneratedRecord.type==='service'||lastGeneratedRecord.type==='adhoc')&&currentEngineer)?'block':'none';showScreen('pdf-ready');
 setTimeout(()=>{if(record.type==='service')currentServiceMachine=null;else if(record.type==='check'){currentCheckCategory=null;currentCheckMachine=null;}else currentDefect=null;},300);}
 function viewPDF(){
   if(!lastGeneratedDoc){ toast('No PDF ready to view'); return; }
