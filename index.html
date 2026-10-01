@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CheckPlant — KCM Waste Management</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <style>
@@ -103,7 +104,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focu
 <h1 style="color:var(--navy)">CheckPlant</h1><p>Plant machinery servicing &amp; safety check records</p>
 <div id="overdueAlerts"></div>
 <div class="mode-grid">
-<div class="mode-card service" onclick="startService()"><h2>🔧 Service Mode</h2><p>Checklist, hours, LOLER check, sign-off.</p></div>
+<div class="mode-card service" onclick="requestEngineerSignIn()"><h2>🔐 Engineer Sign In</h2><p>Engineer-only service mode and ad-hoc job cards.</p></div>
 <div class="mode-card check" onclick="showScreen('check-category')"><h2>✅ Check Mode</h2><p>Safety check for a machine category.</p></div>
 <div class="mode-card defect" onclick="showScreen('defect-select')"><h2>🛠️ Defect Resolution</h2><p>Resolve an outstanding defect.</p></div>
 </div>
@@ -118,7 +119,37 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focu
 <button class="btn btn-primary btn-block" style="margin-top:16px" onclick="submitPin()">Unlock</button>
 <button class="back-link" style="margin-top:14px" onclick="goHome()">← Back to Home</button>
 </div></div>
-<div class="screen" id="screen-service-select"><button class="back-link" onclick="goHome()">← Back</button>
+<div class="screen" id="screen-engineer-pin">
+<div class="pin-wrap" style="max-width:360px;margin:60px auto;text-align:center">
+<h2 style="color:var(--navy)">🔐 Engineer Sign In</h2>
+<p class="progress-note" style="margin-bottom:16px">Enter your unique engineer PIN.</p>
+<input type="password" id="engineerPinInput" maxlength="8" inputmode="numeric" pattern="[0-9]*" style="text-align:center;font-size:1.8rem;letter-spacing:.35em;padding:16px" onkeydown="if(event.key==='Enter')submitEngineerPin()">
+<button class="btn btn-primary btn-block" style="margin-top:16px" onclick="submitEngineerPin()">Sign In</button>
+<button class="back-link" style="margin-top:14px" onclick="goHome()">← Back to Home</button>
+</div></div>
+<div class="screen" id="screen-engineer-hub">
+<button class="back-link" onclick="engineerSignOut()">← Sign Out</button>
+<div class="card"><div class="section-title">Engineer — <span id="engineerSignedInName"></span></div>
+<p class="progress-note">Service and repair activity logged here is linked to your engineer account.</p></div>
+<div class="mode-grid" style="grid-template-columns:repeat(2,1fr)">
+<div class="mode-card service" onclick="startService()"><h2>🔧 Service Mode</h2><p>Scheduled service checklist, hours, LOLER and sign-off.</p></div>
+<div class="mode-card defect" onclick="startAdHocJob()"><h2>🧰 Ad-Hoc Job Card</h2><p>Record repairs, parts ordered and defects requiring VOR.</p></div>
+</div></div>
+<div class="screen" id="screen-adhoc-form">
+<button class="back-link" onclick="showScreen('engineer-hub')">← Engineer Menu</button>
+<div class="card"><div class="section-title">🧰 Ad-Hoc Job Card</div>
+<div class="row"><div><label>Machine <span class="required-star">*</span></label><select id="adhocMachine" onchange="onAdHocMachineChosen()"><option value="">-- Choose machine --</option></select></div>
+<div><label>Date</label><input type="date" id="adhocDate"></div></div>
+<div class="row" style="margin-top:12px"><div><label>Hours <span class="required-star">*</span></label><input type="number" id="adhocHours" min="0"></div>
+<div><label>Job Category <span class="required-star">*</span></label><select id="adhocCategory"></select></div></div>
+<div class="row" style="margin-top:12px"><div><label>Outcome <span class="required-star">*</span></label><select id="adhocOutcome"><option value="">-- Select --</option><option>Repaired</option><option>Ordered</option><option>Temporary Repair</option><option>Inspected / No Fault Found</option></select></div>
+<div><label>Engineer</label><input type="text" id="adhocEngineer" readonly></div></div></div>
+<div class="card"><div class="section-title">Work Carried Out / Parts Required</div><textarea id="adhocNotes" placeholder="Describe the fault, work completed, parts ordered or follow-up required."></textarea></div>
+<button class="btn btn-primary btn-block" onclick="submitAdHocJob(false)">Save Job Card</button>
+<button class="btn btn-danger btn-block" style="font-size:1.15rem;margin-top:12px;padding:18px" onclick="submitAdHocJob(true)">DEFECT TO VOR</button>
+<p class="progress-note" style="text-align:center">VOR immediately marks the selected machine Out Of Service and blocks operator checks until Back Office signs it back in with remediation notes.</p>
+</div>
+<div class="screen" id="screen-service-select"><button class="back-link" onclick="showScreen('engineer-hub')">← Engineer Menu</button>
 <div class="card"><div class="section-title">🔧 Service Mode</div>
 <label>Select Machine <span class="required-star">*</span></label>
 <select id="serviceMachineSelect" onchange="onServiceMachineChosen()"><option value="">-- Choose machine --</option></select>
@@ -201,6 +232,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focu
 <button data-tab="categories" onclick="switchOfficeTab('categories')">Check Categories</button>
 <button data-tab="defects" onclick="switchOfficeTab('defects')">Outstanding Defects</button>
 <button data-tab="calendar" onclick="switchOfficeTab('calendar')">Service Calendar</button>
+<button data-tab="vor" onclick="switchOfficeTab('vor')">VOR / OOS</button>
 <button data-tab="records" onclick="switchOfficeTab('records')">Records</button>
 <button data-tab="sheets" onclick="switchOfficeTab('sheets')">Google Sheets CSV</button>
 <button data-tab="security" onclick="switchOfficeTab('security')">Security</button>
@@ -234,6 +266,11 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focu
 <div id="calMonthLabel" style="flex:2;text-align:center;font-weight:800"></div>
 <button class="btn btn-secondary btn-sm" onclick="calMonthOffset++;renderCalendar()">Next →</button></div>
 <div class="cal-grid" id="calDowRow"></div><div class="cal-grid" id="calGrid"></div></div></div>
+<div id="office-vor" class="office-tab" style="display:none">
+<div class="card"><div class="section-title">🚫 Vehicle / Plant Off Road Register <span class="badge red" id="vorCount">0</span></div>
+<p class="progress-note">Machines placed into VOR cannot be selected for operator safety checks. Returning a machine to service requires remediation notes.</p>
+<div id="vorRegister"></div></div>
+</div>
 <div id="office-records" class="office-tab" style="display:none">
 <div class="card"><div class="section-title">Submitted Records <span class="badge" id="recordCount">0</span></div>
 <div class="branch-filter" id="recordsBranchFilter"></div><div id="recordsTableWrap"></div></div></div>
@@ -256,10 +293,17 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focu
 <div class="card"><div class="section-title">🔒 Back Office Security</div>
 <p class="progress-note" style="margin-bottom:12px">Change the PIN required to unlock Back Office. Applies immediately on all devices.</p>
 <input type="text" id="newPinInput" maxlength="4" inputmode="numeric" placeholder="New 4-digit PIN">
-<button class="btn btn-primary btn-block" style="margin-top:10px" onclick="changePin()">Update PIN</button></div></div>
+<button class="btn btn-primary btn-block" style="margin-top:10px" onclick="changePin()">Update PIN</button></div>
+<div class="card"><div class="section-title">👷 Engineer Sign-In PINs</div>
+<p class="progress-note">Add each engineer here. Their PIN unlocks Service Mode and Ad-Hoc Job Cards.</p>
+<div class="row"><div><label>Engineer name</label><input id="newEngineerName" type="text" placeholder="e.g. John Smith"></div><div><label>Unique PIN</label><input id="newEngineerPin" type="password" inputmode="numeric" maxlength="8" placeholder="4–8 digits"></div></div>
+<button class="btn btn-primary btn-block" style="margin-top:10px" onclick="addEngineer()">Add Engineer</button>
+<div id="engineerAdminList" style="margin-top:14px"></div></div></div>
 <div id="office-data" class="office-tab" style="display:none">
 <div class="card"><div class="section-title">Backup &amp; Restore</div>
-<button class="btn btn-secondary" onclick="exportData()">Export Backup JSON</button></div></div>
+<button class="btn btn-secondary" onclick="exportData()">Export Backup JSON</button>
+<button class="btn btn-primary" style="margin-left:8px" onclick="exportAllPDFs()">Export All PDFs (Organised ZIP)</button>
+<p class="progress-note">ZIP structure: Machine Type → Machine → Check Type → PDF files.</p></div></div>
 </div></main>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <footer>CheckPlant by KCM Waste Management</footer>
@@ -293,7 +337,7 @@ baler:{label:"Baler (Cardboard/Tyre)",emoji:"📦",lolerApplies:true,items:["Eme
 
 const BRANCHES=["Rotherham","Shires","Sheffield"];
 const SERVICE_HOURS_LIMIT=500,SERVICE_DUE_SOON_WINDOW=100,LOLER_DUE_SOON_DAYS=30;
-let machines=[],categories={},records=[],defects=[],bookings=[];
+let machines=[],categories={},records=[],defects=[],bookings=[],engineers=[];
 const DEFAULT_SHEETS_URL="https://script.google.com/macros/s/AKfycbypRwQyTWNeBKliniJ5hYxeLLY6UWaZS0-HD8uSWDzsg8QNpA1kIwwisiSilBWzsrOD/exec";
 let settings=JSON.parse(localStorage.getItem('cpsettings')||'{}');
 if(!settings.sheetsWebhookUrl) settings.sheetsWebhookUrl = DEFAULT_SHEETS_URL;
@@ -301,7 +345,7 @@ if(settings.autoSheets === undefined) settings.autoSheets = true;
 if(settings.autoCsv === undefined) settings.autoCsv = false;
 localStorage.setItem('cpsettings', JSON.stringify(settings));
 let syncLog=JSON.parse(localStorage.getItem('cpsynclog')||'[]');
-let currentServiceMachine=null,currentCheckCategory=null,currentCheckMachine=null,currentProfileMachineId=null,currentDefect=null;
+let currentServiceMachine=null,currentCheckCategory=null,currentCheckMachine=null,currentProfileMachineId=null,currentDefect=null,currentEngineer=null,currentAdHocMachine=null;
 let nextDefectSeq = null;
 let officeMachineBranchFilter='all',recordsBranchFilter='all',calMonthOffset=0,pendingLolerStatus='pass';
 let backOfficeUnlocked = false;
@@ -476,21 +520,25 @@ function initFirestoreListeners(){
 setConn(true,"Connecting...");
 loadPinSetting();
 db.collection('machines').orderBy('name').onSnapshot({includeMetadataChanges:true},s=>{
-  machines=s.docs.map(d=>({id:d.id,...d.data()}));populateServiceMachineSelect();populateBookingMachineSelect();renderMachineList();renderHomeMachineList();renderOverdueAlerts();renderCalendar();renderDailyChecks();setConn(!s.metadata.fromCache,s.metadata.fromCache?"Offline / cached assets":s.metadata.hasPendingWrites?"Saving changes…":"Assets synced");
+  machines=s.docs.map(d=>({id:d.id,...d.data()}));populateServiceMachineSelect();populateBookingMachineSelect();populateAdHocMachines();renderMachineList();renderHomeMachineList();renderOverdueAlerts();renderCalendar();renderDailyChecks();renderVORRegister();setConn(!s.metadata.fromCache,s.metadata.fromCache?"Offline / cached assets":s.metadata.hasPendingWrites?"Saving changes…":"Assets synced");
 },e=>setConn(false,"Error: "+e.message));
+db.collection('engineers').orderBy('name').onSnapshot(s=>{engineers=s.docs.map(d=>({id:d.id,...d.data()}));renderEngineerAdmin();},e=>console.error("Engineer list error",e));
 db.collection('categories').onSnapshot(async s=>{
   const seeded = await ensureCategoriesSeeded(s.docs);
   if(seeded) return;
   categories={};s.docs.forEach(d=>categories[d.id]=d.data());
   renderCategoryGrid();renderCategoryList();populateNewMachineCategorySelect();
 },e=>setConn(false,"Cat error: "+e.message));
-db.collection('records').orderBy('createdAt','desc').onSnapshot(s=>{records=s.docs.map(d=>({id:d.id,...d.data()}));renderRecordsTable();renderHomeMachineList();renderDailyChecks();},e=>setConn(false,"Rec error: "+e.message));
+db.collection('records').orderBy('createdAt','desc').onSnapshot(s=>{records=s.docs.map(d=>({id:d.id,...d.data()}));renderRecordsTable();renderHomeMachineList();renderDailyChecks();renderCalendar();},e=>setConn(false,"Rec error: "+e.message));
 db.collection('defects').orderBy('dateRaised','desc').onSnapshot(s=>{defects=s.docs.map(d=>({id:d.id,...d.data()})).filter(d=>!isFireExtinguisherItem(d.itemName||d.inspectionItemName));renderDefectsTable();renderOutstandingDefectsList();},e=>setConn(false,"Def error: "+e.message));
 db.collection('bookings').orderBy('date').onSnapshot(s=>{bookings=s.docs.map(d=>({id:d.id,...d.data()}));renderCalendar();renderHomeUpcomingBookings();},e=>setConn(false,"Book error: "+e.message));
 }
 function showScreen(n){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById('screen-'+n).classList.add('active');if(n==='backoffice')switchOfficeTab('daily');window.scrollTo(0,0);}
 function goHome(){showScreen('home');}
-function startService(){showScreen('service-select');}
+function requestEngineerSignIn(){if(currentEngineer){showScreen('engineer-hub');return;}showScreen('engineer-pin');const el=document.getElementById('engineerPinInput');el.value='';setTimeout(()=>el.focus(),100);}
+function submitEngineerPin(){const pin=document.getElementById('engineerPinInput').value.trim();const match=engineers.find(e=>e.active!==false&&String(e.pin||'')===pin);if(!match){toast(engineers.length?'Incorrect engineer PIN':'No engineer PINs configured — add one in Back Office > Security');return;}currentEngineer=match;document.getElementById('engineerSignedInName').textContent=match.name;document.getElementById('adhocEngineer').value=match.name;showScreen('engineer-hub');toast('Signed in as '+match.name);}
+function engineerSignOut(){currentEngineer=null;currentServiceMachine=null;currentAdHocMachine=null;goHome();}
+function startService(){if(!currentEngineer){requestEngineerSignIn();return;}showScreen('service-select');setTimeout(()=>{const t=document.getElementById('svcTechName');if(t){t.value=currentEngineer.name;t.readOnly=true;}const s=document.getElementById('svcSignName');if(s){s.value=currentEngineer.name;s.readOnly=true;}},0);}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);}
 function escapeHtml(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
 function escapeAttr(s){return escapeHtml(s).replace(/'/g,"&#39;");}
@@ -572,11 +620,12 @@ Object.entries(categories).forEach(([k,c])=>{const card=document.createElement('
 card.innerHTML='<div class="emoji">'+c.emoji+'</div><div class="label">'+escapeHtml(c.label)+'</div>';g.appendChild(card);});}
 function onCategoryChosen(key){currentCheckCategory=key;document.getElementById('checkCategoryName').textContent=categories[key].label;
 const sel=document.getElementById('chkMachineSelect');sel.innerHTML='<option value="">-- Choose machine --</option>';
-machines.filter(m=>m.categoryKey===key).forEach(m=>{const o=document.createElement('option');o.value=m.id;o.textContent=m.name+(m.serialNumber?' (S/N: '+m.serialNumber+')':'');sel.appendChild(o);});
+machines.filter(m=>m.categoryKey===key&&!m.outOfService).forEach(m=>{const o=document.createElement('option');o.value=m.id;o.textContent=m.name+(m.serialNumber?' (S/N: '+m.serialNumber+')':'');sel.appendChild(o);});
 currentCheckMachine=null;document.getElementById('chkDate').value=todayISO();document.getElementById('chkHours').value='';
 document.getElementById('chkNotes').value='';document.getElementById('chkSignName').value='';document.getElementById('chkSignDate').value=todayISO();
 renderCheckItems();showScreen('check-form');setTimeout(()=>initSigPad('sigPadCheck'),50);}
 function onCheckMachineChosen(){const id=document.getElementById('chkMachineSelect').value;currentCheckMachine=machines.find(m=>m.id===id)||null;
+if(currentCheckMachine&&currentCheckMachine.outOfService){toast('This machine is VOR / Out Of Service and cannot be checked');currentCheckMachine=null;document.getElementById('chkMachineSelect').value='';return;}
 if(currentCheckMachine)document.getElementById('chkHours').value=currentCheckMachine.currentHours||'';}
 function renderCheckItems(){const l=document.getElementById('checkItemsList');l.innerHTML='';const cat = categories[currentCheckCategory];
       const items = (cat.checkItems && cat.checkItems.length) ? cat.checkItems : cat.items;
@@ -623,7 +672,7 @@ const items=collectItems('serviceItemsList',machineChecklistItems(currentService
 const lolerCertDate=document.getElementById('lolerCertDate').value,lolerNextDue=document.getElementById('lolerNextDue').value,lolerExaminer=document.getElementById('lolerExaminer').value.trim();
 const lolerSection={status:pendingLolerStatus,certDate:lolerCertDate,nextDueDate:lolerNextDue,examinerName:lolerExaminer};
 const hoursNum=Number(hours);const nextDue=hoursNum+SERVICE_HOURS_LIMIT;
-const record={type:'service',machineId:currentServiceMachine.id,subject:currentServiceMachine.name,serialNumber:currentServiceMachine.serialNumber||'',branch:currentServiceMachine.branch||'',technician:techName,date:document.getElementById('svcDate').value,items,notes:document.getElementById('svcNotes').value.trim(),signName,signDate,signatureData:sig.canvas.toDataURL('image/png'),hoursReading:hoursNum,nextServiceDueHours:nextDue,lolerSection,createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending'};
+const record={recordId:await getNextRecordId('service'),type:'service',machineId:currentServiceMachine.id,subject:currentServiceMachine.name,serialNumber:currentServiceMachine.serialNumber||'',branch:currentServiceMachine.branch||'',technician:techName,date:document.getElementById('svcDate').value,items,notes:document.getElementById('svcNotes').value.trim(),signName,signDate,signatureData:sig.canvas.toDataURL('image/png'),hoursReading:hoursNum,nextServiceDueHours:nextDue,lolerSection,createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending'};
 await db.collection('machines').doc(currentServiceMachine.id).update({currentHours:hoursNum,lastServiceHours:hoursNum,nextServiceDueHours:nextDue});
 if(lolerSection.status!=='na'){await db.collection('machines').doc(currentServiceMachine.id).update({loler:{applies:true,lastExamDate:lolerCertDate||null,nextDueDate:lolerNextDue||null,examinerName:lolerExaminer||''}});}
 if(lolerSection.status==='defect'){const defectId=await getNextDefectId();await db.collection('defects').add({defectId,machineId:currentServiceMachine.id,machineName:currentServiceMachine.name,itemName:'LOLER — Statutory: exam overdue/expired',dateRaised:todayISO(),raisedAt:firebase.firestore.Timestamp.now(),status:'open',resolvedDate:null,resolvedAt:null,resolvedBy:null,resolutionRecordId:null,severity:'statutory'});}
@@ -635,7 +684,7 @@ if(!signName||!signDate){toast('Enter name and date');return;}if(!sig||!sig.hasS
 const cat = categories[currentCheckCategory];
     const checkSrc = (cat.checkItems && cat.checkItems.length) ? cat.checkItems : cat.items;
     const items = collectItems('checkItemsList', checkSrc);
-const record={type:'check',categoryKey:currentCheckCategory,machineId:currentCheckMachine.id,subject:cat.label+' — '+currentCheckMachine.name,serialNumber:currentCheckMachine.serialNumber||'',branch:currentCheckMachine.branch||'',technician:signName,date:document.getElementById('chkDate').value,items,notes:document.getElementById('chkNotes').value.trim(),signName,signDate,signatureData:sig.canvas.toDataURL('image/png'),hoursReading:Number(hours),createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending'};
+const record={recordId:await getNextRecordId('check'),type:'check',categoryKey:currentCheckCategory,machineId:currentCheckMachine.id,subject:cat.label+' — '+currentCheckMachine.name,serialNumber:currentCheckMachine.serialNumber||'',branch:currentCheckMachine.branch||'',technician:signName,date:document.getElementById('chkDate').value,items,notes:document.getElementById('chkNotes').value.trim(),signName,signDate,signatureData:sig.canvas.toDataURL('image/png'),hoursReading:Number(hours),createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending'};
 await db.collection('machines').doc(currentCheckMachine.id).update({currentHours:Number(hours)});
 for(const di of items.filter(i=>i.status==='Defect')){await createOrLinkCheckDefect(di,record,signName);}
 await saveRecordToFirestore(record);
@@ -644,7 +693,7 @@ if(!currentDefect){toast('Select a defect');return;}
 const signName=document.getElementById('defSignName').value.trim(),signDate=document.getElementById('defSignDate').value,hours=document.getElementById('defHours').value,workDone=document.getElementById('defWorkDone').value.trim(),sig=sigPads['sigPadDefect'];
 if(!signName||!signDate){toast('Enter name and date');return;}if(!sig||!sig.hasSignature){toast('Draw signature');return;}if(hours===''){toast('Enter hours');return;}if(!workDone){toast('Describe work');return;}
 const m=machines.find(x=>x.id===currentDefect.machineId);
-const record={type:'defect',defectId:currentDefect.defectId||currentDefect.id,machineId:currentDefect.machineId,subject:currentDefect.machineName+' — '+currentDefect.itemName,serialNumber:m?(m.serialNumber||''):'',branch:m?(m.branch||''):'',technician:signName,date:document.getElementById('defResolvedDate').value,items:[{name:currentDefect.itemName,status:'Resolved'}],notes:workDone,signName,signDate,signatureData:sig.canvas.toDataURL('image/png'),hoursReading:Number(hours),defectRefId:currentDefect.id,createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending'};
+const record={recordId:await getNextRecordId('defect'),type:'defect',defectId:currentDefect.defectId||currentDefect.id,machineId:currentDefect.machineId,subject:currentDefect.machineName+' — '+currentDefect.itemName,serialNumber:m?(m.serialNumber||''):'',branch:m?(m.branch||''):'',technician:signName,date:document.getElementById('defResolvedDate').value,items:[{name:currentDefect.itemName,status:'Resolved'}],notes:workDone,signName,signDate,signatureData:sig.canvas.toDataURL('image/png'),hoursReading:Number(hours),defectRefId:currentDefect.id,createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending'};
 if(m)await db.collection('machines').doc(m.id).update({currentHours:Number(hours)});
 await db.collection('defects').doc(currentDefect.id).update({status:'resolved',resolvedDate:document.getElementById('defResolvedDate').value,resolvedAt:firebase.firestore.Timestamp.now(),resolvedBy:signName,resolutionNotes:workDone,resolutionMachineHours:Number(hours),updatedAt:firebase.firestore.Timestamp.now()});
 await saveRecordToFirestore(record);
@@ -660,15 +709,15 @@ function generatePDF(record){const jsPDF=window.jspdf.jsPDF;const doc=new jsPDF(
 doc.setFillColor(46,46,143);doc.rect(0,0,pageW,74,'F');doc.setFillColor(47,174,78);doc.rect(0,70,pageW,4,'F');
 doc.setTextColor(255,255,255);doc.setFontSize(20);doc.setFont(undefined,'bold');doc.text('CheckPlant',margin,33);
 doc.setFontSize(10);doc.text('KCM WASTE MANAGEMENT',margin,50);
-const typeLabel=record.type==='service'?'Service Report':record.type==='check'?'Safety Check Report':'Defect Resolution Report';
+const typeLabel=record.type==='service'?'Service Report':record.type==='check'?'Safety Check Report':record.type==='adhoc'?'Ad-Hoc Job Card':'Defect Resolution Report';
 doc.setFont(undefined,'normal');doc.text(typeLabel,margin,64);y=98;
 doc.setTextColor(28,31,38);doc.setFontSize(13);doc.setFont(undefined,'bold');doc.text(record.subject,margin,y);y+=20;
-doc.setFontSize(10);doc.setFont(undefined,'normal');doc.text((record.defectId?('Defect ID: '+record.defectId+'   '):'')+'Date: '+record.date+'  Branch: '+(record.branch||'-')+(record.serialNumber?'  S/N: '+record.serialNumber:''),margin,y);
+doc.setFontSize(10);doc.setFont(undefined,'normal');doc.text((record.recordId?('Record ID: '+record.recordId+'   '):'')+(record.defectId?('Defect ID: '+record.defectId+'   '):'')+'Date: '+record.date+'  Branch: '+(record.branch||'-')+(record.serialNumber?'  S/N: '+record.serialNumber:''),margin,y);
 doc.text('By: '+(record.technician||record.signName),margin+280,y);y+=16;
 if(record.hoursReading!=null){doc.text('Hours: '+record.hoursReading+(record.nextServiceDueHours!=null?'  Next service due: '+record.nextServiceDueHours+' hrs':''),margin,y);y+=16;}
 y+=8;doc.setDrawColor(220,220,220);doc.line(margin,y,pageW-margin,y);y+=20;
 doc.setFontSize(12);doc.setFont(undefined,'bold');doc.setTextColor(46,46,143);
-doc.text(record.type==='service'?'Serviceable Items':record.type==='check'?'Safety Checklist':'Defect Details',margin,y);doc.setTextColor(28,31,38);y+=10;
+doc.text(record.type==='service'?'Serviceable Items':record.type==='check'?'Safety Checklist':record.type==='adhoc'?'Job Details':'Defect Details',margin,y);doc.setTextColor(28,31,38);y+=10;
 const colX=margin,colStatusX=pageW-margin-110;
 record.items.forEach(it=>{if(y>760){doc.addPage();y=50;}doc.setFontSize(10);doc.setFont(undefined,'normal');
 const lines=doc.splitTextToSize(it.name,colStatusX-colX-10);doc.text(lines,colX,y+2);
@@ -681,7 +730,7 @@ const ls=record.lolerSection;const st=ls.status==='pass'?'PASS':ls.status==='def
 doc.text('Status: '+st,margin,y);y+=14;doc.text('Cert: '+(ls.certDate||'-')+' Next due: '+(ls.nextDueDate||'-'),margin,y);y+=14;
 doc.text('Examiner: '+(ls.examinerName||'-'),margin,y);y+=10;}
 if(y>680){doc.addPage();y=50;}y+=12;doc.setFontSize(12);doc.setFont(undefined,'bold');doc.setTextColor(46,46,143);
-doc.text(record.type==='defect'?'Work Carried Out':'Notes',margin,y);doc.setTextColor(28,31,38);y+=16;doc.setFontSize(10);doc.setFont(undefined,'normal');
+doc.text(record.type==='defect'||record.type==='adhoc'?'Work Carried Out / Notes':'Notes',margin,y);doc.setTextColor(28,31,38);y+=16;doc.setFontSize(10);doc.setFont(undefined,'normal');
 const nl=doc.splitTextToSize(record.notes||'No notes.',pageW-2*margin);doc.text(nl,margin,y);y+=nl.length*13+20;
 if(y>650){doc.addPage();y=50;}doc.setDrawColor(220,220,220);doc.line(margin,y,pageW-margin,y);y+=20;
 doc.setFontSize(12);doc.setFont(undefined,'bold');doc.setTextColor(46,46,143);doc.text('Sign Off',margin,y);doc.setTextColor(28,31,38);y+=14;
@@ -726,7 +775,7 @@ pushRecordToSheets({type:'check',subject:'Test row',technician:'Test',date:today
 function switchOfficeTab(tab){document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
 document.querySelectorAll('.office-tab').forEach(el=>el.style.display='none');document.getElementById('office-'+tab).style.display='block';
 if(tab==='daily')renderDailyChecks();if(tab==='machines')renderMachineList();if(tab==='categories')renderCategoryList();if(tab==='defects')renderDefectsTable();
-if(tab==='calendar')renderCalendar();if(tab==='records')renderRecordsTable();if(tab==='sheets')renderSheetsStatus();}
+if(tab==='calendar')renderCalendar();if(tab==='vor')renderVORRegister();if(tab==='records')renderRecordsTable();if(tab==='sheets')renderSheetsStatus();if(tab==='security')renderEngineerAdmin();}
 function populateNewMachineCategorySelect(){const sel=document.getElementById('newMachineCategory');if(!sel)return;const cv=sel.value;sel.innerHTML='<option value="">Choose category</option>';
 Object.entries(categories).forEach(([k,c])=>{const o=document.createElement('option');o.value=k;o.textContent=c.emoji+' '+c.label;sel.appendChild(o);});sel.value=cv;}
 function renderMachineBranchFilter(){const w=document.getElementById('machineBranchFilter');if(!w)return;
@@ -912,8 +961,8 @@ labelEl.textContent=vd.toLocaleDateString('en-GB',{month:'long',year:'numeric'})
 dowEl.innerHTML=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d=>'<div class="cal-dow">'+d+'</div>').join('');
 const fd=new Date(year,month,1);let so=fd.getDay()-1;if(so<0)so=6;const dim=new Date(year,month+1,0).getDate();const ts=todayISO();let h='';
 for(let i=0;i<so;i++)h+='<div class="cal-cell" style="visibility:hidden"></div>';
-for(let d=1;d<=dim;d++){const ds=year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');const db_=bookings.filter(b=>b.date===ds);
-h+='<div class="cal-cell '+(ds===ts?'today':'')+'"><div>'+d+'</div>'+db_.map(b=>'<div class="cal-booking" onclick="event.stopPropagation();deleteBooking(\''+b.id+'\')">'+escapeHtml(b.machineName)+'</div>').join('')+'</div>';}
+for(let d=1;d<=dim;d++){const ds=year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');const db_=bookings.filter(b=>b.date===ds);const jobs=records.filter(r=>r.type==='adhoc'&&r.date===ds);
+h+='<div class="cal-cell '+(ds===ts?'today':'')+'"><div>'+d+'</div>'+db_.map(b=>'<div class="cal-booking" onclick="event.stopPropagation();deleteBooking(\''+b.id+'\')">'+escapeHtml(b.machineName)+'</div>').join('')+jobs.map(r=>'<div class="cal-booking" style="background:var(--amber)" title="'+escapeAttr((r.recordId||r.id)+' — '+(r.jobCategory||''))+'">'+escapeHtml((r.machineName||r.subject)+' · '+(r.jobCategory||'Ad-Hoc'))+'</div>').join('')+'</div>';}
 gridEl.innerHTML=h;}
 function renderRecordsBranchFilter(){const w=document.getElementById('recordsBranchFilter');if(!w)return;
 w.innerHTML='<button class="'+(recordsBranchFilter==='all'?'active':'')+'" onclick="setRecordsBranchFilter(\'all\')">All</button>'+BRANCHES.map(b=>'<button class="'+(recordsBranchFilter===b?'active':'')+'" onclick="setRecordsBranchFilter(\''+b+'\')">'+b+'</button>').join('');}
@@ -921,9 +970,9 @@ function setRecordsBranchFilter(b){recordsBranchFilter=b;renderRecordsBranchFilt
 function renderRecordsTable(){renderRecordsBranchFilter();const filtered=recordsBranchFilter==='all'?records:records.filter(r=>r.branch===recordsBranchFilter);
 const ce=document.getElementById('recordCount');if(ce)ce.textContent=filtered.length;const w=document.getElementById('recordsTableWrap');if(!w)return;
 if(!filtered.length){w.innerHTML='<div class="empty-state">No records.</div>';return;}
-let h='<table><thead><tr><th>Type</th><th>Subject</th><th>Branch</th><th>By</th><th>Date</th><th>Hrs</th><th>Notes</th><th></th></tr></thead><tbody>';
-filtered.forEach(r=>{const pl=r.type==='service'?'Service':r.type==='check'?'Check':'Defect';
-h+='<tr><td><span class="pill '+r.type+'">'+pl+'</span></td><td>'+escapeHtml(r.subject)+'</td><td>'+escapeHtml(r.branch||'-')+'</td><td>'+escapeHtml(r.signName)+'</td><td>'+r.date+'</td><td>'+(r.hoursReading!=null?r.hoursReading:'-')+'</td><td style="max-width:220px;white-space:normal">'+escapeHtml(r.notes||'-')+'</td><td><button class="btn btn-secondary btn-sm" onclick="reprintRecord(\''+r.id+'\')">PDF</button></td></tr>';});
+let h='<table><thead><tr><th>ID</th><th>Type</th><th>Subject</th><th>Branch</th><th>By</th><th>Date</th><th>Hrs</th><th>Notes</th><th></th></tr></thead><tbody>';
+filtered.forEach(r=>{const pl=r.type==='service'?'Service':r.type==='check'?'Check':r.type==='adhoc'?'Ad-Hoc':'Defect';
+h+='<tr><td style="font-weight:700">'+escapeHtml(r.recordId||r.id)+'</td><td><span class="pill '+r.type+'">'+pl+'</span></td><td>'+escapeHtml(r.subject)+'</td><td>'+escapeHtml(r.branch||'-')+'</td><td>'+escapeHtml(r.signName)+'</td><td>'+r.date+'</td><td>'+(r.hoursReading!=null?r.hoursReading:'-')+'</td><td style="max-width:220px;white-space:normal">'+escapeHtml(r.notes||'-')+'</td><td><button class="btn btn-secondary btn-sm" onclick="reprintRecord(\''+r.id+'\')">PDF</button></td></tr>';});
 h+='</tbody></table>';w.innerHTML=h;}
 function reprintRecord(id){const r=records.find(x=>x.id===id);if(r)generatePDF(r);}
 function csvRow(r){const items=r.items.map(i=>i.name+':'+i.status).join(' | ');
@@ -933,13 +982,97 @@ records.forEach(r=>{csv+=csvRow(r)+'\n';});const blob=new Blob([csv],{type:'text
 const a=document.createElement('a');a.href=url;a.download='CheckPlant_Records_'+todayISO()+'.csv';a.click();URL.revokeObjectURL(url);toast('Downloaded');}
 function downloadSingleRecordCsv(record){let csv='Type,Subject,Branch,By,Date,Hours,Notes,Items\n'+csvRow(record);
 const blob=new Blob([csv],{type:'text/csv'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='CheckPlant_'+record.type+'_'+record.date+'.csv';a.click();URL.revokeObjectURL(url);}
-function exportData(){const data={machines,categories,records,defects,bookings,exportedAt:new Date().toISOString()};
+
+const ADHOC_JOB_CATEGORIES=["Hydraulic Hose","Hydraulic Ram / Cylinder","Hydraulics - Other","Engine","Cooling System","Oils / Fluids","Filters","Electrical","Battery","Tyres / Wheels / Tracks","Bearings","Belts / Chains","Guards / Safety Devices","Welding / Fabrication","Conveyor / Belt","Drum / Roller","Pump / Motor","Other"];
+
+async function getNextRecordId(type){
+  const prefix={service:'SVC',check:'CHK',adhoc:'AHJ',defect:'DEF'}[type]||'REC';
+  const ref=db.collection('settings').doc('recordSequence');
+  return db.runTransaction(async tx=>{
+    const snap=await tx.get(ref);const data=snap.exists?snap.data():{};const key=type+'Seq';const next=(Number(data[key])||0)+1;
+    tx.set(ref,{[key]:next},{merge:true});
+    return 'CP-'+prefix+'-'+String(next).padStart(6,'0');
+  });
+}
+function populateAdHocMachines(){
+  const sel=document.getElementById('adhocMachine');if(!sel)return;const old=sel.value;
+  sel.innerHTML='<option value="">-- Choose machine --</option>'+machines.map(m=>'<option value="'+m.id+'">'+escapeHtml(m.name)+(m.outOfService?' — CURRENTLY VOR':'')+'</option>').join('');
+  if(machines.some(m=>m.id===old))sel.value=old;
+}
+function populateAdHocCategories(){
+  const sel=document.getElementById('adhocCategory');if(!sel)return;
+  sel.innerHTML='<option value="">-- Select job category --</option>'+ADHOC_JOB_CATEGORIES.map(x=>'<option>'+escapeHtml(x)+'</option>').join('');
+}
+function startAdHocJob(){
+  if(!currentEngineer){requestEngineerSignIn();return;}
+  populateAdHocMachines();populateAdHocCategories();currentAdHocMachine=null;
+  document.getElementById('adhocDate').value=todayISO();document.getElementById('adhocHours').value='';
+  document.getElementById('adhocOutcome').value='';document.getElementById('adhocNotes').value='';
+  document.getElementById('adhocEngineer').value=currentEngineer.name;showScreen('adhoc-form');
+}
+function onAdHocMachineChosen(){const id=document.getElementById('adhocMachine').value;currentAdHocMachine=machines.find(m=>m.id===id)||null;if(currentAdHocMachine)document.getElementById('adhocHours').value=currentAdHocMachine.currentHours||'';}
+async function submitAdHocJob(markVOR){
+  if(!currentEngineer)return requestEngineerSignIn();
+  const machineId=document.getElementById('adhocMachine').value;const m=machines.find(x=>x.id===machineId);if(!m)return toast('Select a machine');
+  const hours=document.getElementById('adhocHours').value;const jobCategory=document.getElementById('adhocCategory').value;const outcome=document.getElementById('adhocOutcome').value;const notes=document.getElementById('adhocNotes').value.trim();const date=document.getElementById('adhocDate').value||todayISO();
+  if(hours==='')return toast('Enter machine hours');if(!jobCategory)return toast('Choose a job category');if(!outcome)return toast('Choose Repaired / Ordered / outcome');if(!notes)return toast('Add work or fault notes');
+  if(markVOR&&!confirm('Place '+m.name+' into VOR / Out Of Service now? Operator checks will be blocked until Back Office signs it back into service.'))return;
+  const record={recordId:await getNextRecordId('adhoc'),type:'adhoc',machineId:m.id,machineName:m.name,subject:m.name+' — '+jobCategory,serialNumber:m.serialNumber||'',branch:m.branch||'',technician:currentEngineer.name,engineerId:currentEngineer.id,date,jobCategory,outcome,items:[{name:jobCategory,status:outcome}],notes,signName:currentEngineer.name,signDate:date,signatureData:'',hoursReading:Number(hours),createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending',vorRaised:!!markVOR};
+  await db.collection('machines').doc(m.id).update({currentHours:Number(hours),...(markVOR?{outOfService:true,outOfServiceReason:jobCategory+' — '+notes,outOfServiceSince:date,outOfServiceRecordId:record.recordId,outOfServiceBy:currentEngineer.name}: {})});
+  await saveRecordToFirestore(record);
+  if(markVOR)toast('Job saved — machine is now VOR / Out Of Service');
+  currentAdHocMachine=null;
+}
+async function addEngineer(){
+  const name=document.getElementById('newEngineerName').value.trim(),pin=document.getElementById('newEngineerPin').value.trim();
+  if(!name)return toast('Enter engineer name');if(!/^\d{4,8}$/.test(pin))return toast('Engineer PIN must be 4–8 digits');
+  if(engineers.some(e=>String(e.pin||'')===pin))return toast('That PIN is already assigned');
+  await db.collection('engineers').add({name,pin,active:true,createdAt:firebase.firestore.Timestamp.now()});
+  document.getElementById('newEngineerName').value='';document.getElementById('newEngineerPin').value='';toast('Engineer added');
+}
+async function removeEngineer(id){if(!confirm('Remove this engineer PIN?'))return;await db.collection('engineers').doc(id).delete();}
+function renderEngineerAdmin(){const w=document.getElementById('engineerAdminList');if(!w)return;if(!engineers.length){w.innerHTML='<div class="empty-state">No engineer PINs configured yet.</div>';return;}w.innerHTML=engineers.map(e=>'<div class="machine-list-item"><div><div class="mname">'+escapeHtml(e.name)+'</div><div class="mmeta">PIN configured · '+(e.active===false?'Disabled':'Active')+'</div></div><button class="btn btn-danger btn-sm" onclick="removeEngineer(\''+e.id+'\')">Remove</button></div>').join('');}
+function renderVORRegister(){
+  const w=document.getElementById('vorRegister');if(!w)return;const list=machines.filter(m=>m.outOfService);const count=document.getElementById('vorCount');if(count)count.textContent=list.length;
+  if(!list.length){w.innerHTML='<div class="empty-state">No machines currently VOR / Out Of Service.</div>';return;}
+  w.innerHTML=list.map(m=>'<div class="card" style="border-color:#fecaca;background:#fffafa"><div class="section-title" style="color:var(--red)">'+escapeHtml(m.name)+' <span class="badge red">VOR</span></div><p class="progress-note">'+escapeHtml(m.outOfServiceReason||'No reason recorded')+' · Since '+escapeHtml(m.outOfServiceSince||'-')+(m.outOfServiceRecordId?' · '+escapeHtml(m.outOfServiceRecordId):'')+'</p><label>Remediation / sign-back-in notes <span class="required-star">*</span></label><textarea id="vorRemedy-'+m.id+'" placeholder="What was repaired, replaced, tested or verified before returning this machine to service?"></textarea><button class="btn btn-primary btn-block" onclick="returnMachineToService(\''+m.id+'\')">Sign Off & Return to Service</button></div>').join('');
+}
+async function returnMachineToService(id){
+  const m=machines.find(x=>x.id===id);if(!m)return;const el=document.getElementById('vorRemedy-'+id);const notes=el?el.value.trim():'';
+  if(!notes)return toast('Remediation notes are required before returning to service');
+  if(!confirm('Confirm '+m.name+' is safe to return to service?'))return;
+  await db.collection('machines').doc(id).update({outOfService:false,outOfServiceReason:null,outOfServiceSince:null,lastVORRemediation:notes,lastVORClearedAt:firebase.firestore.Timestamp.now(),lastVORClearedBy:'Back Office'});
+  await db.collection('vorHistory').add({machineId:id,machineName:m.name,raisedRecordId:m.outOfServiceRecordId||null,reason:m.outOfServiceReason||'',raisedDate:m.outOfServiceSince||null,remediationNotes:notes,clearedAt:firebase.firestore.Timestamp.now(),clearedDate:todayISO(),clearedBy:'Back Office'});
+  toast('Machine returned to service');
+}
+function safeFolderName(v){return String(v||'Unknown').replace(/[\\/:*?"<>|]/g,'_').trim()||'Unknown';}
+function recordCheckType(r){return r.type==='service'?'Service Checks':r.type==='check'?'Safety Checks':r.type==='adhoc'?'Ad-Hoc Job Cards':r.type==='defect'?'Defect Resolutions':'Other Records';}
+function pdfForExport(record){
+  const oldDoc=lastGeneratedDoc,oldRec=lastGeneratedRecord,active=document.querySelector('.screen.active')?.id;
+  generatePDF(record);const doc=lastGeneratedDoc;lastGeneratedDoc=oldDoc;lastGeneratedRecord=oldRec;
+  if(active){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(active)?.classList.add('active');}
+  return doc;
+}
+async function exportAllPDFs(){
+  if(!records.length)return toast('No records to export');if(!window.JSZip)return toast('ZIP library unavailable — refresh and try again');
+  const zip=new JSZip();let n=0;
+  for(const r of records){
+    const m=machines.find(x=>x.id===r.machineId);const typeFolder=safeFolderName((m&&categories[m.categoryKey]?.label)||r.categoryKey||'Uncategorised');
+    const machineFolder=safeFolderName((m&&m.name)||r.machineName||r.subject||'Unknown Machine');const checkFolder=recordCheckType(r);
+    const doc=pdfForExport(r);const bytes=doc.output('arraybuffer');const id=safeFolderName(r.recordId||r.id);const file=safeFolderName(r.date||'undated')+'_'+id+'.pdf';
+    zip.folder(typeFolder).folder(machineFolder).folder(checkFolder).file(file,bytes);n++;
+  }
+  const blob=await zip.generateAsync({type:'blob'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='CheckPlant_All_PDFs_'+todayISO()+'.zip';a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);toast('Exported '+n+' PDFs');
+}
+
+function exportData(){const data={machines,categories,records,defects,bookings,engineers:engineers.map(e=>({id:e.id,name:e.name,active:e.active!==false})),exportedAt:new Date().toISOString()};
 const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);
 const a=document.createElement('a');a.href=url;a.download='CheckPlant_Backup_'+todayISO()+'.json';a.click();URL.revokeObjectURL(url);toast('Exported');}
 document.getElementById('svcDate').value=todayISO();document.getElementById('svcSignDate').value=todayISO();
 document.getElementById('chkDate').value=todayISO();document.getElementById('chkSignDate').value=todayISO();
 document.getElementById('defResolvedDate').value=todayISO();document.getElementById('defSignDate').value=todayISO();
 document.getElementById('bookingDate').value=todayISO();
+document.getElementById('adhocDate').value=todayISO();populateAdHocCategories();
 initFirestoreListeners();renderSheetsStatus();
 </script>
 </body>
