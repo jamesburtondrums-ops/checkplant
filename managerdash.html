@@ -140,6 +140,16 @@ th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;}
     <select id="assignEngineer"><option value="">-- Select engineer --</option></select>
     <button class="btn btn-secondary" onclick="createAssignedJob()">Assign Job</button>
   </div>
+  <div id="adhocAssignmentDetails" style="margin-top:10px">
+    <label>Ad-Hoc Job Description</label>
+    <textarea id="assignJobDescription" placeholder="Describe the fault, repair or work required for the engineer."></textarea>
+    <div class="row" style="margin-top:10px">
+      <select id="assignDamageStatus">
+        <option value="no">Not Damage</option>
+        <option value="yes">Damage</option>
+      </select>
+    </div>
+  </div>
   <div class="row" style="margin-top:10px">
     <input type="date" id="plannedJobDate" aria-label="Planned work date">
     <button class="btn btn-secondary" onclick="createAssignedJob('planned')">Add as Planned Work</button>
@@ -254,9 +264,10 @@ function renderAssignmentSelectors(){
  updateAssignmentForm();
 }
 function updateAssignmentForm(){
- const type=document.getElementById('assignJobType').value,isDefect=type==='defect';
+ const type=document.getElementById('assignJobType').value,isDefect=type==='defect',isAdHoc=type==='adhoc';
  document.getElementById('assignDefect').style.display=isDefect?'block':'none';
  document.getElementById('assignMachine').style.display='block';
+ const adh=document.getElementById('adhocAssignmentDetails');if(adh)adh.style.display=isAdHoc?'block':'none';
  updateDefectOptions();
 }
 function defectFullLabel(d){
@@ -280,6 +291,9 @@ function updateDefectOptions(){
 async function createAssignedJob(statusOverride){
  const engineerId=document.getElementById('assignEngineer').value,jobType=document.getElementById('assignJobType').value,e=engineers.find(x=>x.id===engineerId);if(!e)return toast('Choose an engineer');
  const status=statusOverride==='planned'?'planned':'assigned',plannedDate=status==='planned'?document.getElementById('plannedJobDate').value:'';if(status==='planned'&&!plannedDate)return toast('Choose a planned work date');
+ const jobDescription=jobType==='adhoc'?(document.getElementById('assignJobDescription').value||'').trim():'';
+ const isDamage=jobType==='adhoc'&&document.getElementById('assignDamageStatus').value==='yes';
+ if(jobType==='adhoc'&&!jobDescription)return toast('Add an Ad-Hoc job description');
  const ref=db.collection('settings').doc('managerJobSequence');
  const n=await db.runTransaction(async tx=>{const s=await tx.get(ref),v=(s.exists?(s.data().value||0):0)+1;tx.set(ref,{value:v},{merge:true});return v;});
  if(jobType==='defect'){
@@ -293,7 +307,8 @@ async function createAssignedJob(statusOverride){
  }
  const machineId=document.getElementById('assignMachine').value,m=machines.find(x=>x.id===machineId);if(!m)return toast('Choose a machine');
  const prefix=jobType==='service'?'SVC':'AHJ',jobId='CP-'+prefix+'-M'+String(n).padStart(5,'0');
- await db.collection('liveJobs').add({jobId,jobType,status,machineId:m.id,machineName:m.name,serialNumber:m.serialNumber||'',branch:m.branch||'',hoursReading:Number(m.currentHours)||0,date:(status==='planned'?plannedDate:todayISO()),plannedDate:plannedDate||null,jobCategory:jobType==='service'?'Service':'Ad-Hoc Job',engineerId:e.id,engineerName:e.name,accumulatedMs:0,progressNotes:[],supportEngineerIds:[],supportEngineerNames:[],assignedAt:firebase.firestore.Timestamp.now(),createdAt:firebase.firestore.Timestamp.now(),updatedAt:firebase.firestore.Timestamp.now()});
+ await db.collection('liveJobs').add({jobId,jobType,status,machineId:m.id,machineName:m.name,serialNumber:m.serialNumber||'',branch:m.branch||'',hoursReading:Number(m.currentHours)||0,date:(status==='planned'?plannedDate:todayISO()),plannedDate:plannedDate||null,jobCategory:jobType==='service'?'Service':'Ad-Hoc Job',jobDescription,isDamage,damageDriver:'',damageIncident:'',source:'managerdash_assignment',engineerId:e.id,engineerName:e.name,accumulatedMs:0,progressNotes:[],supportEngineerIds:[],supportEngineerNames:[],assignedAt:firebase.firestore.Timestamp.now(),createdAt:firebase.firestore.Timestamp.now(),updatedAt:firebase.firestore.Timestamp.now()});
+ if(jobType==='adhoc'){document.getElementById('assignJobDescription').value='';document.getElementById('assignDamageStatus').value='no';}
  toast(status==='planned'?'Planned work added for '+e.name:'Job assigned to '+e.name);
 }
 async function reassignJob(id){
@@ -341,7 +356,7 @@ function renderAssignmentBoard(){
    const supportIds=Array.isArray(j.supportEngineerIds)?j.supportEngineerIds:[],supportNames=Array.isArray(j.supportEngineerNames)?j.supportEngineerNames:[];
    const support=supportIds.length?supportIds.map((id,i)=>'<span class="badge" style="margin:3px">'+escapeHtml(supportNames[i]||'Support')+' <button type="button" title="Remove support" style="border:0;background:transparent;cursor:pointer" onclick="removeSupportEngineer(\''+j.id+'\',\''+id+'\')">×</button></span>').join(''):'<span class="sub">No supporting engineers</span>';
    const supportOptions=engineers.filter(e=>e.active!==false&&e.id!==j.engineerId&&!supportIds.includes(e.id)).map(e=>'<option value="'+e.id+'">'+escapeHtml(e.name)+'</option>').join('');
-   return '<div class="card" style="margin-bottom:10px"><div class="alert-row"><span><strong>'+escapeHtml(j.jobId||'')+'</strong> · '+escapeHtml(j.machineName||'')+' · '+type+' · <strong>'+status+'</strong>'+when+'<br><span class="sub">Lead: '+escapeHtml(j.engineerName||'Unassigned')+(j.jobCategory?' · '+escapeHtml(j.jobCategory):'')+'</span></span><span style="display:flex;align-items:center;gap:10px"><strong data-manager-job-time="'+j.id+'">'+time+'</strong>'+(j.status==='active'?'<button class="btn btn-secondary btn-sm" onclick="pauseJobFromManager(\''+j.id+'\')">Pause Job</button>':'')+'<select id="reassign-'+j.id+'" title="Transfer lead engineer" onchange="reassignJob(\''+j.id+'\')">'+engineers.filter(e=>e.active!==false).map(e=>'<option value="'+e.id+'" '+(e.id===j.engineerId?'selected':'')+'>'+escapeHtml(e.name)+'</option>').join('')+'</select></span></div><div style="margin-top:10px"><div class="sub" style="margin-bottom:6px"><strong>Supporting engineers</strong></div><div style="margin-bottom:8px">'+support+'</div><div class="row"><select id="support-'+j.id+'"><option value="">-- Add supporting engineer --</option>'+supportOptions+'</select><button class="btn btn-secondary btn-sm" onclick="addSupportEngineer(\''+j.id+'\')">Add Support</button></div></div></div>';
+   return '<div class="card" style="margin-bottom:10px"><div class="alert-row"><span><strong>'+escapeHtml(j.jobId||'')+'</strong> · '+escapeHtml(j.machineName||'')+' · '+type+' · <strong>'+status+'</strong>'+when+'<br><span class="sub">Lead: '+escapeHtml(j.engineerName||'Unassigned')+(j.jobCategory?' · '+escapeHtml(j.jobCategory):'')+(j.isDamage?' · DAMAGE':'')+'</span>'+(j.jobDescription?'<br><span class="sub">'+escapeHtml(j.jobDescription)+'</span>':'')+'</span><span style="display:flex;align-items:center;gap:10px"><strong data-manager-job-time="'+j.id+'">'+time+'</strong>'+(j.status==='active'?'<button class="btn btn-secondary btn-sm" onclick="pauseJobFromManager(\''+j.id+'\')">Pause Job</button>':'')+'<select id="reassign-'+j.id+'" title="Transfer lead engineer" onchange="reassignJob(\''+j.id+'\')">'+engineers.filter(e=>e.active!==false).map(e=>'<option value="'+e.id+'" '+(e.id===j.engineerId?'selected':'')+'>'+escapeHtml(e.name)+'</option>').join('')+'</select></span></div><div style="margin-top:10px"><div class="sub" style="margin-bottom:6px"><strong>Supporting engineers</strong></div><div style="margin-bottom:8px">'+support+'</div><div class="row"><select id="support-'+j.id+'"><option value="">-- Add supporting engineer --</option>'+supportOptions+'</select><button class="btn btn-secondary btn-sm" onclick="addSupportEngineer(\''+j.id+'\')">Add Support</button></div></div></div>';
  }).join('');
  updateManagerJobTimers();
 }
