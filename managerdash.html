@@ -272,11 +272,21 @@ async function markOutOfService(){
 }
 
 async function returnToService(machineId){
-  if(!confirm('Return this machine to service?')) return;
+  const m=machines.find(x=>x.id===machineId);if(!m)return;
+  const notes=prompt('Remediation notes are required before returning '+m.name+' to service.\n\nDescribe what was repaired, replaced, tested or verified:');
+  if(!notes||!notes.trim()){toast('Return to service cancelled — remediation notes are required');return;}
+  if(!confirm('Confirm this machine is safe to return to service?')) return;
   await db.collection('machines').doc(machineId).update({
     outOfService: false,
     outOfServiceReason: null,
-    outOfServiceSince: null
+    outOfServiceSince: null,
+    lastVORRemediation: notes.trim(),
+    lastVORClearedAt: firebase.firestore.Timestamp.now(),
+    lastVORClearedBy: 'ManagerDash'
+  });
+  await db.collection('vorHistory').add({
+    machineId,machineName:m.name,raisedRecordId:m.outOfServiceRecordId||null,reason:m.outOfServiceReason||'',raisedDate:m.outOfServiceSince||null,
+    remediationNotes:notes.trim(),clearedAt:firebase.firestore.Timestamp.now(),clearedDate:todayISO(),clearedBy:'ManagerDash'
   });
   toast('Machine returned to service');
 }
