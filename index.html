@@ -72,6 +72,11 @@ input:checked+.slider{background:var(--green);}input:checked+.slider:before{tran
 .conn-dot.online{background:var(--green);}.conn-dot.offline{background:var(--red);}
 .sync-banner{font-size:.78rem;color:var(--grey);padding:6px 14px;}
 .history-item{padding:12px;border:1px solid #eef0f2;border-radius:10px;margin-bottom:8px;}
+.live-job{border:2px solid #f59e0b;background:#fffbeb;border-radius:12px;padding:14px;margin-bottom:10px;cursor:pointer;}
+.live-job.paused{border-color:#9ca3af;background:#f9fafb;}
+.live-job-time{font-size:1.15rem;font-weight:800;color:var(--navy);font-variant-numeric:tabular-nums;}
+.timer-panel{background:#f8fafc;border:2px solid var(--navy);border-radius:var(--radius);padding:18px;margin-bottom:16px;text-align:center;}
+.timer-big{font-size:2rem;font-weight:900;color:var(--navy);font-variant-numeric:tabular-nums;}
 .alert-panel{border-radius:var(--radius);padding:16px 18px;margin-bottom:16px;}
 .alert-panel.service-alert{background:#fff7ed;border:1.5px solid #fdba74;}
 .alert-panel.loler-alert{background:#fef2f2;border:1.5px solid #fca5a5;}
@@ -134,10 +139,19 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focu
 <div class="mode-grid" style="grid-template-columns:repeat(2,1fr)">
 <div class="mode-card service" onclick="startService()"><h2>🔧 Service Mode</h2><p>Scheduled service checklist, hours, LOLER and sign-off.</p></div>
 <div class="mode-card defect" onclick="startAdHocJob()"><h2>🧰 Ad-Hoc Job Card</h2><p>Record repairs, parts ordered and defects requiring VOR.</p></div>
-</div></div>
+</div>
+<div class="card" style="margin-top:18px"><div class="section-title">🟠 Live Jobs <span class="badge amber" id="liveJobCount">0</span></div>
+<p class="progress-note">All currently open engineering jobs are shown here. Select a job to open its job card.</p>
+<div id="engineerLiveJobs"></div></div></div>
 <div class="screen" id="screen-adhoc-form">
 <button class="back-link" onclick="showScreen('engineer-hub')">← Engineer Menu</button>
-<div class="card"><div class="section-title">🧰 Ad-Hoc Job Card</div>
+<div id="adhocTimerPanel" class="timer-panel" style="display:none">
+<div class="progress-note" id="adhocTimerStatus">LIVE JOB</div>
+<div class="timer-big" id="adhocTimer">00:00:00</div>
+<div class="progress-note" id="adhocStartedAt"></div>
+<div class="row" style="margin-top:12px"><button class="btn btn-secondary btn-block" id="adhocPauseBtn" onclick="pauseLiveJob()">Pause Job</button><button class="btn btn-primary btn-block" id="adhocResumeBtn" style="display:none" onclick="resumeLiveJob()">Resume Job</button></div>
+</div>
+<div class="card"><div class="section-title">🧰 Ad-Hoc Job Card <span id="adhocLiveId" class="badge navy" style="display:none"></span></div>
 <div class="row"><div><label>Machine <span class="required-star">*</span></label><select id="adhocMachine" onchange="onAdHocMachineChosen()"><option value="">-- Choose machine --</option></select></div>
 <div><label>Date</label><input type="date" id="adhocDate"></div></div>
 <div class="row" style="margin-top:12px"><div><label>Hours <span class="required-star">*</span></label><input type="number" id="adhocHours" min="0"></div>
@@ -145,7 +159,12 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focu
 <div class="row" style="margin-top:12px"><div><label>Outcome <span class="required-star">*</span></label><select id="adhocOutcome"><option value="">-- Select --</option><option>Repaired</option><option>Ordered</option><option>Temporary Repair</option><option>Inspected / No Fault Found</option></select></div>
 <div><label>Engineer</label><input type="text" id="adhocEngineer" readonly></div></div></div>
 <div class="card"><div class="section-title">Work Carried Out / Parts Required</div><textarea id="adhocNotes" placeholder="Describe the fault, work completed, parts ordered or follow-up required."></textarea></div>
-<button class="btn btn-primary btn-block" onclick="submitAdHocJob(false)">Save Job Card</button>
+<div class="card" id="adhocProgressCard" style="display:none"><div class="section-title">Job Progress Notes</div>
+<p class="progress-note">Use this when pausing or handing over work. Notes are time-stamped and kept with the live job.</p>
+<div id="adhocProgressHistory"></div><textarea id="adhocProgressNote" placeholder="Add an update on work carried out so far..."></textarea>
+<button class="btn btn-secondary btn-block" onclick="addLiveJobProgressNote()">Add Progress Note</button></div>
+<button class="btn btn-primary btn-block" id="openAdhocJobBtn" onclick="openAdHocJob()">Open Job & Start Timer</button>
+<button class="btn btn-primary btn-block" id="completeAdhocJobBtn" style="display:none" onclick="submitAdHocJob(false)">Complete Job Card</button>
 <button class="btn btn-danger btn-block" style="font-size:1.15rem;margin-top:12px;padding:18px" onclick="submitAdHocJob(true)">DEFECT TO VOR</button>
 <p class="progress-note" style="text-align:center">VOR immediately marks the selected machine Out Of Service and blocks operator checks until Back Office signs it back in with remediation notes.</p>
 </div>
@@ -337,7 +356,7 @@ baler:{label:"Baler (Cardboard/Tyre)",emoji:"📦",lolerApplies:true,items:["Eme
 
 const BRANCHES=["Rotherham","Shires","Sheffield"];
 const SERVICE_HOURS_LIMIT=500,SERVICE_DUE_SOON_WINDOW=100,LOLER_DUE_SOON_DAYS=30;
-let machines=[],categories={},records=[],defects=[],bookings=[],engineers=[];
+let machines=[],categories={},records=[],defects=[],bookings=[],engineers=[],liveJobs=[];
 const DEFAULT_SHEETS_URL="https://script.google.com/macros/s/AKfycbypRwQyTWNeBKliniJ5hYxeLLY6UWaZS0-HD8uSWDzsg8QNpA1kIwwisiSilBWzsrOD/exec";
 let settings=JSON.parse(localStorage.getItem('cpsettings')||'{}');
 if(!settings.sheetsWebhookUrl) settings.sheetsWebhookUrl = DEFAULT_SHEETS_URL;
@@ -345,7 +364,7 @@ if(settings.autoSheets === undefined) settings.autoSheets = true;
 if(settings.autoCsv === undefined) settings.autoCsv = false;
 localStorage.setItem('cpsettings', JSON.stringify(settings));
 let syncLog=JSON.parse(localStorage.getItem('cpsynclog')||'[]');
-let currentServiceMachine=null,currentCheckCategory=null,currentCheckMachine=null,currentProfileMachineId=null,currentDefect=null,currentEngineer=null,currentAdHocMachine=null;
+let currentServiceMachine=null,currentCheckCategory=null,currentCheckMachine=null,currentProfileMachineId=null,currentDefect=null,currentEngineer=null,currentAdHocMachine=null,currentLiveJob=null,liveTimerInterval=null;
 let nextDefectSeq = null;
 let officeMachineBranchFilter='all',recordsBranchFilter='all',calMonthOffset=0,pendingLolerStatus='pass';
 let backOfficeUnlocked = false;
@@ -523,6 +542,7 @@ db.collection('machines').orderBy('name').onSnapshot({includeMetadataChanges:tru
   machines=s.docs.map(d=>({id:d.id,...d.data()}));populateServiceMachineSelect();populateBookingMachineSelect();populateAdHocMachines();renderMachineList();renderHomeMachineList();renderOverdueAlerts();renderCalendar();renderDailyChecks();renderVORRegister();setConn(!s.metadata.fromCache,s.metadata.fromCache?"Offline / cached assets":s.metadata.hasPendingWrites?"Saving changes…":"Assets synced");
 },e=>setConn(false,"Error: "+e.message));
 db.collection('engineers').orderBy('name').onSnapshot(s=>{engineers=s.docs.map(d=>({id:d.id,...d.data()}));renderEngineerAdmin();},e=>console.error("Engineer list error",e));
+db.collection('liveJobs').onSnapshot(s=>{liveJobs=s.docs.map(d=>({id:d.id,...d.data()})).filter(j=>j.status!=='completed');renderEngineerLiveJobs();if(currentLiveJob){const fresh=liveJobs.find(j=>j.id===currentLiveJob.id);if(fresh){currentLiveJob=fresh;renderLiveJobState();}}},e=>console.error("Live jobs error",e));
 db.collection('categories').onSnapshot(async s=>{
   const seeded = await ensureCategoriesSeeded(s.docs);
   if(seeded) return;
@@ -536,8 +556,8 @@ db.collection('bookings').orderBy('date').onSnapshot(s=>{bookings=s.docs.map(d=>
 function showScreen(n){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById('screen-'+n).classList.add('active');if(n==='backoffice')switchOfficeTab('daily');window.scrollTo(0,0);}
 function goHome(){showScreen('home');}
 function requestEngineerSignIn(){if(currentEngineer){showScreen('engineer-hub');return;}showScreen('engineer-pin');const el=document.getElementById('engineerPinInput');el.value='';setTimeout(()=>el.focus(),100);}
-function submitEngineerPin(){const pin=document.getElementById('engineerPinInput').value.trim();const match=engineers.find(e=>e.active!==false&&String(e.pin||'')===pin);if(!match){toast(engineers.length?'Incorrect engineer PIN':'No engineer PINs configured — add one in Back Office > Security');return;}currentEngineer=match;document.getElementById('engineerSignedInName').textContent=match.name;document.getElementById('adhocEngineer').value=match.name;showScreen('engineer-hub');toast('Signed in as '+match.name);}
-function engineerSignOut(){currentEngineer=null;currentServiceMachine=null;currentAdHocMachine=null;goHome();}
+function submitEngineerPin(){const pin=document.getElementById('engineerPinInput').value.trim();const match=engineers.find(e=>e.active!==false&&String(e.pin||'')===pin);if(!match){toast(engineers.length?'Incorrect engineer PIN':'No engineer PINs configured — add one in Back Office > Security');return;}currentEngineer=match;document.getElementById('engineerSignedInName').textContent=match.name;document.getElementById('adhocEngineer').value=match.name;renderEngineerLiveJobs();showScreen('engineer-hub');toast('Signed in as '+match.name);}
+function engineerSignOut(){stopLiveTimer();currentEngineer=null;currentServiceMachine=null;currentAdHocMachine=null;currentLiveJob=null;goHome();}
 function startService(){if(!currentEngineer){requestEngineerSignIn();return;}showScreen('service-select');setTimeout(()=>{const t=document.getElementById('svcTechName');if(t){t.value=currentEngineer.name;t.readOnly=true;}const s=document.getElementById('svcSignName');if(s){s.value=currentEngineer.name;s.readOnly=true;}},0);}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);}
 function escapeHtml(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
@@ -716,6 +736,7 @@ doc.setTextColor(28,31,38);doc.setFontSize(13);doc.setFont(undefined,'bold');doc
 doc.setFontSize(10);doc.setFont(undefined,'normal');doc.text((record.recordId?('Record ID: '+record.recordId+'   '):'')+(record.defectId?('Defect ID: '+record.defectId+'   '):'')+'Date: '+record.date+'  Branch: '+(record.branch||'-')+(record.serialNumber?'  S/N: '+record.serialNumber:''),margin,y);
 doc.text('By: '+(record.technician||record.signName),margin+280,y);y+=16;
 if(record.hoursReading!=null){doc.text('Hours: '+record.hoursReading+(record.nextServiceDueHours!=null?'  Next service due: '+record.nextServiceDueHours+' hrs':''),margin,y);y+=16;}
+if(record.type==='adhoc'&&record.jobDurationFormatted){doc.text('Job duration: '+record.jobDurationFormatted,margin,y);y+=16;}
 y+=8;doc.setDrawColor(220,220,220);doc.line(margin,y,pageW-margin,y);y+=20;
 doc.setFontSize(12);doc.setFont(undefined,'bold');doc.setTextColor(46,46,143);
 doc.text(record.type==='service'?'Serviceable Items':record.type==='check'?'Safety Checklist':record.type==='adhoc'?'Job Details':'Defect Details',margin,y);doc.setTextColor(28,31,38);y+=10;
@@ -1006,23 +1027,92 @@ function populateAdHocCategories(){
 }
 function startAdHocJob(){
   if(!currentEngineer){requestEngineerSignIn();return;}
-  populateAdHocMachines();populateAdHocCategories();currentAdHocMachine=null;
+  currentLiveJob=null;stopLiveTimer();populateAdHocMachines();populateAdHocCategories();currentAdHocMachine=null;
   document.getElementById('adhocDate').value=todayISO();document.getElementById('adhocHours').value='';
-  document.getElementById('adhocOutcome').value='';document.getElementById('adhocNotes').value='';
-  document.getElementById('adhocEngineer').value=currentEngineer.name;showScreen('adhoc-form');
+  document.getElementById('adhocOutcome').value='';document.getElementById('adhocNotes').value='';document.getElementById('adhocProgressNote').value='';
+  document.getElementById('adhocEngineer').value=currentEngineer.name;setAdHocFieldsLocked(false);renderLiveJobState();showScreen('adhoc-form');
 }
 function onAdHocMachineChosen(){const id=document.getElementById('adhocMachine').value;currentAdHocMachine=machines.find(m=>m.id===id)||null;if(currentAdHocMachine)document.getElementById('adhocHours').value=currentAdHocMachine.currentHours||'';}
+function setAdHocFieldsLocked(locked){['adhocMachine','adhocDate','adhocHours','adhocCategory'].forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=locked;});}
+function tsToMs(v){if(!v)return 0;if(v.toMillis)return v.toMillis();if(v.toDate)return v.toDate().getTime();const n=new Date(v).getTime();return Number.isFinite(n)?n:0;}
+function liveElapsedMs(job){
+  let total=Number(job&&job.accumulatedMs)||0;
+  if(job&&job.status==='active'&&job.activeStartedAt)total+=Math.max(0,Date.now()-tsToMs(job.activeStartedAt));
+  return total;
+}
+function formatDuration(ms){const total=Math.max(0,Math.floor(ms/1000));const h=Math.floor(total/3600),m=Math.floor((total%3600)/60),s=total%60;return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');}
+function stopLiveTimer(){if(liveTimerInterval){clearInterval(liveTimerInterval);liveTimerInterval=null;}}
+function startLiveTimer(){stopLiveTimer();const tick=()=>{const el=document.getElementById('adhocTimer');if(el&&currentLiveJob)el.textContent=formatDuration(liveElapsedMs(currentLiveJob));};tick();liveTimerInterval=setInterval(tick,1000);}
+function renderLiveJobState(){
+  const live=!!currentLiveJob,panel=document.getElementById('adhocTimerPanel');if(!panel)return;
+  panel.style.display=live?'block':'none';document.getElementById('adhocProgressCard').style.display=live?'block':'none';document.getElementById('openAdhocJobBtn').style.display=live?'none':'block';document.getElementById('completeAdhocJobBtn').style.display=live?'block':'none';
+  const idBadge=document.getElementById('adhocLiveId');idBadge.style.display=live?'inline-block':'none';idBadge.textContent=live?(currentLiveJob.jobId||'LIVE'):'';
+  if(!live){stopLiveTimer();return;}
+  const paused=currentLiveJob.status==='paused';document.getElementById('adhocPauseBtn').style.display=paused?'none':'block';document.getElementById('adhocResumeBtn').style.display=paused?'block':'none';
+  document.getElementById('adhocTimerStatus').textContent=paused?'PAUSED':'LIVE JOB — TIMER RUNNING';
+  const started=tsToMs(currentLiveJob.startedAt);document.getElementById('adhocStartedAt').textContent=started?'Started '+new Date(started).toLocaleString('en-GB'):'';
+  renderProgressHistory();startLiveTimer();
+}
+function renderEngineerLiveJobs(){
+  const w=document.getElementById('engineerLiveJobs');if(!w)return;const count=document.getElementById('liveJobCount');if(count)count.textContent=liveJobs.length;
+  if(!liveJobs.length){w.innerHTML='<div class="empty-state">No live jobs.</div>';return;}
+  const sorted=[...liveJobs].sort((a,b)=>(a.status==='active'?0:1)-(b.status==='active'?0:1)||(tsToMs(a.startedAt)-tsToMs(b.startedAt)));
+  w.innerHTML=sorted.map(j=>'<div class="live-job '+(j.status==='paused'?'paused':'')+'" onclick="openExistingLiveJob(\''+j.id+'\')"><div style="display:flex;justify-content:space-between;gap:12px"><div><div class="mname">'+escapeHtml(j.machineName||'Machine')+' — '+escapeHtml(j.jobCategory||'Ad-Hoc Job')+'</div><div class="mmeta">'+escapeHtml(j.engineerName||'Engineer')+' · '+(j.status==='paused'?'PAUSED':'IN PROGRESS')+' · '+escapeHtml(j.jobId||'')+'</div></div><div class="live-job-time" data-live-job-time="'+j.id+'">'+formatDuration(liveElapsedMs(j))+'</div></div></div>').join('');
+  updateHubJobTimers();
+}
+function updateHubJobTimers(){document.querySelectorAll('[data-live-job-time]').forEach(el=>{const j=liveJobs.find(x=>x.id===el.dataset.liveJobTime);if(j)el.textContent=formatDuration(liveElapsedMs(j));});}
+setInterval(updateHubJobTimers,1000);
+async function openAdHocJob(){
+  if(!currentEngineer)return requestEngineerSignIn();
+  const machineId=document.getElementById('adhocMachine').value,m=machines.find(x=>x.id===machineId);if(!m)return toast('Select a machine');
+  const hours=document.getElementById('adhocHours').value,jobCategory=document.getElementById('adhocCategory').value,date=document.getElementById('adhocDate').value||todayISO();
+  if(hours==='')return toast('Enter machine hours');if(!jobCategory)return toast('Choose a job category');
+  const jobId=await getNextRecordId('adhoc');const now=firebase.firestore.Timestamp.now();
+  const ref=await db.collection('liveJobs').add({jobId,status:'active',machineId:m.id,machineName:m.name,serialNumber:m.serialNumber||'',branch:m.branch||'',hoursReading:Number(hours),jobCategory,date,engineerId:currentEngineer.id,engineerName:currentEngineer.name,startedAt:now,activeStartedAt:now,accumulatedMs:0,progressNotes:[],createdAt:now,updatedAt:now});
+  currentLiveJob={id:ref.id,jobId,status:'active',machineId:m.id,machineName:m.name,serialNumber:m.serialNumber||'',branch:m.branch||'',hoursReading:Number(hours),jobCategory,date,engineerId:currentEngineer.id,engineerName:currentEngineer.name,startedAt:now,activeStartedAt:now,accumulatedMs:0,progressNotes:[]};
+  setAdHocFieldsLocked(true);renderLiveJobState();toast('Job opened — timer started');
+}
+function openExistingLiveJob(id){
+  if(!currentEngineer)return requestEngineerSignIn();const j=liveJobs.find(x=>x.id===id);if(!j)return toast('Live job no longer available');
+  currentLiveJob=j;currentAdHocMachine=machines.find(m=>m.id===j.machineId)||null;populateAdHocMachines();populateAdHocCategories();
+  document.getElementById('adhocMachine').value=j.machineId;document.getElementById('adhocDate').value=j.date||todayISO();document.getElementById('adhocHours').value=j.hoursReading!=null?j.hoursReading:'';
+  document.getElementById('adhocCategory').value=j.jobCategory||'';document.getElementById('adhocEngineer').value=j.engineerName||currentEngineer.name;document.getElementById('adhocOutcome').value=j.outcome||'';
+  document.getElementById('adhocNotes').value=j.finalNotes||'';document.getElementById('adhocProgressNote').value='';setAdHocFieldsLocked(true);renderLiveJobState();showScreen('adhoc-form');
+}
+async function pauseLiveJob(){
+  if(!currentLiveJob||currentLiveJob.status!=='active')return;
+  const note=document.getElementById('adhocProgressNote').value.trim();if(!note)return toast('Add a progress note before pausing the job');
+  const now=Date.now(),activeStart=tsToMs(currentLiveJob.activeStartedAt),added=Math.max(0,now-activeStart),entry={text:note,by:currentEngineer?currentEngineer.name:'Engineer',at:new Date().toISOString(),event:'paused'};
+  await db.collection('liveJobs').doc(currentLiveJob.id).update({status:'paused',accumulatedMs:(Number(currentLiveJob.accumulatedMs)||0)+added,activeStartedAt:null,progressNotes:firebase.firestore.FieldValue.arrayUnion(entry),updatedAt:firebase.firestore.Timestamp.now()});
+  document.getElementById('adhocProgressNote').value='';toast('Job paused — timer stopped');
+}
+async function resumeLiveJob(){
+  if(!currentLiveJob||currentLiveJob.status!=='paused')return;
+  await db.collection('liveJobs').doc(currentLiveJob.id).update({status:'active',activeStartedAt:firebase.firestore.Timestamp.now(),engineerId:currentEngineer.id,engineerName:currentEngineer.name,updatedAt:firebase.firestore.Timestamp.now()});toast('Job resumed');
+}
+async function addLiveJobProgressNote(){
+  if(!currentLiveJob)return;const note=document.getElementById('adhocProgressNote').value.trim();if(!note)return toast('Enter a progress note');
+  const entry={text:note,by:currentEngineer?currentEngineer.name:'Engineer',at:new Date().toISOString(),event:'note'};
+  await db.collection('liveJobs').doc(currentLiveJob.id).update({progressNotes:firebase.firestore.FieldValue.arrayUnion(entry),updatedAt:firebase.firestore.Timestamp.now()});document.getElementById('adhocProgressNote').value='';toast('Progress note saved');
+}
+function renderProgressHistory(){
+  const w=document.getElementById('adhocProgressHistory');if(!w)return;const notes=Array.isArray(currentLiveJob&&currentLiveJob.progressNotes)?currentLiveJob.progressNotes:[];
+  w.innerHTML=notes.length?notes.map(n=>'<div class="history-item"><div>'+escapeHtml(n.text||'')+'</div><div class="mmeta">'+escapeHtml(n.by||'')+' · '+(n.at?new Date(n.at).toLocaleString('en-GB'):'')+(n.event==='paused'?' · Job paused':'')+'</div></div>').join(''):'<p class="progress-note">No progress notes yet.</p>';
+}
 async function submitAdHocJob(markVOR){
   if(!currentEngineer)return requestEngineerSignIn();
-  const machineId=document.getElementById('adhocMachine').value;const m=machines.find(x=>x.id===machineId);if(!m)return toast('Select a machine');
-  const hours=document.getElementById('adhocHours').value;const jobCategory=document.getElementById('adhocCategory').value;const outcome=document.getElementById('adhocOutcome').value;const notes=document.getElementById('adhocNotes').value.trim();const date=document.getElementById('adhocDate').value||todayISO();
-  if(hours==='')return toast('Enter machine hours');if(!jobCategory)return toast('Choose a job category');if(!outcome)return toast('Choose Repaired / Ordered / outcome');if(!notes)return toast('Add work or fault notes');
+  if(!currentLiveJob){if(markVOR){await openAdHocJob();if(!currentLiveJob)return;}else return toast('Open the job first to start the timer');}
+  const m=machines.find(x=>x.id===currentLiveJob.machineId);if(!m)return toast('Machine not found');
+  const outcome=document.getElementById('adhocOutcome').value,notes=document.getElementById('adhocNotes').value.trim();
+  if(!outcome)return toast('Choose Repaired / Ordered / outcome');if(!notes)return toast('Add final work carried out notes');
   if(markVOR&&!confirm('Place '+m.name+' into VOR / Out Of Service now? Operator checks will be blocked until Back Office signs it back into service.'))return;
-  const record={recordId:await getNextRecordId('adhoc'),type:'adhoc',machineId:m.id,machineName:m.name,subject:m.name+' — '+jobCategory,serialNumber:m.serialNumber||'',branch:m.branch||'',technician:currentEngineer.name,engineerId:currentEngineer.id,date,jobCategory,outcome,items:[{name:jobCategory,status:outcome}],notes,signName:currentEngineer.name,signDate:date,signatureData:'',hoursReading:Number(hours),createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending',vorRaised:!!markVOR};
-  await db.collection('machines').doc(m.id).update({currentHours:Number(hours),...(markVOR?{outOfService:true,outOfServiceReason:jobCategory+' — '+notes,outOfServiceSince:date,outOfServiceRecordId:record.recordId,outOfServiceBy:currentEngineer.name}: {})});
-  await saveRecordToFirestore(record);
-  if(markVOR)toast('Job saved — machine is now VOR / Out Of Service');
-  currentAdHocMachine=null;
+  const completedAt=Date.now();let durationMs=Number(currentLiveJob.accumulatedMs)||0;if(currentLiveJob.status==='active')durationMs+=Math.max(0,completedAt-tsToMs(currentLiveJob.activeStartedAt));
+  const record={recordId:currentLiveJob.jobId,type:'adhoc',machineId:m.id,machineName:m.name,subject:m.name+' — '+currentLiveJob.jobCategory,serialNumber:m.serialNumber||'',branch:m.branch||'',technician:currentEngineer.name,engineerId:currentEngineer.id,date:currentLiveJob.date||todayISO(),jobCategory:currentLiveJob.jobCategory,outcome,items:[{name:currentLiveJob.jobCategory,status:outcome}],notes,progressNotes:currentLiveJob.progressNotes||[],signName:currentEngineer.name,signDate:todayISO(),signatureData:'',hoursReading:Number(currentLiveJob.hoursReading),startedAt:currentLiveJob.startedAt,completedAt:firebase.firestore.Timestamp.fromMillis(completedAt),jobDurationMs:durationMs,jobDurationFormatted:formatDuration(durationMs),createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending',vorRaised:!!markVOR};
+  await db.collection('machines').doc(m.id).update({currentHours:Number(currentLiveJob.hoursReading),...(markVOR?{outOfService:true,outOfServiceReason:currentLiveJob.jobCategory+' — '+notes,outOfServiceSince:todayISO(),outOfServiceRecordId:record.recordId,outOfServiceBy:currentEngineer.name}: {})});
+  await db.collection('records').add(record);
+  await db.collection('liveJobs').doc(currentLiveJob.id).update({status:'completed',outcome,finalNotes:notes,completedAt:firebase.firestore.Timestamp.fromMillis(completedAt),jobDurationMs:durationMs,updatedAt:firebase.firestore.Timestamp.now(),vorRaised:!!markVOR});
+  afterRecordCreated(record);generatePDF(record);if(markVOR)toast('Job completed — machine is now VOR / Out Of Service');else toast('Job completed in '+formatDuration(durationMs));
+  stopLiveTimer();currentAdHocMachine=null;currentLiveJob=null;
 }
 async function addEngineer(){
   const name=document.getElementById('newEngineerName').value.trim(),pin=document.getElementById('newEngineerPin').value.trim();
