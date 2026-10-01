@@ -131,7 +131,13 @@ th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;}
     <select id="assignEngineer"><option value="">-- Select engineer --</option></select>
     <button class="btn btn-secondary" onclick="createAssignedJob()">Assign Job</button>
   </div>
-  <div id="liveAssignmentBoard" style="margin-top:16px"></div>
+  <div class="row" style="margin-top:10px">
+    <input type="date" id="plannedJobDate" aria-label="Planned work date">
+    <button class="btn btn-secondary" onclick="createAssignedJob('planned')">Add as Planned Work</button>
+  </div>
+  <p class="progress-note" style="margin-top:8px">Planned work is added to the selected engineer's job list immediately. Its timer does not start until the engineer opens and starts the job.</p>
+  <div class="section-title" style="margin-top:18px">Live Engineering Jobs</div>
+  <div id="liveAssignmentBoard" style="margin-top:8px"></div>
 </div>
 <div class="card">
   <div class="section-title">Damage Investigations</div>
@@ -175,10 +181,15 @@ function escapeHtml(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({"&":"&
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600);}
 function money(n){return '£'+(Number(n)||0).toLocaleString('en-GB',{minimumFractionDigits:0,maximumFractionDigits:0});}
 function daysBetween(a,b){return Math.round((new Date(b)-new Date(a))/86400000);}
+function jobTsMs(v){if(!v)return 0;if(v.toMillis)return v.toMillis();if(v.toDate)return v.toDate().getTime();if(typeof v==='number')return v;return new Date(v).getTime()||0;}
+function jobElapsedMs(j){const base=Number(j&&j.accumulatedMs)||0;if(!j||j.status!=='active'||!j.activeStartedAt)return base;return base+Math.max(0,Date.now()-jobTsMs(j.activeStartedAt));}
+function jobDuration(ms){let s=Math.floor((Number(ms)||0)/1000),h=Math.floor(s/3600);s%=3600;let m=Math.floor(s/60);s%=60;return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');}
+function updateManagerJobTimers(){document.querySelectorAll('[data-manager-job-time]').forEach(el=>{const j=liveJobs.find(x=>x.id===el.dataset.managerJobTime);if(j)el.textContent=j.status==='active'?jobDuration(jobElapsedMs(j)):j.status==='paused'?jobDuration(jobElapsedMs(j)):'—';});}
+setInterval(updateManagerJobTimers,1000);
 
 function initListeners(){
   setConn(true,'Connecting...');
-  document.getElementById('monthPicker').value = todayISO().slice(0,7);
+  document.getElementById('monthPicker').value = todayISO().slice(0,7);const pjd=document.getElementById('plannedJobDate');if(pjd&&!pjd.value)pjd.value=todayISO();
 
   db.collection('machines').orderBy('name').onSnapshot(s=>{
     machines=s.docs.map(d=>({id:d.id,...d.data()}));
@@ -243,8 +254,9 @@ function updateDefectOptions(){
  const open=defects.filter(d=>d.status==='open'&&d.machineId===machineId&&!liveJobs.some(j=>j.defectRefId===d.id&&j.status!=='completed'));
  ds.innerHTML=open.length?'<option value="">-- Select defect --</option>'+open.map(d=>'<option value="'+d.id+'">'+escapeHtml(defectFullLabel(d))+'</option>').join(''):'<option value="">-- No unassigned open defects for this machine --</option>';
 }
-async function createAssignedJob(){
+async function createAssignedJob(statusOverride){
  const engineerId=document.getElementById('assignEngineer').value,jobType=document.getElementById('assignJobType').value,e=engineers.find(x=>x.id===engineerId);if(!e)return toast('Choose an engineer');
+ const status=statusOverride==='planned'?'planned':'assigned',plannedDate=status==='planned'?document.getElementById('plannedJobDate').value:'';if(status==='planned'&&!plannedDate)return toast('Choose a planned work date');
  const ref=db.collection('settings').doc('managerJobSequence');
  const n=await db.runTransaction(async tx=>{const s=await tx.get(ref),v=(s.exists?(s.data().value||0):0)+1;tx.set(ref,{value:v},{merge:true});return v;});
  if(jobType==='defect'){
@@ -252,24 +264,32 @@ async function createAssignedJob(){
    const defectDocId=document.getElementById('assignDefect').value,d=defects.find(x=>x.id===defectDocId&&x.machineId===machineId);if(!d||d.status!=='open')return toast('Choose an outstanding defect for this machine');
    const existing=liveJobs.find(j=>j.defectRefId===d.id&&j.status!=='completed');if(existing)return toast('This defect is already assigned');
    const m=machines.find(x=>x.id===d.machineId),jobId='CP-AHJ-M'+String(n).padStart(5,'0');
-   await db.collection('liveJobs').add({jobId,jobType:'adhoc',status:'assigned',machineId:d.machineId||'',machineName:d.machineName||(m?m.name:''),serialNumber:m?(m.serialNumber||''):'',branch:m?(m.branch||''):'',hoursReading:m?(Number(m.currentHours)||0):0,date:todayISO(),jobCategory:'Outstanding Defect — '+(d.itemName||d.inspectionItemName||'Repair'),engineerId:e.id,engineerName:e.name,defectRefId:d.id,defectId:d.defectId||'',defectItemName:d.itemName||d.inspectionItemName||'',defectDateRaised:d.dateRaised||'',source:'managerdash_defect_assignment',accumulatedMs:0,progressNotes:[],assignedAt:firebase.firestore.Timestamp.now(),createdAt:firebase.firestore.Timestamp.now(),updatedAt:firebase.firestore.Timestamp.now()});
-   await db.collection('defects').doc(d.id).set({assignedEngineerId:e.id,assignedEngineerName:e.name,assignedJobId:jobId,assignedAt:firebase.firestore.Timestamp.now()},{merge:true});
-   toast((d.defectId||'Defect')+' assigned to '+e.name);return;
+   await db.collection('liveJobs').add({jobId,jobType:'adhoc',status,machineId:d.machineId||'',machineName:d.machineName||(m?m.name:''),serialNumber:m?(m.serialNumber||''):'',branch:m?(m.branch||''):'',hoursReading:m?(Number(m.currentHours)||0):0,date:(status==='planned'?plannedDate:todayISO()),plannedDate:plannedDate||null,jobCategory:'Outstanding Defect — '+(d.itemName||d.inspectionItemName||'Repair'),engineerId:e.id,engineerName:e.name,defectRefId:d.id,defectId:d.defectId||'',defectItemName:d.itemName||d.inspectionItemName||'',defectDateRaised:d.dateRaised||'',source:'managerdash_defect_assignment',accumulatedMs:0,progressNotes:[],assignedAt:firebase.firestore.Timestamp.now(),createdAt:firebase.firestore.Timestamp.now(),updatedAt:firebase.firestore.Timestamp.now()});
+   await db.collection('defects').doc(d.id).set({assignedEngineerId:e.id,assignedEngineerName:e.name,assignedJobId:jobId,assignedAt:firebase.firestore.Timestamp.now(),assignmentStatus:status},{merge:true});
+   toast((status==='planned'?'Planned ':'')+(d.defectId||'Defect')+' for '+e.name);return;
  }
  const machineId=document.getElementById('assignMachine').value,m=machines.find(x=>x.id===machineId);if(!m)return toast('Choose a machine');
  const prefix=jobType==='service'?'SVC':'AHJ',jobId='CP-'+prefix+'-M'+String(n).padStart(5,'0');
- await db.collection('liveJobs').add({jobId,jobType,status:'assigned',machineId:m.id,machineName:m.name,serialNumber:m.serialNumber||'',branch:m.branch||'',hoursReading:Number(m.currentHours)||0,date:todayISO(),jobCategory:jobType==='service'?'Service':'Ad-Hoc Job',engineerId:e.id,engineerName:e.name,accumulatedMs:0,progressNotes:[],assignedAt:firebase.firestore.Timestamp.now(),createdAt:firebase.firestore.Timestamp.now(),updatedAt:firebase.firestore.Timestamp.now()});
- toast('Job assigned to '+e.name);
+ await db.collection('liveJobs').add({jobId,jobType,status,machineId:m.id,machineName:m.name,serialNumber:m.serialNumber||'',branch:m.branch||'',hoursReading:Number(m.currentHours)||0,date:(status==='planned'?plannedDate:todayISO()),plannedDate:plannedDate||null,jobCategory:jobType==='service'?'Service':'Ad-Hoc Job',engineerId:e.id,engineerName:e.name,accumulatedMs:0,progressNotes:[],assignedAt:firebase.firestore.Timestamp.now(),createdAt:firebase.firestore.Timestamp.now(),updatedAt:firebase.firestore.Timestamp.now()});
+ toast(status==='planned'?'Planned work added for '+e.name:'Job assigned to '+e.name);
 }
 async function reassignJob(id){
  const sel=document.getElementById('reassign-'+id),engineerId=sel&&sel.value,e=engineers.find(x=>x.id===engineerId);if(!e)return;
  await db.collection('liveJobs').doc(id).update({engineerId:e.id,engineerName:e.name,updatedAt:firebase.firestore.Timestamp.now()});toast('Job reassigned');
 }
 function renderAssignmentBoard(){
- const w=document.getElementById('liveAssignmentBoard');if(!w)return;if(!liveJobs.length){w.innerHTML='<div class="empty-state">No outstanding engineering jobs.</div>';return;}
- w.innerHTML=liveJobs.map(j=>'<div class="alert-row"><span><strong>'+escapeHtml(j.jobId||'')+'</strong> · '+escapeHtml(j.machineName||'')+' · '+(j.jobType==='service'?'Service':j.defectRefId?'Defect Job':'Ad-Hoc')+' · '+escapeHtml(j.status||'')+'</span><span><select id="reassign-'+j.id+'" onchange="reassignJob(\''+j.id+'\')">'+engineers.filter(e=>e.active!==false).map(e=>'<option value="'+e.id+'" '+(e.id===j.engineerId?'selected':'')+'>'+escapeHtml(e.name)+'</option>').join('')+'</select></span></div>').join('');
+ const w=document.getElementById('liveAssignmentBoard');if(!w)return;if(!liveJobs.length){w.innerHTML='<div class="empty-state">No assigned, planned or live engineering jobs.</div>';return;}
+ const order={active:0,paused:1,assigned:2,planned:3};
+ const sorted=[...liveJobs].sort((a,b)=>(order[a.status]??9)-(order[b.status]??9)||String(a.plannedDate||a.date||'').localeCompare(String(b.plannedDate||b.date||'')));
+ w.innerHTML=sorted.map(j=>{
+   const type=j.jobType==='service'?'Service':j.defectRefId?'Defect Job':'Ad-Hoc';
+   const status=(j.status||'').toUpperCase();
+   const when=j.status==='planned'?' · Planned '+escapeHtml(j.plannedDate||j.date||''):'';
+   const time=(j.status==='active'||j.status==='paused')?jobDuration(jobElapsedMs(j)):'—';
+   return '<div class="alert-row"><span><strong>'+escapeHtml(j.jobId||'')+'</strong> · '+escapeHtml(j.machineName||'')+' · '+type+' · <strong>'+status+'</strong>'+when+'<br><span class="sub">'+escapeHtml(j.engineerName||'Unassigned')+(j.jobCategory?' · '+escapeHtml(j.jobCategory):'')+'</span></span><span style="display:flex;align-items:center;gap:10px"><strong data-manager-job-time="'+j.id+'">'+time+'</strong><select id="reassign-'+j.id+'" onchange="reassignJob(\''+j.id+'\')">'+engineers.filter(e=>e.active!==false).map(e=>'<option value="'+e.id+'" '+(e.id===j.engineerId?'selected':'')+'>'+escapeHtml(e.name)+'</option>').join('')+'</select></span></div>';
+ }).join('');
+ updateManagerJobTimers();
 }
-
 function renderDamageInvestigations(){
  const w=document.getElementById('damageInvestigations');if(!w)return;const d=records.filter(r=>r.type==='adhoc'&&r.isDamage);
  if(!d.length){w.innerHTML='<div class="empty-state">No damage jobs recorded.</div>';return;}
