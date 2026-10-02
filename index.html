@@ -261,7 +261,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focu
 <div class="screen" id="screen-pdf-ready">
 <button class="back-link" onclick="goHome()">← Back to Home</button>
 <div class="card"><div class="section-title">✅ Report Complete</div>
-<p class="progress-note" style="margin-bottom:14px">Your report has been saved. View it inline or download a copy.</p>
+<p class="progress-note" style="margin-bottom:14px">Your report has been saved successfully. PDF controls are available when generation succeeds.</p>
 <div class="row"><button class="btn btn-primary btn-block" onclick="viewPDF()">👁 View PDF</button><button class="btn btn-secondary btn-block" onclick="downloadPDF()">⬇ Download PDF</button></div>
 <button class="btn btn-primary btn-block" id="backToEngineerJobsBtn" style="margin-top:12px;display:none" onclick="backToEngineerJobs()">Back to Engineer Live Jobs</button>
 </div></div>
@@ -790,10 +790,10 @@ const incomplete=items.filter(i=>i.status==='Not checked');if(incomplete.length)
 if(completeBtn){completeBtn.disabled=true;completeBtn.textContent='Completing Check…';}if(completeStatus)completeStatus.textContent='Saving completed check…';
 const checkCompletedAtMs=Date.now(),checkDurationMs=Math.max(0,checkCompletedAtMs-checkStartedAtMs);
 const signatureData=(sig&&sig.hasSignature)?sig.canvas.toDataURL('image/png'):'';
-const record={recordId:await getNextRecordId('check'),type:'check',categoryKey:currentCheckCategory,machineId:currentCheckMachine.id,machineName:currentCheckMachine.name,subject:cat.label+' — '+currentCheckMachine.name,serialNumber:currentCheckMachine.serialNumber||'',branch:currentCheckMachine.branch||'',technician:signName,date:document.getElementById('chkDate').value||todayISO(),items,notes:document.getElementById('chkNotes').value.trim(),signName,signDate,signatureData,hoursReading:Number(hours),checkStartedAt:firebase.firestore.Timestamp.fromMillis(checkStartedAtMs),checkCompletedAt:firebase.firestore.Timestamp.fromMillis(checkCompletedAtMs),checkDurationMs,checkDurationFormatted:formatDuration(checkDurationMs),createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending'};
-let saved=false;
+const checkRef=db.collection('records').doc();
+const record={id:checkRef.id,recordId:'CP-CHK-'+checkRef.id.slice(0,8).toUpperCase(),type:'check',categoryKey:currentCheckCategory,machineId:currentCheckMachine.id,machineName:currentCheckMachine.name,subject:cat.label+' — '+currentCheckMachine.name,serialNumber:currentCheckMachine.serialNumber||'',branch:currentCheckMachine.branch||'',technician:signName,date:document.getElementById('chkDate').value||todayISO(),items,notes:document.getElementById('chkNotes').value.trim(),signName,signDate,signatureData,hoursReading:Number(hours),checkStartedAt:firebase.firestore.Timestamp.fromMillis(checkStartedAtMs),checkCompletedAt:firebase.firestore.Timestamp.fromMillis(checkCompletedAtMs),checkDurationMs,checkDurationFormatted:formatDuration(checkDurationMs),createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending'};
 try{
-  const ref=await db.collection('records').add(record);record.id=ref.id;saved=true;
+  await checkRef.set(record);
   await db.collection('machines').doc(record.machineId).update({currentHours:Number(hours)});
 }catch(err){
   console.error('Check save failed',err);if(completeBtn){completeBtn.disabled=false;completeBtn.textContent='Complete Check';}if(completeStatus)completeStatus.textContent='Could not save check. Please try again.';toast('Check could not be saved — please try again');return;
@@ -803,11 +803,14 @@ for(const di of items.filter(i=>i.status==='Defect')){
   try{await createOrLinkCheckDefect(di,record,signName);}
   catch(err){defectFailures++;console.error('Defect creation/link failed',err);}
 }
-try{afterRecordCreated(record);}catch(syncErr){console.error('Post-save sync error',syncErr);}
-if(completeStatus)completeStatus.textContent='Check completed successfully.';
-try{generatePDF(record);}catch(pdfErr){console.error('PDF generation error',pdfErr);showScreen('home');}
-if(completeBtn){completeBtn.disabled=false;completeBtn.textContent='Complete Check';}
 stopCheckTimer();checkStartedAtMs=null;document.getElementById('chkMachineSelect').disabled=false;document.getElementById('chkHours').disabled=false;
+if(completeStatus)completeStatus.textContent='Check completed successfully.';
+lastGeneratedRecord=record;lastGeneratedDoc=null;
+showScreen('pdf-ready');
+currentCheckCategory=null;currentCheckMachine=null;
+try{generatePDF(record);}catch(pdfErr){console.error('PDF generation error',pdfErr);}
+try{afterRecordCreated(record);}catch(syncErr){console.error('Post-save sync error',syncErr);}
+if(completeBtn){completeBtn.disabled=false;completeBtn.textContent='Complete Check';}
 toast(defectFailures?'Check completed — '+defectFailures+' defect record could not be created':'Check completed successfully');
 }else if(mode==='defect'){
 if(!currentDefect){toast('Select a defect');return;}
