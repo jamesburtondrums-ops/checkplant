@@ -230,6 +230,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focu
 <div class="progress-note">CHECK IN PROGRESS</div>
 <div class="timer-big" id="checkTimerDisplay">00:00:00</div>
 <div class="progress-note" id="checkStartedAt"></div>
+<button class="btn btn-secondary btn-block" style="margin-top:12px" type="button" onclick="changeTimedCheckMachine()">Change Machine</button>
 </div>
 <div id="checkWorkArea" style="display:none">
 <div class="card"><div class="section-title">Safety Checklist <span class="badge" id="chkItemCount">0</span></div>
@@ -698,9 +699,29 @@ function startTimedMachineCheck(){
  document.getElementById('chkMachineSelect').disabled=true;document.getElementById('chkHours').disabled=true;document.getElementById('checkStartedAt').textContent='Started '+new Date(checkStartedAtMs).toLocaleString('en-GB');
  updateCheckTimer();checkTimerInterval=setInterval(updateCheckTimer,1000);setTimeout(()=>initSigPad('sigPadCheck'),50);
 }
+function resetTimedCheckState(keepScreen){
+ stopCheckTimer();checkStartedAtMs=null;
+ const ms=document.getElementById('chkMachineSelect'),h=document.getElementById('chkHours');
+ if(ms)ms.disabled=false;if(h)h.disabled=false;
+ document.getElementById('activeCheckTimer').style.display='none';
+ document.getElementById('checkWorkArea').style.display='none';
+ document.getElementById('checkStartPrompt').style.display=currentCheckMachine?'block':'none';
+ if(!keepScreen)showScreen('check-category');
+}
+function changeTimedCheckMachine(){
+ if(checkStartedAtMs&&!confirm('Change machine? This unfinished timed check will be discarded.'))return;
+ resetTimedCheckState(true);
+ currentCheckMachine=null;
+ const ms=document.getElementById('chkMachineSelect');if(ms){ms.value='';ms.disabled=false;}
+ const h=document.getElementById('chkHours');if(h){h.value='';h.disabled=false;}
+ document.getElementById('checkStartPrompt').style.display='none';
+ document.getElementById('chkNotes').value='';document.getElementById('chkSignName').value='';document.getElementById('chkSignDate').value=todayISO();
+ renderCheckItems();clearSig('sigPadCheck');
+ toast('Select another machine');
+}
 function cancelTimedCheck(){
  if(checkStartedAtMs&&document.getElementById('checkWorkArea').style.display!=='none'&&!confirm('Leave this check? The current timer and unfinished check will be discarded.'))return;
- stopCheckTimer();checkStartedAtMs=null;const ms=document.getElementById('chkMachineSelect'),h=document.getElementById('chkHours');if(ms)ms.disabled=false;if(h)h.disabled=false;showScreen('check-category');
+ resetTimedCheckState(false);
 }
 function renderCheckItems(){const l=document.getElementById('checkItemsList');l.innerHTML='';const cat = categories[currentCheckCategory];
       const items = (cat.checkItems && cat.checkItems.length) ? cat.checkItems : cat.items;
@@ -765,12 +786,13 @@ if(!signName||!signDate){toast('Enter name and date');return;}if(!sig||!sig.hasS
 const cat = categories[currentCheckCategory];
     const checkSrc = (cat.checkItems && cat.checkItems.length) ? cat.checkItems : cat.items;
     const items = collectItems('checkItemsList', checkSrc);
+const incomplete=items.filter(i=>i.status==='Not checked');if(incomplete.length){toast('Complete every checklist item before submitting');return;}
 const checkCompletedAtMs=Date.now(),checkDurationMs=Math.max(0,checkCompletedAtMs-checkStartedAtMs);
 const record={recordId:await getNextRecordId('check'),type:'check',categoryKey:currentCheckCategory,machineId:currentCheckMachine.id,machineName:currentCheckMachine.name,subject:cat.label+' — '+currentCheckMachine.name,serialNumber:currentCheckMachine.serialNumber||'',branch:currentCheckMachine.branch||'',technician:signName,date:document.getElementById('chkDate').value,items,notes:document.getElementById('chkNotes').value.trim(),signName,signDate,signatureData:sig.canvas.toDataURL('image/png'),hoursReading:Number(hours),checkStartedAt:firebase.firestore.Timestamp.fromMillis(checkStartedAtMs),checkCompletedAt:firebase.firestore.Timestamp.fromMillis(checkCompletedAtMs),checkDurationMs,checkDurationFormatted:formatDuration(checkDurationMs),createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending'};
 await db.collection('machines').doc(currentCheckMachine.id).update({currentHours:Number(hours)});
 for(const di of items.filter(i=>i.status==='Defect')){await createOrLinkCheckDefect(di,record,signName);}
-stopCheckTimer();checkStartedAtMs=null;document.getElementById('chkMachineSelect').disabled=false;document.getElementById('chkHours').disabled=false;
-await saveRecordToFirestore(record);
+const saved=await saveRecordToFirestore(record);
+if(saved){stopCheckTimer();checkStartedAtMs=null;document.getElementById('chkMachineSelect').disabled=false;document.getElementById('chkHours').disabled=false;}
 }else if(mode==='defect'){
 if(!currentDefect){toast('Select a defect');return;}
 const signName=document.getElementById('defSignName').value.trim(),signDate=document.getElementById('defSignDate').value,hours=document.getElementById('defHours').value,workDone=document.getElementById('defWorkDone').value.trim(),sig=sigPads['sigPadDefect'];
@@ -782,7 +804,14 @@ await db.collection('defects').doc(currentDefect.id).update({status:'resolved',r
 await saveRecordToFirestore(record);
 if(record.id)await db.collection('defects').doc(currentDefect.id).update({resolutionRecordId:record.id});
 }}
-async function saveRecordToFirestore(record){try{const ref=await db.collection('records').add(record);record.id=ref.id;toast('Saved');afterRecordCreated(record);generatePDF(record);}catch(err){toast('Save failed');console.error(err);}}
+async function saveRecordToFirestore(record){
+ try{
+  const ref=await db.collection('records').add(record);record.id=ref.id;toast('Saved');
+  try{afterRecordCreated(record);}catch(syncErr){console.error('Post-save sync error',syncErr);}
+  try{generatePDF(record);}catch(pdfErr){console.error('PDF generation error',pdfErr);toast('Check saved — PDF could not be generated');showScreen('home');}
+  return true;
+ }catch(err){toast('Save failed — please try again');console.error(err);return false;}
+}
 function afterRecordCreated(record){if(settings.autoSheets&&settings.sheetsWebhookUrl)pushRecordToSheets(record,true);if(settings.autoCsv)downloadSingleRecordCsv(record);}
 function defectPDFLine(doc,text,state){const pageW=doc.internal.pageSize.getWidth(),margin=40;doc.setFontSize(10);doc.setFont(undefined,'normal');const lines=doc.splitTextToSize(String(text||'-'),pageW-margin*2);if(state.y+lines.length*13>760){doc.addPage();state.y=50;}doc.text(lines,margin,state.y);state.y+=lines.length*13+5;}
 function buildDefectPDF(defect){const jsPDF=window.jspdf&&window.jspdf.jsPDF;if(!jsPDF)throw new Error('PDF library is unavailable');const doc=new jsPDF({unit:'pt',format:'a4'}),pageW=doc.internal.pageSize.getWidth(),margin=40,state={y:50};doc.setFillColor(46,46,143);doc.rect(0,0,pageW,74,'F');doc.setFillColor(47,174,78);doc.rect(0,70,pageW,4,'F');doc.setTextColor(255,255,255);doc.setFontSize(20);doc.setFont(undefined,'bold');doc.text('CheckPlant',margin,33);doc.setFontSize(10);doc.text('KCM WASTE MANAGEMENT',margin,50);doc.setFont(undefined,'normal');doc.text('Open Defect Record',margin,64);doc.setTextColor(28,31,38);state.y=100;doc.setFontSize(14);doc.setFont(undefined,'bold');doc.text((defect.defectId||defect.id)+' — '+(defect.itemName||'Defect'),margin,state.y);state.y+=24;defectPDFLine(doc,'Machine: '+(defect.machineName||'-'),state);defectPDFLine(doc,'Date raised: '+(defect.dateRaised||'-'),state);defectPDFLine(doc,'Status: '+(defect.status||'open'),state);defectPDFLine(doc,'Severity: '+(defect.severity||'routine'),state);defectPDFLine(doc,'Reports logged: '+(defect.reportCount||1),state);if(defect.lastReportedDate)defectPDFLine(doc,'Last reported: '+defect.lastReportedDate+(defect.lastReportedBy?' by '+defect.lastReportedBy:''),state);state.y+=8;doc.setFontSize(12);doc.setFont(undefined,'bold');doc.setTextColor(46,46,143);doc.text('Defect Notes and Repeat Reports',margin,state.y);doc.setTextColor(28,31,38);state.y+=18;const reports=Array.isArray(defect.repeatReports)?defect.repeatReports:[];if(reports.length){reports.sort((a,b)=>String(a.reportedAt||'').localeCompare(String(b.reportedAt||''))).forEach((r,i)=>defectPDFLine(doc,(i+1)+'. '+(r.reportedDate||'')+(r.reportedBy?' — '+r.reportedBy:'')+(r.condition?' — '+r.condition:''),state));}else defectPDFLine(doc,'Original report: '+(defect.lastObservedCondition||'No operator notes recorded.'),state);if(defect.resolutionNotes){state.y+=8;doc.setFontSize(12);doc.setFont(undefined,'bold');doc.setTextColor(46,46,143);doc.text('Resolution Notes',margin,state.y);doc.setTextColor(28,31,38);state.y+=18;defectPDFLine(doc,defect.resolutionNotes,state);}doc.setFontSize(8);doc.setTextColor(150,150,150);doc.text('CheckPlant KCM — Generated '+new Date().toLocaleString('en-GB'),margin,800);return doc;}
