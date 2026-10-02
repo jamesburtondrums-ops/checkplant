@@ -547,26 +547,23 @@ function defectItemKey(name){return String(name||'').trim().toLowerCase().replac
 function openMatchingDefects(machineId,itemName){const key=defectItemKey(itemName);return defects.filter(d=>d.machineId===machineId&&d.status==='open'&&defectItemKey(d.itemName)===key);}
 async function createOrLinkCheckDefect(item,record,operatorName){
   if(isFireExtinguisherItem(item&&item.name)) return {action:'ignored',defectId:null};
-  const matches=openMatchingDefects(currentCheckMachine.id,item.name);
+  const machineId=record.machineId,machineName=record.machineName||record.subject||'Machine';
+  const matches=openMatchingDefects(machineId,item.name);
   const reportedAt=new Date().toISOString();
   const occurrence={reportedAt,reportedDate:record.date,reportedBy:operatorName,inspectionRecordId:record.id||null,inspectionItemName:item.name,condition:item.defectNote||'Marked Defect during routine check'};
   if(matches.length){
-    const existing=matches[0];
-    const repeats=Number(existing.reportCount||1);
-    const message='Existing open defect found:\n\n'+(existing.defectId||existing.id)+' — '+existing.itemName+'\nRaised: '+(existing.dateRaised||'unknown')+'\nPreviously reported: '+repeats+' time'+(repeats===1?'':'s')+'.\n\nOK = add this finding to the existing defect.\nCancel = create a new, separate defect.';
-    if(confirm(message)){
-      await db.collection('defects').doc(existing.id).set({
-        inspectionItemCode:defectItemKey(item.name),inspectionItemName:item.name,
-        reportCount:repeats+1,lastReportedAt:firebase.firestore.Timestamp.now(),lastReportedAtClient:reportedAt,lastReportedDate:record.date,lastReportedBy:operatorName,lastInspectionId:record.id||null,lastObservedCondition:occurrence.condition,
-        repeatReports:firebase.firestore.FieldValue.arrayUnion(occurrence),updatedAt:firebase.firestore.Timestamp.now()
-      },{merge:true});
-      return {action:'linked',defectId:existing.defectId||existing.id};
-    }
+    const existing=matches[0],repeats=Number(existing.reportCount||1);
+    await db.collection('defects').doc(existing.id).set({
+      inspectionItemCode:defectItemKey(item.name),inspectionItemName:item.name,
+      reportCount:repeats+1,lastReportedAt:firebase.firestore.Timestamp.now(),lastReportedAtClient:reportedAt,lastReportedDate:record.date,lastReportedBy:operatorName,lastInspectionId:record.id||null,lastObservedCondition:occurrence.condition,
+      repeatReports:firebase.firestore.FieldValue.arrayUnion(occurrence),updatedAt:firebase.firestore.Timestamp.now()
+    },{merge:true});
+    return {action:'linked',defectId:existing.defectId||existing.id};
   }
   const defectId=await getNextDefectId();
   await db.collection('defects').add({
-    defectId,machineId:currentCheckMachine.id,machineName:currentCheckMachine.name,itemName:item.name,inspectionItemCode:defectItemKey(item.name),inspectionItemName:item.name,
-    dateRaised:todayISO(),raisedAt:firebase.firestore.Timestamp.now(),status:'open',resolvedDate:null,resolvedAt:null,resolvedBy:null,resolutionRecordId:null,severity:'routine',
+    defectId,machineId,machineName,itemName:item.name,inspectionItemCode:defectItemKey(item.name),inspectionItemName:item.name,
+    dateRaised:record.date||todayISO(),raisedAt:firebase.firestore.Timestamp.now(),status:'open',resolvedDate:null,resolvedAt:null,resolvedBy:null,resolutionRecordId:null,severity:'routine',
     reportCount:1,firstReportedAt:firebase.firestore.Timestamp.now(),firstReportedAtClient:reportedAt,firstReportedBy:operatorName,lastReportedAt:firebase.firestore.Timestamp.now(),lastReportedAtClient:reportedAt,lastReportedDate:record.date,lastReportedBy:operatorName,lastInspectionId:record.id||null,lastObservedCondition:occurrence.condition,repeatReports:[occurrence]
   });
   return {action:'created',defectId};
@@ -789,10 +786,22 @@ const cat = categories[currentCheckCategory];
 const incomplete=items.filter(i=>i.status==='Not checked');if(incomplete.length){toast('Complete every checklist item before submitting');return;}
 const checkCompletedAtMs=Date.now(),checkDurationMs=Math.max(0,checkCompletedAtMs-checkStartedAtMs);
 const record={recordId:await getNextRecordId('check'),type:'check',categoryKey:currentCheckCategory,machineId:currentCheckMachine.id,machineName:currentCheckMachine.name,subject:cat.label+' — '+currentCheckMachine.name,serialNumber:currentCheckMachine.serialNumber||'',branch:currentCheckMachine.branch||'',technician:signName,date:document.getElementById('chkDate').value,items,notes:document.getElementById('chkNotes').value.trim(),signName,signDate,signatureData:sig.canvas.toDataURL('image/png'),hoursReading:Number(hours),checkStartedAt:firebase.firestore.Timestamp.fromMillis(checkStartedAtMs),checkCompletedAt:firebase.firestore.Timestamp.fromMillis(checkCompletedAtMs),checkDurationMs,checkDurationFormatted:formatDuration(checkDurationMs),createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending'};
-await db.collection('machines').doc(currentCheckMachine.id).update({currentHours:Number(hours)});
-for(const di of items.filter(i=>i.status==='Defect')){await createOrLinkCheckDefect(di,record,signName);}
-const saved=await saveRecordToFirestore(record);
-if(saved){stopCheckTimer();checkStartedAtMs=null;document.getElementById('chkMachineSelect').disabled=false;document.getElementById('chkHours').disabled=false;}
+let saved=false;
+try{
+  const ref=await db.collection('records').add(record);record.id=ref.id;saved=true;
+  await db.collection('machines').doc(record.machineId).update({currentHours:Number(hours)});
+}catch(err){
+  console.error('Check save failed',err);toast('Check could not be saved — please try again');return;
+}
+let defectFailures=0;
+for(const di of items.filter(i=>i.status==='Defect')){
+  try{await createOrLinkCheckDefect(di,record,signName);}
+  catch(err){defectFailures++;console.error('Defect creation/link failed',err);}
+}
+try{afterRecordCreated(record);}catch(syncErr){console.error('Post-save sync error',syncErr);}
+try{generatePDF(record);}catch(pdfErr){console.error('PDF generation error',pdfErr);showScreen('home');}
+stopCheckTimer();checkStartedAtMs=null;document.getElementById('chkMachineSelect').disabled=false;document.getElementById('chkHours').disabled=false;
+toast(defectFailures?'Check completed — '+defectFailures+' defect record could not be created':'Check completed successfully');
 }else if(mode==='defect'){
 if(!currentDefect){toast('Select a defect');return;}
 const signName=document.getElementById('defSignName').value.trim(),signDate=document.getElementById('defSignDate').value,hours=document.getElementById('defHours').value,workDone=document.getElementById('defWorkDone').value.trim(),sig=sigPads['sigPadDefect'];
