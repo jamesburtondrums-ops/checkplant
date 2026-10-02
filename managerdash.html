@@ -249,7 +249,7 @@ function initListeners(){
     computeStats();renderAssetCostHours();
   }, e=>{});
   db.collection('engineers').orderBy('name').onSnapshot(s=>{engineers=s.docs.map(d=>({id:d.id,...d.data()}));renderAssignmentSelectors();renderAssignmentBoard();},e=>{});
-  db.collection('liveJobs').onSnapshot(s=>{liveJobs=s.docs.map(d=>({id:d.id,...d.data()})).filter(j=>j.status!=='completed');renderAssignmentBoard();updateDefectOptions();},e=>{});
+  db.collection('liveJobs').onSnapshot(s=>{liveJobs=s.docs.map(d=>({id:d.id,...d.data()})).filter(j=>j.status!=='completed'&&j.status!=='cancelled');renderAssignmentBoard();updateDefectOptions();},e=>{});
 
 }
 
@@ -360,6 +360,25 @@ async function saveManagerJobEdits(id){
  if(noteEl)noteEl.value='';
  toast('Job instructions updated');
 }
+async function rescheduleJob(id){
+ const j=liveJobs.find(x=>x.id===id),el=document.getElementById('jobdate-'+id);if(!j||!el)return;
+ const newDate=el.value;if(!newDate)return toast('Choose a new date');
+ const oldDate=j.plannedDate||j.date||'';
+ const note={text:'Job date changed by ManagerDash from '+(oldDate||'unscheduled')+' to '+newDate,by:'ManagerDash',at:new Date().toISOString(),event:'date_changed'};
+ const update={date:newDate,plannedDate:newDate,updatedAt:firebase.firestore.Timestamp.now(),progressNotes:firebase.firestore.FieldValue.arrayUnion(note)};
+ if(j.status==='assigned')update.status='planned';
+ await db.collection('liveJobs').doc(id).update(update);
+ toast('Job date updated');
+}
+async function cancelJobFromManager(id){
+ const j=liveJobs.find(x=>x.id===id);if(!j)return;
+ if(!confirm('Cancel '+(j.jobId||'this job')+'? It will be removed from engineer work lists but kept in the audit trail.'))return;
+ let accumulatedMs=Number(j.accumulatedMs)||0;
+ if(j.status==='active'&&j.activeStartedAt)accumulatedMs+=Math.max(0,Date.now()-jobTsMs(j.activeStartedAt));
+ const note={text:'Job cancelled by ManagerDash',by:'ManagerDash',at:new Date().toISOString(),event:'cancelled'};
+ await db.collection('liveJobs').doc(id).update({status:'cancelled',activeStartedAt:null,accumulatedMs,cancelledAt:firebase.firestore.Timestamp.now(),cancelledBy:'ManagerDash',progressNotes:firebase.firestore.FieldValue.arrayUnion(note),updatedAt:firebase.firestore.Timestamp.now()});
+ toast('Job cancelled');
+}
 function renderAssignmentBoard(){
  const w=document.getElementById('liveAssignmentBoard');if(!w)return;
  if(!liveJobs.length){w.innerHTML='<div class="empty-state">No assigned, planned or live engineering jobs.</div>';return;}
@@ -370,7 +389,7 @@ function renderAssignmentBoard(){
    const supportIds=Array.isArray(j.supportEngineerIds)?j.supportEngineerIds:[],supportNames=Array.isArray(j.supportEngineerNames)?j.supportEngineerNames:[];
    const support=supportIds.length?supportIds.map((id,i)=>'<span class="badge" style="margin:3px">'+escapeHtml(supportNames[i]||'Support')+' <button type="button" title="Remove support" style="border:0;background:transparent;cursor:pointer" onclick="removeSupportEngineer(\''+j.id+'\',\''+id+'\')">×</button></span>').join(''):'<span class="sub">No supporting engineers</span>';
    const supportOptions=engineers.filter(e=>e.active!==false&&e.id!==j.engineerId&&!supportIds.includes(e.id)).map(e=>'<option value="'+e.id+'">'+escapeHtml(e.name)+'</option>').join('');
-   return '<div class="card" style="margin-bottom:10px"><div class="alert-row"><span><strong>'+escapeHtml(j.jobId||'')+'</strong> · '+escapeHtml(j.machineName||'')+' · '+type+' · <strong>'+status+'</strong>'+when+'<br><span class="sub">Lead: '+escapeHtml(j.engineerName||'Unassigned')+(j.jobCategory?' · '+escapeHtml(j.jobCategory):'')+(j.isDamage?' · DAMAGE':'')+'</span>'+(j.jobDescription?'<br><span class="sub">'+escapeHtml(j.jobDescription)+'</span>':'')+'</span><span style="display:flex;align-items:center;gap:10px"><strong data-manager-job-time="'+j.id+'">'+time+'</strong>'+(j.status==='active'?'<button class="btn btn-secondary btn-sm" onclick="pauseJobFromManager(\''+j.id+'\')">Pause Job</button>':'')+'<select id="reassign-'+j.id+'" title="Transfer lead engineer" onchange="reassignJob(\''+j.id+'\')">'+engineers.filter(e=>e.active!==false).map(e=>'<option value="'+e.id+'" '+(e.id===j.engineerId?'selected':'')+'>'+escapeHtml(e.name)+'</option>').join('')+'</select></span></div><div style="margin-top:10px"><label>Job Description / Instructions</label><textarea id="jobdesc-'+j.id+'" placeholder="Update work requested or job description">'+escapeHtml(j.jobDescription||'')+'</textarea><label style="margin-top:8px">Add Manager Note</label><textarea id="jobnote-'+j.id+'" placeholder="Add an instruction or note for the engineer"></textarea><button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="saveManagerJobEdits(\''+j.id+'\')">Save Job Updates</button></div><div style="margin-top:10px"><div class="sub" style="margin-bottom:6px"><strong>Supporting engineers</strong></div><div style="margin-bottom:8px">'+support+'</div><div class="row"><select id="support-'+j.id+'"><option value="">-- Add supporting engineer --</option>'+supportOptions+'</select><button class="btn btn-secondary btn-sm" onclick="addSupportEngineer(\''+j.id+'\')">Add Support</button></div></div></div>';
+   return '<div class="card" style="margin-bottom:10px"><div class="alert-row"><span><strong>'+escapeHtml(j.jobId||'')+'</strong> · '+escapeHtml(j.machineName||'')+' · '+type+' · <strong>'+status+'</strong>'+when+'<br><span class="sub">Lead: '+escapeHtml(j.engineerName||'Unassigned')+(j.jobCategory?' · '+escapeHtml(j.jobCategory):'')+(j.isDamage?' · DAMAGE':'')+'</span>'+(j.jobDescription?'<br><span class="sub">'+escapeHtml(j.jobDescription)+'</span>':'')+'</span><span style="display:flex;align-items:center;gap:10px"><strong data-manager-job-time="'+j.id+'">'+time+'</strong>'+(j.status==='active'?'<button class="btn btn-secondary btn-sm" onclick="pauseJobFromManager(\''+j.id+'\')">Pause Job</button>':'')+'<select id="reassign-'+j.id+'" title="Transfer lead engineer" onchange="reassignJob(\''+j.id+'\')">'+engineers.filter(e=>e.active!==false).map(e=>'<option value="'+e.id+'" '+(e.id===j.engineerId?'selected':'')+'>'+escapeHtml(e.name)+'</option>').join('')+'</select></span></div><div class="row" style="margin-top:10px"><input type="date" id="jobdate-'+j.id+'" value="'+escapeHtml(j.plannedDate||j.date||todayISO())+'"><button class="btn btn-secondary btn-sm" onclick="rescheduleJob(\''+j.id+'\')">Change Date</button><button class="btn btn-danger btn-sm" onclick="cancelJobFromManager(\''+j.id+'\')">Cancel Job</button></div><div style="margin-top:10px"><label>Job Description / Instructions</label><textarea id="jobdesc-'+j.id+'" placeholder="Update work requested or job description">'+escapeHtml(j.jobDescription||'')+'</textarea><label style="margin-top:8px">Add Manager Note</label><textarea id="jobnote-'+j.id+'" placeholder="Add an instruction or note for the engineer"></textarea><button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="saveManagerJobEdits(\''+j.id+'\')">Save Job Updates</button></div><div style="margin-top:10px"><div class="sub" style="margin-bottom:6px"><strong>Supporting engineers</strong></div><div style="margin-bottom:8px">'+support+'</div><div class="row"><select id="support-'+j.id+'"><option value="">-- Add supporting engineer --</option>'+supportOptions+'</select><button class="btn btn-secondary btn-sm" onclick="addSupportEngineer(\''+j.id+'\')">Add Support</button></div></div></div>';
  }).join('');
  updateManagerJobTimers();
 }
