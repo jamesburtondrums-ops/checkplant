@@ -240,7 +240,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focu
 <div class="row"><div><label>Name <span class="required-star">*</span></label><input type="text" id="chkSignName"></div><div><label>Date <span class="required-star">*</span></label><input type="date" id="chkSignDate"></div></div>
 <canvas class="sigPad" id="sigPadCheck"></canvas>
 <button class="btn btn-secondary" onclick="clearSig('sigPadCheck')">Clear Signature</button></div>
-<button class="btn btn-primary btn-block" onclick="completeAndShare('check')">Complete &amp; Share PDF</button>
+<button class="btn btn-primary btn-block" id="completeCheckBtn" type="button" onclick="completeAndShare('check')">Complete Check</button>
+<p class="progress-note" id="checkCompleteStatus" style="text-align:center;margin-top:8px"></p>
 </div></div>
 <div class="screen" id="screen-defect-select">
 <button class="back-link" onclick="goHome()">← Back</button>
@@ -676,7 +677,7 @@ function onCategoryChosen(key){currentCheckCategory=key;document.getElementById(
 const sel=document.getElementById('chkMachineSelect');sel.innerHTML='<option value="">-- Choose machine --</option>';
 machines.filter(m=>m.categoryKey===key&&!m.outOfService).forEach(m=>{const o=document.createElement('option');o.value=m.id;o.textContent=m.name+(m.serialNumber?' (S/N: '+m.serialNumber+')':'');sel.appendChild(o);});
 currentCheckMachine=null;stopCheckTimer();checkStartedAtMs=null;document.getElementById('chkDate').value=todayISO();document.getElementById('chkHours').value='';
-document.getElementById('chkNotes').value='';document.getElementById('chkSignName').value='';document.getElementById('chkSignDate').value=todayISO();
+document.getElementById('chkNotes').value='';document.getElementById('chkSignName').value='';document.getElementById('chkSignDate').value=todayISO();const ccs=document.getElementById('checkCompleteStatus');if(ccs)ccs.textContent='';const ccb=document.getElementById('completeCheckBtn');if(ccb){ccb.disabled=false;ccb.textContent='Complete Check';}
 document.getElementById('checkStartPrompt').style.display='none';document.getElementById('activeCheckTimer').style.display='none';document.getElementById('checkWorkArea').style.display='none';
 renderCheckItems();showScreen('check-form');}
 function onCheckMachineChosen(){
@@ -778,20 +779,24 @@ stopServiceTimer();currentServiceLiveJob=null;
 await saveRecordToFirestore(record);
 }else if(mode==='check'){
 if(!currentCheckCategory){toast('Select a category');return;}if(!currentCheckMachine){toast('Select a machine');return;}if(!checkStartedAtMs){toast('Start the machine check first');return;}
-const signName=document.getElementById('chkSignName').value.trim(),signDate=document.getElementById('chkSignDate').value,hours=document.getElementById('chkHours').value,sig=sigPads['sigPadCheck'];
-if(!signName||!signDate){toast('Enter name and date');return;}if(!sig||!sig.hasSignature){toast('Draw signature');return;}if(hours===''){toast('Enter hours');return;}
+const signName=document.getElementById('chkSignName').value.trim(),signDate=document.getElementById('chkSignDate').value||todayISO(),hours=document.getElementById('chkHours').value,sig=sigPads['sigPadCheck'];
+const completeStatus=document.getElementById('checkCompleteStatus'),completeBtn=document.getElementById('completeCheckBtn');
+if(!signName){if(completeStatus)completeStatus.textContent='Enter operator name before completing.';toast('Enter operator name');return;}
+if(hours===''){if(completeStatus)completeStatus.textContent='Enter machine hours before completing.';toast('Enter machine hours');return;}
 const cat = categories[currentCheckCategory];
     const checkSrc = (cat.checkItems && cat.checkItems.length) ? cat.checkItems : cat.items;
     const items = collectItems('checkItemsList', checkSrc);
-const incomplete=items.filter(i=>i.status==='Not checked');if(incomplete.length){toast('Complete every checklist item before submitting');return;}
+const incomplete=items.filter(i=>i.status==='Not checked');if(incomplete.length){const msg=incomplete.length+' checklist item'+(incomplete.length===1?' is':'s are')+' still unanswered';if(completeStatus)completeStatus.textContent=msg+'.';toast(msg);return;}
+if(completeBtn){completeBtn.disabled=true;completeBtn.textContent='Completing Check…';}if(completeStatus)completeStatus.textContent='Saving completed check…';
 const checkCompletedAtMs=Date.now(),checkDurationMs=Math.max(0,checkCompletedAtMs-checkStartedAtMs);
-const record={recordId:await getNextRecordId('check'),type:'check',categoryKey:currentCheckCategory,machineId:currentCheckMachine.id,machineName:currentCheckMachine.name,subject:cat.label+' — '+currentCheckMachine.name,serialNumber:currentCheckMachine.serialNumber||'',branch:currentCheckMachine.branch||'',technician:signName,date:document.getElementById('chkDate').value,items,notes:document.getElementById('chkNotes').value.trim(),signName,signDate,signatureData:sig.canvas.toDataURL('image/png'),hoursReading:Number(hours),checkStartedAt:firebase.firestore.Timestamp.fromMillis(checkStartedAtMs),checkCompletedAt:firebase.firestore.Timestamp.fromMillis(checkCompletedAtMs),checkDurationMs,checkDurationFormatted:formatDuration(checkDurationMs),createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending'};
+const signatureData=(sig&&sig.hasSignature)?sig.canvas.toDataURL('image/png'):'';
+const record={recordId:await getNextRecordId('check'),type:'check',categoryKey:currentCheckCategory,machineId:currentCheckMachine.id,machineName:currentCheckMachine.name,subject:cat.label+' — '+currentCheckMachine.name,serialNumber:currentCheckMachine.serialNumber||'',branch:currentCheckMachine.branch||'',technician:signName,date:document.getElementById('chkDate').value||todayISO(),items,notes:document.getElementById('chkNotes').value.trim(),signName,signDate,signatureData,hoursReading:Number(hours),checkStartedAt:firebase.firestore.Timestamp.fromMillis(checkStartedAtMs),checkCompletedAt:firebase.firestore.Timestamp.fromMillis(checkCompletedAtMs),checkDurationMs,checkDurationFormatted:formatDuration(checkDurationMs),createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending'};
 let saved=false;
 try{
   const ref=await db.collection('records').add(record);record.id=ref.id;saved=true;
   await db.collection('machines').doc(record.machineId).update({currentHours:Number(hours)});
 }catch(err){
-  console.error('Check save failed',err);toast('Check could not be saved — please try again');return;
+  console.error('Check save failed',err);if(completeBtn){completeBtn.disabled=false;completeBtn.textContent='Complete Check';}if(completeStatus)completeStatus.textContent='Could not save check. Please try again.';toast('Check could not be saved — please try again');return;
 }
 let defectFailures=0;
 for(const di of items.filter(i=>i.status==='Defect')){
@@ -799,7 +804,9 @@ for(const di of items.filter(i=>i.status==='Defect')){
   catch(err){defectFailures++;console.error('Defect creation/link failed',err);}
 }
 try{afterRecordCreated(record);}catch(syncErr){console.error('Post-save sync error',syncErr);}
+if(completeStatus)completeStatus.textContent='Check completed successfully.';
 try{generatePDF(record);}catch(pdfErr){console.error('PDF generation error',pdfErr);showScreen('home');}
+if(completeBtn){completeBtn.disabled=false;completeBtn.textContent='Complete Check';}
 stopCheckTimer();checkStartedAtMs=null;document.getElementById('chkMachineSelect').disabled=false;document.getElementById('chkHours').disabled=false;
 toast(defectFailures?'Check completed — '+defectFailures+' defect record could not be created':'Check completed successfully');
 }else if(mode==='defect'){
