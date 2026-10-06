@@ -63,7 +63,8 @@ th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;}
 .chart-bar-track{flex:1;background:#eef0f3;border-radius:6px;height:18px;}
 .chart-bar-fill{background:var(--navy);height:100%;border-radius:6px;}
 .chart-bar-val{width:70px;text-align:right;flex-shrink:0;font-weight:700;}
-.manager-tabs{display:flex;gap:8px;margin:0 0 18px;position:sticky;top:0;z-index:20;background:#f5f6f8;padding:10px 0 8px}.manager-tab{border:1px solid #d8dce3;background:#fff;color:var(--navy);padding:10px 16px;border-radius:10px;font-weight:800;cursor:pointer}.manager-tab.active{background:var(--navy);color:#fff;border-color:var(--navy)}.manager-panel{display:none}.manager-panel.active{display:block}.job-section-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}.job-summary{font-size:.78rem;color:var(--grey)}.job-card{border:1px solid #e2e5ea;border-radius:12px;padding:14px;margin-bottom:10px;background:#fff}.job-card.live{border-left:5px solid var(--green)}.job-card.paused{border-left:5px solid var(--amber)}.job-card.planned{border-left:5px solid var(--navy)}.job-card.assigned{border-left:5px solid #64748b}.job-main{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}.job-title{font-weight:800;color:var(--navy)}.job-meta{font-size:.78rem;color:var(--grey);margin-top:4px}.job-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.job-edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}.job-edit-grid .full{grid-column:1/-1}.job-large-textarea{width:100%;min-height:150px;resize:vertical;font-size:1rem;line-height:1.45;padding:12px 14px;box-sizing:border-box}@media(max-width:760px){.job-main{display:block}.job-actions{margin-top:10px}.job-edit-grid{grid-template-columns:1fr}.job-edit-grid .full{grid-column:auto}}
+.manager-tabs{display:flex;gap:8px;margin:0 0 18px;position:sticky;top:0;z-index:20;background:#f5f6f8;padding:10px 0 8px}.manager-tab{border:1px solid #d8dce3;background:#fff;color:var(--navy);padding:10px 16px;border-radius:10px;font-weight:800;cursor:pointer}.manager-tab.active{background:var(--navy);color:#fff;border-color:var(--navy)}.manager-panel{display:none}.manager-panel.active{display:block}.job-section-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}.job-summary{font-size:.78rem;color:var(--grey)}.job-card{border:1px solid #e2e5ea;border-radius:12px;padding:14px;margin-bottom:10px;background:#fff}.job-card.live{border-left:5px solid var(--green)}.job-card.paused{border-left:5px solid var(--amber)}.job-card.planned{border-left:5px solid var(--navy)}.job-card.assigned{border-left:5px solid #64748b}.engineer-day-card{border:1px solid #e2e5ea;border-radius:12px;padding:14px;margin-bottom:12px;background:#fff}.engineer-day-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:10px}.engineer-day-total{font-size:1.15rem;font-weight:900;color:var(--navy)}.engineer-job-row{display:grid;grid-template-columns:minmax(150px,1.4fr) minmax(120px,1fr) minmax(100px,.8fr) 95px;gap:10px;align-items:start;padding:10px 0;border-top:1px solid #eceef1;font-size:.82rem}.engineer-job-row:first-of-type{border-top:0}.engineer-job-duration{text-align:right;font-weight:800}@media(max-width:760px){.engineer-job-row{grid-template-columns:1fr}.engineer-job-duration{text-align:left}}
+.job-main{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}.job-title{font-weight:800;color:var(--navy)}.job-meta{font-size:.78rem;color:var(--grey);margin-top:4px}.job-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.job-edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}.job-edit-grid .full{grid-column:1/-1}.job-large-textarea{width:100%;min-height:150px;resize:vertical;font-size:1rem;line-height:1.45;padding:12px 14px;box-sizing:border-box}@media(max-width:760px){.job-main{display:block}.job-actions{margin-top:10px}.job-edit-grid{grid-template-columns:1fr}.job-edit-grid .full{grid-column:auto}}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 20px;border-radius:10px;font-size:.9rem;font-weight:600;z-index:200;box-shadow:0 6px 20px rgba(0,0,0,.2);opacity:0;transition:opacity .25s;pointer-events:none;}
 .toast.show{opacity:1;}
 </style>
@@ -168,6 +169,13 @@ th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;}
   <div class="job-section-head"><div><div class="section-title">Assigned & Planned Jobs</div><div class="job-summary">Upcoming work waiting to be started.</div></div><span class="badge" id="plannedJobBoardCount">0</span></div>
   <div id="plannedJobsBoard"></div>
 </div>
+<div class="card">
+  <div class="job-section-head">
+    <div><div class="section-title">Engineer Daily Hours</div><div class="job-summary">Completed engineering jobs and total job time by engineer for the selected day.</div></div>
+    <div style="min-width:165px"><input type="date" id="engineerHoursDate" onchange="renderEngineerDailyHours()"></div>
+  </div>
+  <div id="engineerDailyHours"></div>
+</div>
 </div>
 <div class="manager-panel active manager-overview-tail" id="manager-overview-tail"><div class="card">
   <div class="section-title">Damage Investigations</div>
@@ -222,7 +230,7 @@ function switchManagerTab(tab){
  document.getElementById('manager-engineering').classList.toggle('active',tab==='engineering');
  document.getElementById('tab-overview').classList.toggle('active',tab==='overview');
  document.getElementById('tab-engineering').classList.toggle('active',tab==='engineering');
- if(tab==='engineering')renderAssignmentBoard();
+ if(tab==='engineering'){renderAssignmentBoard();renderEngineerDailyHours();}
  window.scrollTo(0,0);
 }
 
@@ -242,7 +250,7 @@ function bootManagerDash(){
 }
 function initListeners(){
   setConn(true,'Connecting...');
-  document.getElementById('monthPicker').value = todayISO().slice(0,7);const pjd=document.getElementById('plannedJobDate');if(pjd&&!pjd.value)pjd.value=todayISO();
+  document.getElementById('monthPicker').value = todayISO().slice(0,7);const pjd=document.getElementById('plannedJobDate');if(pjd&&!pjd.value)pjd.value=todayISO();const ehd=document.getElementById('engineerHoursDate');if(ehd&&!ehd.value)ehd.value=todayISO();
 
   db.collection('machines').orderBy('name').onSnapshot(s=>{
     machines=s.docs.map(d=>({id:d.id,...d.data()}));
@@ -253,7 +261,7 @@ function initListeners(){
 
   db.collection('records').onSnapshot(s=>{
     records=s.docs.map(d=>({id:d.id,...d.data()}));
-    computeStats();renderDamageInvestigations();renderCheckTimeOverview();
+    computeStats();renderDamageInvestigations();renderCheckTimeOverview();renderEngineerDailyHours();
   }, e=>setConn(false,'Records error: '+e.message));
 
   db.collection('defects').orderBy('dateRaised','desc').onSnapshot(s=>{
@@ -268,7 +276,7 @@ function initListeners(){
     costEntries=s.docs.map(d=>({id:d.id,...d.data()}));
     computeStats();renderAssetCostHours();
   }, e=>{});
-  db.collection('engineers').orderBy('name').onSnapshot(s=>{engineers=s.docs.map(d=>({id:d.id,...d.data()}));renderAssignmentSelectors();renderAssignmentBoard();},e=>{});
+  db.collection('engineers').orderBy('name').onSnapshot(s=>{engineers=s.docs.map(d=>({id:d.id,...d.data()}));renderAssignmentSelectors();renderAssignmentBoard();renderEngineerDailyHours();},e=>{});
   db.collection('liveJobs').onSnapshot(s=>{liveJobs=s.docs.map(d=>({id:d.id,...d.data()})).filter(j=>j.status!=='completed'&&j.status!=='cancelled');renderAssignmentBoard();updateDefectOptions();},e=>{});
 
 }
@@ -415,6 +423,36 @@ function renderAssignmentBoard(){
  liveWrap.innerHTML=live.length?live.map(jobCardHtml).join(''):'<div class="empty-state">No live or paused engineering jobs.</div>';
  plannedWrap.innerHTML=planned.length?planned.map(jobCardHtml).join(''):'<div class="empty-state">No assigned or planned engineering jobs.</div>';
  updateManagerJobTimers();
+}
+function completedJobDate(r){
+ if(r.completedAt&&r.completedAt.toDate)return r.completedAt.toDate().toISOString().slice(0,10);
+ if(r.completedAt){const d=new Date(r.completedAt);if(!isNaN(d))return d.toISOString().slice(0,10);}
+ return r.date||'';
+}
+function engineerRecordName(r){return String(r.signName||r.technician||r.engineerName||'Unknown engineer').trim()||'Unknown engineer';}
+function completedJobDurationMs(r){
+ if(Number(r.jobDurationMs)>0)return Number(r.jobDurationMs);
+ if(r.startedAt&&r.completedAt){const a=jobTsMs(r.startedAt),b=jobTsMs(r.completedAt);if(a&&b&&b>=a)return b-a;}
+ return 0;
+}
+function renderEngineerDailyHours(){
+ const w=document.getElementById('engineerDailyHours'),dateEl=document.getElementById('engineerHoursDate');if(!w||!dateEl)return;
+ const date=dateEl.value||todayISO();
+ const jobs=records.filter(r=>(r.type==='adhoc'||r.type==='service')&&completedJobDate(r)===date);
+ const grouped={};
+ jobs.forEach(r=>{const name=engineerRecordName(r);if(!grouped[name])grouped[name]=[];grouped[name].push(r);});
+ const names=[...new Set([...engineers.filter(e=>e.active!==false).map(e=>e.name),...Object.keys(grouped)])].sort((a,b)=>String(a).localeCompare(String(b)));
+ if(!names.length){w.innerHTML='<div class="empty-state">No engineers available.</div>';return;}
+ w.innerHTML=names.map(name=>{
+   const list=(grouped[name]||[]).sort((a,b)=>jobTsMs(b.completedAt)-jobTsMs(a.completedAt));
+   const total=list.reduce((s,r)=>s+completedJobDurationMs(r),0);
+   const rows=list.length?list.map(r=>{
+     const type=r.type==='service'?'Service':(r.jobCategory||'Ad-Hoc');
+     const outcome=r.outcome||'—';
+     return '<div class="engineer-job-row"><div><strong>'+escapeHtml(r.recordId||r.id||'Job')+'</strong><div class="job-meta">'+escapeHtml(r.machineName||r.subject||'Asset')+'</div></div><div>'+escapeHtml(type)+'</div><div>'+escapeHtml(outcome)+'</div><div class="engineer-job-duration">'+jobDuration(completedJobDurationMs(r))+'</div></div>';
+   }).join(''):'<div class="empty-state" style="padding:12px 0">No completed jobs on this day.</div>';
+   return '<div class="engineer-day-card"><div class="engineer-day-head"><div><strong>'+escapeHtml(name)+'</strong><div class="job-meta">'+list.length+' completed job'+(list.length===1?'':'s')+'</div></div><div class="engineer-day-total">'+jobDuration(total)+'</div></div>'+rows+'</div>';
+ }).join('');
 }
 function renderDamageInvestigations(){
  const w=document.getElementById('damageInvestigations');if(!w)return;const d=records.filter(r=>r.type==='adhoc'&&r.isDamage);
