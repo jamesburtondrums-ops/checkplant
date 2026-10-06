@@ -63,6 +63,7 @@ th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;}
 .chart-bar-track{flex:1;background:#eef0f3;border-radius:6px;height:18px;}
 .chart-bar-fill{background:var(--navy);height:100%;border-radius:6px;}
 .chart-bar-val{width:70px;text-align:right;flex-shrink:0;font-weight:700;}
+.manager-tabs{display:flex;gap:8px;margin:0 0 18px;position:sticky;top:0;z-index:20;background:#f5f6f8;padding:10px 0 8px}.manager-tab{border:1px solid #d8dce3;background:#fff;color:var(--navy);padding:10px 16px;border-radius:10px;font-weight:800;cursor:pointer}.manager-tab.active{background:var(--navy);color:#fff;border-color:var(--navy)}.manager-panel{display:none}.manager-panel.active{display:block}.job-section-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}.job-summary{font-size:.78rem;color:var(--grey)}.job-card{border:1px solid #e2e5ea;border-radius:12px;padding:14px;margin-bottom:10px;background:#fff}.job-card.live{border-left:5px solid var(--green)}.job-card.paused{border-left:5px solid var(--amber)}.job-card.planned{border-left:5px solid var(--navy)}.job-card.assigned{border-left:5px solid #64748b}.job-main{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}.job-title{font-weight:800;color:var(--navy)}.job-meta{font-size:.78rem;color:var(--grey);margin-top:4px}.job-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.job-edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}.job-edit-grid .full{grid-column:1/-1}@media(max-width:760px){.job-main{display:block}.job-actions{margin-top:10px}.job-edit-grid{grid-template-columns:1fr}.job-edit-grid .full{grid-column:auto}}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 20px;border-radius:10px;font-size:.9rem;font-weight:600;z-index:200;box-shadow:0 6px 20px rgba(0,0,0,.2);opacity:0;transition:opacity .25s;pointer-events:none;}
 .toast.show{opacity:1;}
 </style>
@@ -82,6 +83,11 @@ th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;}
   </div>
 </div>
 <main id="managerMain" style="display:none">
+<div class="manager-tabs">
+  <button class="manager-tab active" id="tab-overview" onclick="switchManagerTab('overview')">Overview</button>
+  <button class="manager-tab" id="tab-engineering" onclick="switchManagerTab('engineering')">Engineering Jobs</button>
+</div>
+<div class="manager-panel active" id="manager-overview">
 
 <div class="card">
   <div class="section-title">Quick Links</div>
@@ -127,8 +133,10 @@ th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;}
   <div class="chart-bar-wrap" id="costChart"></div>
 </div>
 
+</div>
+<div class="manager-panel" id="manager-engineering">
 <div class="card">
-  <div class="section-title">Engineering Job Assignment</div>
+  <div class="job-section-head"><div><div class="section-title">Assign / Plan Engineering Work</div><div class="job-summary">Create immediate or planned work for a lead engineer.</div></div></div>
   <div class="row">
     <select id="assignJobType" onchange="updateAssignmentForm()">
       <option value="adhoc">Ad-Hoc Job</option>
@@ -138,27 +146,30 @@ th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;}
     <select id="assignMachine" onchange="updateDefectOptions()"><option value="">-- Select asset --</option></select>
     <select id="assignDefect" style="display:none"><option value="">-- Select defect --</option></select>
     <select id="assignEngineer"><option value="">-- Select engineer --</option></select>
-    <button class="btn btn-secondary" onclick="createAssignedJob()">Assign Job</button>
   </div>
   <div id="adhocAssignmentDetails" style="margin-top:10px">
-    <label>Ad-Hoc Job Description</label>
-    <textarea id="assignJobDescription" placeholder="Describe the fault, repair or work required for the engineer."></textarea>
-    <div class="row" style="margin-top:10px">
-      <select id="assignDamageStatus">
-        <option value="no">Not Damage</option>
-        <option value="yes">Damage</option>
-      </select>
-    </div>
+    <label>Job Description / Work Requested</label>
+    <textarea id="assignJobDescription" placeholder="Describe exactly what needs doing."></textarea>
+    <div class="row" style="margin-top:10px"><select id="assignDamageStatus"><option value="no">Not Damage</option><option value="yes">Damage</option></select></div>
   </div>
-  <div class="row" style="margin-top:10px">
+  <div class="row" style="margin-top:12px">
+    <button class="btn btn-primary" onclick="createAssignedJob()">Assign Now</button>
     <input type="date" id="plannedJobDate" aria-label="Planned work date">
-    <button class="btn btn-secondary" onclick="createAssignedJob('planned')">Add as Planned Work</button>
+    <button class="btn btn-secondary" onclick="createAssignedJob('planned')">Plan For Date</button>
   </div>
-  <p class="progress-note" style="margin-top:8px">Planned work is added to the selected engineer's job list immediately. Its timer does not start until the engineer opens and starts the job.</p>
-  <div class="section-title" style="margin-top:18px">Live Engineering Jobs</div>
-  <div id="liveAssignmentBoard" style="margin-top:8px"></div>
 </div>
+
 <div class="card">
+  <div class="job-section-head"><div><div class="section-title">Live & Paused Jobs</div><div class="job-summary">Current engineering work and timers.</div></div><span class="badge" id="liveJobBoardCount">0</span></div>
+  <div id="liveJobsBoard"></div>
+</div>
+
+<div class="card">
+  <div class="job-section-head"><div><div class="section-title">Assigned & Planned Jobs</div><div class="job-summary">Upcoming work waiting to be started.</div></div><span class="badge" id="plannedJobBoardCount">0</span></div>
+  <div id="plannedJobsBoard"></div>
+</div>
+</div>
+<div class="manager-panel active manager-overview-tail" id="manager-overview-tail"><div class="card">
   <div class="section-title">Damage Investigations</div>
   <div id="damageInvestigations"></div>
 </div>
@@ -181,7 +192,7 @@ th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;}
   <div style="overflow-x:auto"><table id="resTable"><thead><tr><th>Defect ID</th><th>Machine</th><th>Raised</th><th>Resolved</th><th>Days to Resolve</th><th>By</th></tr></thead><tbody></tbody></table></div>
 </div>
 
-</main>
+</div></main>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -205,6 +216,15 @@ function jobElapsedMs(j){const base=Number(j&&j.accumulatedMs)||0;if(!j||j.statu
 function jobDuration(ms){let s=Math.floor((Number(ms)||0)/1000),h=Math.floor(s/3600);s%=3600;let m=Math.floor(s/60);s%=60;return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');}
 function updateManagerJobTimers(){document.querySelectorAll('[data-manager-job-time]').forEach(el=>{const j=liveJobs.find(x=>x.id===el.dataset.managerJobTime);if(j)el.textContent=j.status==='active'?jobDuration(jobElapsedMs(j)):j.status==='paused'?jobDuration(jobElapsedMs(j)):'—';});}
 setInterval(updateManagerJobTimers,1000);
+function switchManagerTab(tab){
+ document.getElementById('manager-overview').classList.toggle('active',tab==='overview');
+ document.getElementById('manager-overview-tail').classList.toggle('active',tab==='overview');
+ document.getElementById('manager-engineering').classList.toggle('active',tab==='engineering');
+ document.getElementById('tab-overview').classList.toggle('active',tab==='overview');
+ document.getElementById('tab-engineering').classList.toggle('active',tab==='engineering');
+ if(tab==='engineering')renderAssignmentBoard();
+ window.scrollTo(0,0);
+}
 
 const MANAGER_PIN='1994';
 let managerUnlocked=false,managerListenersStarted=false;
@@ -379,18 +399,21 @@ async function cancelJobFromManager(id){
  await db.collection('liveJobs').doc(id).update({status:'cancelled',activeStartedAt:null,accumulatedMs,cancelledAt:firebase.firestore.Timestamp.now(),cancelledBy:'ManagerDash',progressNotes:firebase.firestore.FieldValue.arrayUnion(note),updatedAt:firebase.firestore.Timestamp.now()});
  toast('Job cancelled');
 }
+function jobCardHtml(j){
+ const type=j.jobType==='service'?'Service':j.defectRefId?'Defect Job':'Ad-Hoc';
+ const status=(j.status||'').toUpperCase(),time=(j.status==='active'||j.status==='paused')?jobDuration(jobElapsedMs(j)):'';
+ const supportIds=Array.isArray(j.supportEngineerIds)?j.supportEngineerIds:[],supportNames=Array.isArray(j.supportEngineerNames)?j.supportEngineerNames:[];
+ const support=supportIds.length?supportIds.map((id,i)=>'<span class="badge" style="margin:3px">'+escapeHtml(supportNames[i]||'Support')+' <button type="button" title="Remove support" style="border:0;background:transparent;cursor:pointer" onclick="removeSupportEngineer(\''+j.id+'\',\''+id+'\')">×</button></span>').join(''):'<span class="job-meta">No supporting engineers</span>';
+ const supportOptions=engineers.filter(e=>e.active!==false&&e.id!==j.engineerId&&!supportIds.includes(e.id)).map(e=>'<option value="'+e.id+'">'+escapeHtml(e.name)+'</option>').join('');
+ return '<div class="job-card '+escapeHtml(j.status||'assigned')+'"><div class="job-main"><div><div class="job-title">'+escapeHtml(j.jobId||'Job')+' · '+escapeHtml(j.machineName||'Asset')+'</div><div class="job-meta">'+type+' · Lead: '+escapeHtml(j.engineerName||'Unassigned')+(j.isDamage?' · DAMAGE':'')+(j.plannedDate?' · '+escapeHtml(j.plannedDate):'')+'</div>'+(j.jobDescription?'<div style="margin-top:8px">'+escapeHtml(j.jobDescription)+'</div>':'')+'</div><div class="job-actions">'+(time?'<strong data-manager-job-time="'+j.id+'">'+time+'</strong>':'')+(j.status==='active'?'<button class="btn btn-secondary btn-sm" onclick="pauseJobFromManager(\''+j.id+'\')">Pause</button>':'')+'<select id="reassign-'+j.id+'" title="Lead engineer" onchange="reassignJob(\''+j.id+'\')">'+engineers.filter(e=>e.active!==false).map(e=>'<option value="'+e.id+'" '+(e.id===j.engineerId?'selected':'')+'>'+escapeHtml(e.name)+'</option>').join('')+'</select></div></div><div class="job-edit-grid"><div><label>Work Date</label><input type="date" id="jobdate-'+j.id+'" value="'+escapeHtml(j.plannedDate||j.date||todayISO())+'"></div><div style="align-self:end"><button class="btn btn-secondary btn-sm" onclick="rescheduleJob(\''+j.id+'\')">Change Date</button> <button class="btn btn-danger btn-sm" onclick="cancelJobFromManager(\''+j.id+'\')">Cancel</button></div><div class="full"><label>Job Description / Instructions</label><textarea id="jobdesc-'+j.id+'">'+escapeHtml(j.jobDescription||'')+'</textarea></div><div class="full"><label>Add Manager Note</label><textarea id="jobnote-'+j.id+'" placeholder="Add instruction or update"></textarea><button class="btn btn-secondary btn-sm" style="margin-top:6px" onclick="saveManagerJobEdits(\''+j.id+'\')">Save Update</button></div><div class="full"><label>Supporting Engineers</label><div style="margin-bottom:6px">'+support+'</div><div class="row"><select id="support-'+j.id+'"><option value="">-- Add supporting engineer --</option>'+supportOptions+'</select><button class="btn btn-secondary btn-sm" onclick="addSupportEngineer(\''+j.id+'\')">Add Support</button></div></div></div></div>';
+}
 function renderAssignmentBoard(){
- const w=document.getElementById('liveAssignmentBoard');if(!w)return;
- if(!liveJobs.length){w.innerHTML='<div class="empty-state">No assigned, planned or live engineering jobs.</div>';return;}
- const order={active:0,paused:1,assigned:2,planned:3};
- const sorted=[...liveJobs].sort((a,b)=>(order[a.status]??9)-(order[b.status]??9)||String(a.plannedDate||a.date||'').localeCompare(String(b.plannedDate||b.date||'')));
- w.innerHTML=sorted.map(j=>{
-   const type=j.jobType==='service'?'Service':j.defectRefId?'Defect Job':'Ad-Hoc',status=(j.status||'').toUpperCase(),when=j.status==='planned'?' · Planned '+escapeHtml(j.plannedDate||j.date||''):'',time=(j.status==='active'||j.status==='paused')?jobDuration(jobElapsedMs(j)):'—';
-   const supportIds=Array.isArray(j.supportEngineerIds)?j.supportEngineerIds:[],supportNames=Array.isArray(j.supportEngineerNames)?j.supportEngineerNames:[];
-   const support=supportIds.length?supportIds.map((id,i)=>'<span class="badge" style="margin:3px">'+escapeHtml(supportNames[i]||'Support')+' <button type="button" title="Remove support" style="border:0;background:transparent;cursor:pointer" onclick="removeSupportEngineer(\''+j.id+'\',\''+id+'\')">×</button></span>').join(''):'<span class="sub">No supporting engineers</span>';
-   const supportOptions=engineers.filter(e=>e.active!==false&&e.id!==j.engineerId&&!supportIds.includes(e.id)).map(e=>'<option value="'+e.id+'">'+escapeHtml(e.name)+'</option>').join('');
-   return '<div class="card" style="margin-bottom:10px"><div class="alert-row"><span><strong>'+escapeHtml(j.jobId||'')+'</strong> · '+escapeHtml(j.machineName||'')+' · '+type+' · <strong>'+status+'</strong>'+when+'<br><span class="sub">Lead: '+escapeHtml(j.engineerName||'Unassigned')+(j.jobCategory?' · '+escapeHtml(j.jobCategory):'')+(j.isDamage?' · DAMAGE':'')+'</span>'+(j.jobDescription?'<br><span class="sub">'+escapeHtml(j.jobDescription)+'</span>':'')+'</span><span style="display:flex;align-items:center;gap:10px"><strong data-manager-job-time="'+j.id+'">'+time+'</strong>'+(j.status==='active'?'<button class="btn btn-secondary btn-sm" onclick="pauseJobFromManager(\''+j.id+'\')">Pause Job</button>':'')+'<select id="reassign-'+j.id+'" title="Transfer lead engineer" onchange="reassignJob(\''+j.id+'\')">'+engineers.filter(e=>e.active!==false).map(e=>'<option value="'+e.id+'" '+(e.id===j.engineerId?'selected':'')+'>'+escapeHtml(e.name)+'</option>').join('')+'</select></span></div><div class="row" style="margin-top:10px"><input type="date" id="jobdate-'+j.id+'" value="'+escapeHtml(j.plannedDate||j.date||todayISO())+'"><button class="btn btn-secondary btn-sm" onclick="rescheduleJob(\''+j.id+'\')">Change Date</button><button class="btn btn-danger btn-sm" onclick="cancelJobFromManager(\''+j.id+'\')">Cancel Job</button></div><div style="margin-top:10px"><label>Job Description / Instructions</label><textarea id="jobdesc-'+j.id+'" placeholder="Update work requested or job description">'+escapeHtml(j.jobDescription||'')+'</textarea><label style="margin-top:8px">Add Manager Note</label><textarea id="jobnote-'+j.id+'" placeholder="Add an instruction or note for the engineer"></textarea><button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="saveManagerJobEdits(\''+j.id+'\')">Save Job Updates</button></div><div style="margin-top:10px"><div class="sub" style="margin-bottom:6px"><strong>Supporting engineers</strong></div><div style="margin-bottom:8px">'+support+'</div><div class="row"><select id="support-'+j.id+'"><option value="">-- Add supporting engineer --</option>'+supportOptions+'</select><button class="btn btn-secondary btn-sm" onclick="addSupportEngineer(\''+j.id+'\')">Add Support</button></div></div></div>';
- }).join('');
+ const liveWrap=document.getElementById('liveJobsBoard'),plannedWrap=document.getElementById('plannedJobsBoard');if(!liveWrap||!plannedWrap)return;
+ const live=liveJobs.filter(j=>j.status==='active'||j.status==='paused').sort((a,b)=>(a.status==='active'?0:1)-(b.status==='active'?0:1));
+ const planned=liveJobs.filter(j=>j.status==='assigned'||j.status==='planned').sort((a,b)=>String(a.plannedDate||a.date||'').localeCompare(String(b.plannedDate||b.date||'')));
+ document.getElementById('liveJobBoardCount').textContent=live.length;document.getElementById('plannedJobBoardCount').textContent=planned.length;
+ liveWrap.innerHTML=live.length?live.map(jobCardHtml).join(''):'<div class="empty-state">No live or paused engineering jobs.</div>';
+ plannedWrap.innerHTML=planned.length?planned.map(jobCardHtml).join(''):'<div class="empty-state">No assigned or planned engineering jobs.</div>';
  updateManagerJobTimers();
 }
 function renderDamageInvestigations(){
