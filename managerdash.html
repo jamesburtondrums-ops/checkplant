@@ -171,7 +171,7 @@ th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;}
 </div>
 <div class="card">
   <div class="job-section-head">
-    <div><div class="section-title">Engineer Daily Hours</div><div class="job-summary">Completed engineering jobs and total job time by engineer for the selected day.</div></div>
+    <div><div class="section-title">Engineer Daily Hours</div><div class="job-summary">Completed jobs shown using final authorised labour hours for the selected day.</div></div>
     <div style="min-width:165px"><input type="date" id="engineerHoursDate" onchange="renderEngineerDailyHours()"></div>
   </div>
   <div id="engineerDailyHours"></div>
@@ -430,10 +430,10 @@ function completedJobDate(r){
  return r.date||'';
 }
 function engineerRecordName(r){return String(r.signName||r.technician||r.engineerName||'Unknown engineer').trim()||'Unknown engineer';}
-function completedJobDurationMs(r){
- if(Number(r.jobDurationMs)>0)return Number(r.jobDurationMs);
- if(r.startedAt&&r.completedAt){const a=jobTsMs(r.startedAt),b=jobTsMs(r.completedAt);if(a&&b&&b>=a)return b-a;}
- return 0;
+function finalAuthorisedHoursForRecord(r){
+ const signed=costEntries.find(e=>e.linkedRecordId===r.id&&e.costStatus==='fully_signed_off');
+ if(signed&&Number.isFinite(Number(signed.authorisedHours)))return Number(signed.authorisedHours);
+ return null;
 }
 function renderEngineerDailyHours(){
  const w=document.getElementById('engineerDailyHours'),dateEl=document.getElementById('engineerHoursDate');if(!w||!dateEl)return;
@@ -445,13 +445,15 @@ function renderEngineerDailyHours(){
  if(!names.length){w.innerHTML='<div class="empty-state">No engineers available.</div>';return;}
  w.innerHTML=names.map(name=>{
    const list=(grouped[name]||[]).sort((a,b)=>jobTsMs(b.completedAt)-jobTsMs(a.completedAt));
-   const total=list.reduce((s,r)=>s+completedJobDurationMs(r),0);
-   const rows=list.length?list.map(r=>{
-     const type=r.type==='service'?'Service':(r.jobCategory||'Ad-Hoc');
-     const outcome=r.outcome||'—';
-     return '<div class="engineer-job-row"><div><strong>'+escapeHtml(r.recordId||r.id||'Job')+'</strong><div class="job-meta">'+escapeHtml(r.machineName||r.subject||'Asset')+'</div></div><div>'+escapeHtml(type)+'</div><div>'+escapeHtml(outcome)+'</div><div class="engineer-job-duration">'+jobDuration(completedJobDurationMs(r))+'</div></div>';
+   const authorised=list.map(r=>({r,hours:finalAuthorisedHoursForRecord(r)}));
+   const totalHours=authorised.reduce((s,x)=>s+(x.hours==null?0:x.hours),0);
+   const rows=list.length?authorised.map(x=>{
+     const r=x.r,type=r.type==='service'?'Service':(r.jobCategory||'Ad-Hoc'),outcome=r.outcome||'—';
+     const hoursText=x.hours==null?'<span class="job-meta">Awaiting final authorisation</span>':x.hours.toFixed(2)+' h';
+     return '<div class="engineer-job-row"><div><strong>'+escapeHtml(r.recordId||r.id||'Job')+'</strong><div class="job-meta">'+escapeHtml(r.machineName||r.subject||'Asset')+'</div></div><div>'+escapeHtml(type)+'</div><div>'+escapeHtml(outcome)+'</div><div class="engineer-job-duration">'+hoursText+'</div></div>';
    }).join(''):'<div class="empty-state" style="padding:12px 0">No completed jobs on this day.</div>';
-   return '<div class="engineer-day-card"><div class="engineer-day-head"><div><strong>'+escapeHtml(name)+'</strong><div class="job-meta">'+list.length+' completed job'+(list.length===1?'':'s')+'</div></div><div class="engineer-day-total">'+jobDuration(total)+'</div></div>'+rows+'</div>';
+   const signedCount=authorised.filter(x=>x.hours!=null).length;
+   return '<div class="engineer-day-card"><div class="engineer-day-head"><div><strong>'+escapeHtml(name)+'</strong><div class="job-meta">'+list.length+' completed job'+(list.length===1?'':'s')+' · '+signedCount+' finally authorised</div></div><div class="engineer-day-total">'+totalHours.toFixed(2)+' h</div></div>'+rows+'</div>';
  }).join('');
 }
 function renderDamageInvestigations(){
