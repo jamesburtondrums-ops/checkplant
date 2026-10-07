@@ -145,6 +145,7 @@ th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;}
       <option value="defect">Outstanding Defect</option>
     </select>
     <select id="assignMachine" onchange="updateDefectOptions()"><option value="">-- Select asset --</option></select>
+    <select id="assignJobCategory"><option value="">-- Job category --</option></select>
     <select id="assignDefect" style="display:none"><option value="">-- Select defect --</option></select>
     <select id="assignEngineer"><option value="">-- Select engineer --</option></select>
   </div>
@@ -214,6 +215,7 @@ let machines=[];
 let records=[];
 let defects=[];
 let costEntries=[];let liveJobs=[];let engineers=[];
+const ENGINEERING_JOB_CATEGORIES=["Hydraulic Hose","Hydraulic Ram / Cylinder","Hydraulics - Other","Engine","Cooling System","Oils / Fluids","Filters","Electrical","Battery","Tyres / Wheels / Tracks","Bearings","Belts / Chains","Guards / Safety Devices","Welding / Fabrication","Conveyor / Belt","Drum / Roller","Pump / Motor","Other"];
 
 function todayISO(){return new Date().toISOString().slice(0,10);}
 function escapeHtml(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
@@ -251,7 +253,7 @@ function bootManagerDash(){
 }
 function initListeners(){
   setConn(true,'Connecting...');
-  document.getElementById('monthPicker').value = todayISO().slice(0,7);const pjd=document.getElementById('plannedJobDate');if(pjd&&!pjd.value)pjd.value=todayISO();const ehd=document.getElementById('engineerHoursDate');if(ehd&&!ehd.value)ehd.value=todayISO();
+  document.getElementById('monthPicker').value = todayISO().slice(0,7);const pjd=document.getElementById('plannedJobDate');if(pjd&&!pjd.value)pjd.value=todayISO();const ehd=document.getElementById('engineerHoursDate');if(ehd&&!ehd.value)ehd.value=todayISO();populateAssignmentCategories();
 
   db.collection('machines').orderBy('name').onSnapshot(s=>{
     machines=s.docs.map(d=>({id:d.id,...d.data()}));
@@ -283,6 +285,12 @@ function initListeners(){
 }
 
 
+function populateAssignmentCategories(){
+ const sel=document.getElementById('assignJobCategory');if(!sel)return;
+ const current=sel.value;
+ sel.innerHTML='<option value="">-- Job category --</option>'+ENGINEERING_JOB_CATEGORIES.map(x=>'<option value="'+escapeHtml(x)+'">'+escapeHtml(x)+'</option>').join('');
+ if(ENGINEERING_JOB_CATEGORIES.includes(current))sel.value=current;
+}
 function renderAssignmentSelectors(){
  const ms=document.getElementById('assignMachine'),es=document.getElementById('assignEngineer');if(!ms||!es)return;
  const currentMachine=ms.value,currentEngineer=es.value;
@@ -296,6 +304,8 @@ function updateAssignmentForm(){
  const type=document.getElementById('assignJobType').value,isDefect=type==='defect',isAdHoc=type==='adhoc';
  document.getElementById('assignDefect').style.display=isDefect?'block':'none';
  document.getElementById('assignMachine').style.display='block';
+ const cat=document.getElementById('assignJobCategory');
+ if(cat){cat.style.display=type==='service'?'none':'block';if(type==='service')cat.value='';}
  const adh=document.getElementById('adhocAssignmentDetails');if(adh)adh.style.display=isAdHoc?'block':'none';
  updateDefectOptions();
 }
@@ -327,7 +337,9 @@ async function createAssignedJob(statusOverride){
  const machineId=document.getElementById('assignMachine').value,m=machines.find(x=>x.id===machineId);
  if(!m){if(statusEl)statusEl.textContent='Choose a machine.';return toast('Choose a machine');}
  const jobDescription=jobType==='adhoc'?(document.getElementById('assignJobDescription').value||'').trim():'';
+ const selectedCategory=jobType==='service'?'Service':(document.getElementById('assignJobCategory').value||'').trim();
  const isDamage=jobType==='adhoc'&&document.getElementById('assignDamageStatus').value==='yes';
+ if((jobType==='adhoc'||jobType==='defect')&&!selectedCategory){if(statusEl)statusEl.textContent='Choose a job category.';return toast('Choose a job category');}
  if(jobType==='adhoc'&&!jobDescription){if(statusEl)statusEl.textContent='Add an Ad-Hoc job description.';return toast('Add an Ad-Hoc job description');}
 
  let defect=null;
@@ -350,14 +362,15 @@ async function createAssignedJob(statusOverride){
      assignedAt:firebase.firestore.Timestamp.now(),createdAt:firebase.firestore.Timestamp.now(),updatedAt:firebase.firestore.Timestamp.now()
    };
    if(jobType==='defect'){
-     await liveRef.set({...base,jobType:'adhoc',jobCategory:'Outstanding Defect — '+(defect.itemName||defect.inspectionItemName||'Repair'),jobDescription:defect.lastObservedCondition||defect.itemName||'Outstanding defect repair',isDamage:false,damageDriver:'',damageIncident:'',defectRefId:defect.id,defectId:defect.defectId||'',defectItemName:defect.itemName||defect.inspectionItemName||'',defectDateRaised:defect.dateRaised||'',source:'managerdash_defect_assignment'});
+     await liveRef.set({...base,jobType:'adhoc',jobCategory:selectedCategory,jobDescription:defect.lastObservedCondition||defect.itemName||'Outstanding defect repair',isDamage:false,damageDriver:'',damageIncident:'',defectRefId:defect.id,defectId:defect.defectId||'',defectItemName:defect.itemName||defect.inspectionItemName||'',defectDateRaised:defect.dateRaised||'',source:'managerdash_defect_assignment'});
      try{
        await db.collection('defects').doc(defect.id).set({assignedEngineerId:e.id,assignedEngineerName:e.name,assignedJobId:jobId,assignedAt:firebase.firestore.Timestamp.now(),assignmentStatus:status},{merge:true});
      }catch(defErr){console.error('Defect assignment metadata update failed',defErr);}
    }else{
-     await liveRef.set({...base,jobType,jobCategory:jobType==='service'?'Service':'Ad-Hoc Job',jobDescription,isDamage,damageDriver:'',damageIncident:'',source:'managerdash_assignment'});
+     await liveRef.set({...base,jobType,jobCategory:selectedCategory,jobDescription,isDamage,damageDriver:'',damageIncident:'',source:'managerdash_assignment'});
    }
    if(jobType==='adhoc'){document.getElementById('assignJobDescription').value='';document.getElementById('assignDamageStatus').value='no';}
+   if(jobType!=='service')document.getElementById('assignJobCategory').value='';
    setBusy(false,status==='planned'?'Planned work added for '+e.name+'.':'Job assigned to '+e.name+'.');
    toast(status==='planned'?'Planned work added for '+e.name:'Job assigned to '+e.name);
  }catch(err){
