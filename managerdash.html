@@ -154,10 +154,11 @@ th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;}
     <div class="row" style="margin-top:10px"><select id="assignDamageStatus"><option value="no">Not Damage</option><option value="yes">Damage</option></select></div>
   </div>
   <div class="row" style="margin-top:12px">
-    <button class="btn btn-primary" onclick="createAssignedJob()">Assign Now</button>
+    <button class="btn btn-primary" id="assignNowBtn" onclick="createAssignedJob()">Assign Now</button>
     <input type="date" id="plannedJobDate" aria-label="Planned work date">
-    <button class="btn btn-secondary" onclick="createAssignedJob('planned')">Plan For Date</button>
+    <button class="btn btn-secondary" id="planJobBtn" onclick="createAssignedJob('planned')">Plan For Date</button>
   </div>
+  <p class="progress-note" id="assignJobStatus" style="margin-top:10px"></p>
 </div>
 
 <div class="card">
@@ -317,27 +318,53 @@ function updateDefectOptions(){
  ds.innerHTML=open.length?'<option value="">-- Select defect --</option>'+open.map(d=>'<option value="'+d.id+'">'+escapeHtml(defectFullLabel(d))+'</option>').join(''):'<option value="">-- No unassigned open defects for this machine --</option>';
 }
 async function createAssignedJob(statusOverride){
- const engineerId=document.getElementById('assignEngineer').value,jobType=document.getElementById('assignJobType').value,e=engineers.find(x=>x.id===engineerId);if(!e)return toast('Choose an engineer');
- const status=statusOverride==='planned'?'planned':'assigned',plannedDate=status==='planned'?document.getElementById('plannedJobDate').value:'';if(status==='planned'&&!plannedDate)return toast('Choose a planned work date');
+ const statusEl=document.getElementById('assignJobStatus'),assignBtn=document.getElementById('assignNowBtn'),planBtn=document.getElementById('planJobBtn');
+ const setBusy=(busy,msg)=>{if(assignBtn)assignBtn.disabled=busy;if(planBtn)planBtn.disabled=busy;if(assignBtn)assignBtn.textContent=busy?'Assigning…':'Assign Now';if(planBtn)planBtn.textContent=busy?'Saving…':'Plan For Date';if(statusEl)statusEl.textContent=msg||'';};
+ const engineerId=document.getElementById('assignEngineer').value,jobType=document.getElementById('assignJobType').value,e=engineers.find(x=>x.id===engineerId);
+ if(!e){if(statusEl)statusEl.textContent='Choose an engineer.';return toast('Choose an engineer');}
+ const status=statusOverride==='planned'?'planned':'assigned',plannedDate=status==='planned'?document.getElementById('plannedJobDate').value:'';
+ if(status==='planned'&&!plannedDate){if(statusEl)statusEl.textContent='Choose a planned work date.';return toast('Choose a planned work date');}
+ const machineId=document.getElementById('assignMachine').value,m=machines.find(x=>x.id===machineId);
+ if(!m){if(statusEl)statusEl.textContent='Choose a machine.';return toast('Choose a machine');}
  const jobDescription=jobType==='adhoc'?(document.getElementById('assignJobDescription').value||'').trim():'';
  const isDamage=jobType==='adhoc'&&document.getElementById('assignDamageStatus').value==='yes';
- if(jobType==='adhoc'&&!jobDescription)return toast('Add an Ad-Hoc job description');
- const ref=db.collection('settings').doc('managerJobSequence');
- const n=await db.runTransaction(async tx=>{const s=await tx.get(ref),v=(s.exists?(s.data().value||0):0)+1;tx.set(ref,{value:v},{merge:true});return v;});
+ if(jobType==='adhoc'&&!jobDescription){if(statusEl)statusEl.textContent='Add an Ad-Hoc job description.';return toast('Add an Ad-Hoc job description');}
+
+ let defect=null;
  if(jobType==='defect'){
-   const machineId=document.getElementById('assignMachine').value;if(!machineId)return toast('Choose a machine first');
-   const defectDocId=document.getElementById('assignDefect').value,d=defects.find(x=>x.id===defectDocId&&x.machineId===machineId);if(!d||d.status!=='open')return toast('Choose an outstanding defect for this machine');
-   const existing=liveJobs.find(j=>j.defectRefId===d.id&&j.status!=='completed');if(existing)return toast('This defect is already assigned');
-   const m=machines.find(x=>x.id===d.machineId),jobId='CP-AHJ-M'+String(n).padStart(5,'0');
-   await db.collection('liveJobs').add({jobId,jobType:'adhoc',status,machineId:d.machineId||'',machineName:d.machineName||(m?m.name:''),serialNumber:m?(m.serialNumber||''):'',branch:m?(m.branch||''):'',hoursReading:m?(Number(m.currentHours)||0):0,date:(status==='planned'?plannedDate:todayISO()),plannedDate:plannedDate||null,jobCategory:'Outstanding Defect — '+(d.itemName||d.inspectionItemName||'Repair'),engineerId:e.id,engineerName:e.name,defectRefId:d.id,defectId:d.defectId||'',defectItemName:d.itemName||d.inspectionItemName||'',defectDateRaised:d.dateRaised||'',source:'managerdash_defect_assignment',accumulatedMs:0,progressNotes:[],supportEngineerIds:[],supportEngineerNames:[],assignedAt:firebase.firestore.Timestamp.now(),createdAt:firebase.firestore.Timestamp.now(),updatedAt:firebase.firestore.Timestamp.now()});
-   await db.collection('defects').doc(d.id).set({assignedEngineerId:e.id,assignedEngineerName:e.name,assignedJobId:jobId,assignedAt:firebase.firestore.Timestamp.now(),assignmentStatus:status},{merge:true});
-   toast((status==='planned'?'Planned ':'')+(d.defectId||'Defect')+' for '+e.name);return;
+   const defectDocId=document.getElementById('assignDefect').value;
+   defect=defects.find(x=>x.id===defectDocId&&x.machineId===machineId);
+   if(!defect||defect.status!=='open'){if(statusEl)statusEl.textContent='Choose an outstanding defect for this machine.';return toast('Choose an outstanding defect for this machine');}
+   if(liveJobs.some(j=>j.defectRefId===defect.id&&j.status!=='completed'&&j.status!=='cancelled')){if(statusEl)statusEl.textContent='This defect is already assigned.';return toast('This defect is already assigned');}
  }
- const machineId=document.getElementById('assignMachine').value,m=machines.find(x=>x.id===machineId);if(!m)return toast('Choose a machine');
- const prefix=jobType==='service'?'SVC':'AHJ',jobId='CP-'+prefix+'-M'+String(n).padStart(5,'0');
- await db.collection('liveJobs').add({jobId,jobType,status,machineId:m.id,machineName:m.name,serialNumber:m.serialNumber||'',branch:m.branch||'',hoursReading:Number(m.currentHours)||0,date:(status==='planned'?plannedDate:todayISO()),plannedDate:plannedDate||null,jobCategory:jobType==='service'?'Service':'Ad-Hoc Job',jobDescription,isDamage,damageDriver:'',damageIncident:'',source:'managerdash_assignment',engineerId:e.id,engineerName:e.name,accumulatedMs:0,progressNotes:[],supportEngineerIds:[],supportEngineerNames:[],assignedAt:firebase.firestore.Timestamp.now(),createdAt:firebase.firestore.Timestamp.now(),updatedAt:firebase.firestore.Timestamp.now()});
- if(jobType==='adhoc'){document.getElementById('assignJobDescription').value='';document.getElementById('assignDamageStatus').value='no';}
- toast(status==='planned'?'Planned work added for '+e.name:'Job assigned to '+e.name);
+ setBusy(true,status==='planned'?'Saving planned job…':'Assigning job…');
+ try{
+   const liveRef=db.collection('liveJobs').doc();
+   const suffix=liveRef.id.slice(0,6).toUpperCase();
+   const prefix=jobType==='service'?'SVC':'AHJ';
+   const jobId='CP-'+prefix+'-M'+suffix;
+   const base={
+     jobId,status,machineId:m.id,machineName:m.name,serialNumber:m.serialNumber||'',branch:m.branch||'',hoursReading:Number(m.currentHours)||0,
+     date:status==='planned'?plannedDate:todayISO(),plannedDate:plannedDate||null,
+     engineerId:e.id,engineerName:e.name,accumulatedMs:0,progressNotes:[],supportEngineerIds:[],supportEngineerNames:[],
+     assignedAt:firebase.firestore.Timestamp.now(),createdAt:firebase.firestore.Timestamp.now(),updatedAt:firebase.firestore.Timestamp.now()
+   };
+   if(jobType==='defect'){
+     await liveRef.set({...base,jobType:'adhoc',jobCategory:'Outstanding Defect — '+(defect.itemName||defect.inspectionItemName||'Repair'),jobDescription:defect.lastObservedCondition||defect.itemName||'Outstanding defect repair',isDamage:false,damageDriver:'',damageIncident:'',defectRefId:defect.id,defectId:defect.defectId||'',defectItemName:defect.itemName||defect.inspectionItemName||'',defectDateRaised:defect.dateRaised||'',source:'managerdash_defect_assignment'});
+     try{
+       await db.collection('defects').doc(defect.id).set({assignedEngineerId:e.id,assignedEngineerName:e.name,assignedJobId:jobId,assignedAt:firebase.firestore.Timestamp.now(),assignmentStatus:status},{merge:true});
+     }catch(defErr){console.error('Defect assignment metadata update failed',defErr);}
+   }else{
+     await liveRef.set({...base,jobType,jobCategory:jobType==='service'?'Service':'Ad-Hoc Job',jobDescription,isDamage,damageDriver:'',damageIncident:'',source:'managerdash_assignment'});
+   }
+   if(jobType==='adhoc'){document.getElementById('assignJobDescription').value='';document.getElementById('assignDamageStatus').value='no';}
+   setBusy(false,status==='planned'?'Planned work added for '+e.name+'.':'Job assigned to '+e.name+'.');
+   toast(status==='planned'?'Planned work added for '+e.name:'Job assigned to '+e.name);
+ }catch(err){
+   console.error('Manager job assignment failed',err);
+   setBusy(false,'Could not assign job. Please try again.');
+   toast('Job assignment failed — please try again');
+ }
 }
 async function reassignJob(id){
  const j=liveJobs.find(x=>x.id===id),sel=document.getElementById('reassign-'+id),engineerId=sel&&sel.value,e=engineers.find(x=>x.id===engineerId);if(!j||!e)return;
