@@ -63,7 +63,8 @@ th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;}
 .chart-bar-track{flex:1;background:#eef0f3;border-radius:6px;height:18px;}
 .chart-bar-fill{background:var(--navy);height:100%;border-radius:6px;}
 .chart-bar-val{width:70px;text-align:right;flex-shrink:0;font-weight:700;}
-.manager-tabs{display:flex;gap:8px;margin:0 0 18px;position:sticky;top:0;z-index:20;background:#f5f6f8;padding:10px 0 8px}.manager-tab{border:1px solid #d8dce3;background:#fff;color:var(--navy);padding:10px 16px;border-radius:10px;font-weight:800;cursor:pointer}.manager-tab.active{background:var(--navy);color:#fff;border-color:var(--navy)}.manager-panel{display:none}.manager-panel.active{display:block}.job-section-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}.job-summary{font-size:.78rem;color:var(--grey)}.job-card{border:1px solid #e2e5ea;border-radius:12px;padding:14px;margin-bottom:10px;background:#fff}.job-card.live{border-left:5px solid var(--green)}.job-card.paused{border-left:5px solid var(--amber)}.job-card.planned{border-left:5px solid var(--navy)}.job-card.assigned{border-left:5px solid #64748b}.engineer-day-card{border:1px solid #e2e5ea;border-radius:12px;padding:14px;margin-bottom:12px;background:#fff}.engineer-day-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:10px}.engineer-day-total{font-size:1.15rem;font-weight:900;color:var(--navy)}.engineer-job-row{display:grid;grid-template-columns:minmax(150px,1.4fr) minmax(120px,1fr) minmax(100px,.8fr) 95px;gap:10px;align-items:start;padding:10px 0;border-top:1px solid #eceef1;font-size:.82rem}.engineer-job-row:first-of-type{border-top:0}.engineer-job-duration{text-align:right;font-weight:800}@media(max-width:760px){.engineer-job-row{grid-template-columns:1fr}.engineer-job-duration{text-align:left}}
+.manager-tabs{display:flex;gap:8px;margin:0 0 18px;position:sticky;top:0;z-index:20;background:#f5f6f8;padding:10px 0 8px}.manager-tab{border:1px solid #d8dce3;background:#fff;color:var(--navy);padding:10px 16px;border-radius:10px;font-weight:800;cursor:pointer}.manager-tab.active{background:var(--navy);color:#fff;border-color:var(--navy)}.manager-panel{display:none}.manager-panel.active{display:block}.job-section-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}.job-summary{font-size:.78rem;color:var(--grey)}.job-card{border:1px solid #e2e5ea;border-radius:12px;padding:14px;margin-bottom:10px;background:#fff}.job-card.live{border-left:5px solid var(--green)}.job-card.paused{border-left:5px solid var(--amber)}.job-card.planned{border-left:5px solid var(--navy)}.job-card.assigned{border-left:5px solid #64748b}.engineer-pin-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #eceef1}.engineer-pin-row:first-child{border-top:0}.engineer-pin-value{font-family:monospace;font-size:1rem;font-weight:800;letter-spacing:.18em;min-width:90px;text-align:center}
+.engineer-day-card{border:1px solid #e2e5ea;border-radius:12px;padding:14px;margin-bottom:12px;background:#fff}.engineer-day-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:10px}.engineer-day-total{font-size:1.15rem;font-weight:900;color:var(--navy)}.engineer-job-row{display:grid;grid-template-columns:minmax(150px,1.4fr) minmax(120px,1fr) minmax(100px,.8fr) 95px;gap:10px;align-items:start;padding:10px 0;border-top:1px solid #eceef1;font-size:.82rem}.engineer-job-row:first-of-type{border-top:0}.engineer-job-duration{text-align:right;font-weight:800}@media(max-width:760px){.engineer-job-row{grid-template-columns:1fr}.engineer-job-duration{text-align:left}}
 .job-main{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}.job-title{font-weight:800;color:var(--navy)}.job-meta{font-size:.78rem;color:var(--grey);margin-top:4px}.job-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.job-edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}.job-edit-grid .full{grid-column:1/-1}.job-large-textarea{width:100%;min-height:150px;resize:vertical;font-size:1rem;line-height:1.45;padding:12px 14px;box-sizing:border-box}.manager-complete-panel{margin-top:12px;padding:12px 14px;border:1px solid #d9e2ea;border-radius:10px;background:#f8fafc}.manager-complete-panel summary{cursor:pointer;font-weight:800;color:var(--navy)}.manager-complete-panel .row{margin-top:10px}@media(max-width:760px){.job-main{display:block}.job-actions{margin-top:10px}.job-edit-grid{grid-template-columns:1fr}.job-edit-grid .full{grid-column:auto}}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 20px;border-radius:10px;font-size:.9rem;font-weight:600;z-index:200;box-shadow:0 6px 20px rgba(0,0,0,.2);opacity:0;transition:opacity .25s;pointer-events:none;}
 .toast.show{opacity:1;}
@@ -173,6 +174,12 @@ th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;}
 </div>
 <div class="card">
   <div class="job-section-head">
+    <div><div class="section-title">Engineer PINs</div><div class="job-summary">PINs are hidden by default. Reveal only when needed.</div></div>
+  </div>
+  <div id="engineerPinList"></div>
+</div>
+<div class="card">
+  <div class="job-section-head">
     <div><div class="section-title">Engineer Daily Hours</div><div class="job-summary">Completed jobs shown using final authorised labour hours for the selected day.</div></div>
     <div style="min-width:165px"><input type="date" id="engineerHoursDate" onchange="renderEngineerDailyHours()"></div>
   </div>
@@ -233,7 +240,7 @@ function switchManagerTab(tab){
  document.getElementById('manager-engineering').classList.toggle('active',tab==='engineering');
  document.getElementById('tab-overview').classList.toggle('active',tab==='overview');
  document.getElementById('tab-engineering').classList.toggle('active',tab==='engineering');
- if(tab==='engineering'){renderAssignmentBoard();renderEngineerDailyHours();}
+ if(tab==='engineering'){renderAssignmentBoard();renderEngineerDailyHours();renderEngineerPins();}
  window.scrollTo(0,0);
 }
 
@@ -279,7 +286,7 @@ function initListeners(){
     costEntries=s.docs.map(d=>({id:d.id,...d.data()}));
     computeStats();renderAssetCostHours();
   }, e=>{});
-  db.collection('engineers').orderBy('name').onSnapshot(s=>{engineers=s.docs.map(d=>({id:d.id,...d.data()}));renderAssignmentSelectors();renderAssignmentBoard();renderEngineerDailyHours();},e=>{});
+  db.collection('engineers').orderBy('name').onSnapshot(s=>{engineers=s.docs.map(d=>({id:d.id,...d.data()}));renderAssignmentSelectors();renderAssignmentBoard();renderEngineerDailyHours();renderEngineerPins();},e=>{});
   db.collection('liveJobs').onSnapshot(s=>{liveJobs=s.docs.map(d=>({id:d.id,...d.data()})).filter(j=>j.status!=='completed'&&j.status!=='cancelled');renderAssignmentBoard();updateDefectOptions();},e=>{});
 
 }
@@ -501,6 +508,18 @@ function renderAssignmentBoard(){
  liveWrap.innerHTML=live.length?live.map(jobCardHtml).join(''):'<div class="empty-state">No live or paused engineering jobs.</div>';
  plannedWrap.innerHTML=planned.length?planned.map(jobCardHtml).join(''):'<div class="empty-state">No assigned or planned engineering jobs.</div>';
  updateManagerJobTimers();
+}
+function renderEngineerPins(){
+ const w=document.getElementById('engineerPinList');if(!w)return;
+ const list=engineers.filter(e=>e.active!==false).sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
+ if(!list.length){w.innerHTML='<div class="empty-state">No active engineers.</div>';return;}
+ w.innerHTML=list.map(e=>'<div class="engineer-pin-row"><div><strong>'+escapeHtml(e.name||'Engineer')+'</strong><div class="job-meta">Engineer sign-in PIN</div></div><div style="display:flex;align-items:center;gap:10px"><span class="engineer-pin-value" id="pin-'+e.id+'">••••</span><button class="btn btn-secondary btn-sm" id="pinbtn-'+e.id+'" onclick="toggleEngineerPin(\''+e.id+'\')">Reveal PIN</button></div></div>').join('');
+}
+function toggleEngineerPin(id){
+ const e=engineers.find(x=>x.id===id),value=document.getElementById('pin-'+id),btn=document.getElementById('pinbtn-'+id);if(!e||!value||!btn)return;
+ const hidden=btn.textContent==='Reveal PIN';
+ value.textContent=hidden?String(e.pin||'No PIN'):'••••';
+ btn.textContent=hidden?'Hide PIN':'Reveal PIN';
 }
 function completedJobDate(r){
  if(r.completedAt&&r.completedAt.toDate)return r.completedAt.toDate().toISOString().slice(0,10);
