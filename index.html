@@ -368,7 +368,41 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focu
 const firebaseConfig={apiKey:"AIzaSyD60Z04IRIvv-EaSyPzoA33fEQ3yT6wsQQ",authDomain:"checkplant-kcm.firebaseapp.com",projectId:"checkplant-kcm",storageBucket:"checkplant-kcm.firebasestorage.app",messagingSenderId:"492245064396",appId:"1:492245064396:web:c79e64b32b9856766bc069"};
 firebase.initializeApp(firebaseConfig);
 const db=firebase.firestore();
+try{
+  db.settings({experimentalAutoDetectLongPolling:true,useFetchStreams:false});
+}catch(e){console.warn('Firestore transport settings unavailable',e);}
+let firestoreServerSeen=false,firestoreRetryTimer=null;
 function setConn(o,t){document.getElementById('connDot').className='conn-dot '+(o?'online':'offline');document.getElementById('connText').textContent=t;}
+async function ensureFirestoreNetwork(){
+  if(typeof navigator!=='undefined'&&navigator.onLine===false){setConn(false,'Device offline');return false;}
+  try{
+    await db.enableNetwork();
+    return true;
+  }catch(err){
+    console.error('Firestore network enable failed',err);
+    setConn(false,'Reconnecting to CheckPlant…');
+    return false;
+  }
+}
+async function refreshMachinesFromServer(){
+  try{
+    await ensureFirestoreNetwork();
+    const snap=await db.collection('machines').orderBy('name').get({source:'server'});
+    firestoreServerSeen=true;
+    machines=snap.docs.map(d=>({id:d.id,...d.data()}));
+    populateServiceMachineSelect();populateBookingMachineSelect();populateAdHocMachines();renderMachineList();renderHomeMachineList();renderOverdueAlerts();renderCalendar();renderDailyChecks();renderVORRegister();
+    setConn(true,'Assets synced');
+    if(firestoreRetryTimer){clearTimeout(firestoreRetryTimer);firestoreRetryTimer=null;}
+    return true;
+  }catch(err){
+    console.error('Firestore server refresh failed',err);
+    setConn(false,(typeof navigator!=='undefined'&&navigator.onLine===false)?'Device offline':'Reconnecting to CheckPlant…');
+    if(!firestoreRetryTimer)firestoreRetryTimer=setTimeout(()=>{firestoreRetryTimer=null;refreshMachinesFromServer();},8000);
+    return false;
+  }
+}
+window.addEventListener('online',()=>{setConn(true,'Reconnecting…');refreshMachinesFromServer();});
+window.addEventListener('offline',()=>setConn(false,'Device offline'));
 function isFireExtinguisherItem(name){return /fire\s*extinguisher/i.test(String(name||''));}
 const REQUIRED_SERVICE_ITEMS=["Filters Changed","Oils Topped up/ Changed"];
 function serviceItemsWithRequired(categoryKey,items){
@@ -572,10 +606,14 @@ async function createOrLinkCheckDefect(item,record,operatorName){
 }
 function initFirestoreListeners(){
 setConn(true,"Connecting...");
+ensureFirestoreNetwork().then(()=>refreshMachinesFromServer());
 loadPinSetting();
 db.collection('machines').orderBy('name').onSnapshot({includeMetadataChanges:true},s=>{
-  machines=s.docs.map(d=>({id:d.id,...d.data()}));populateServiceMachineSelect();populateBookingMachineSelect();populateAdHocMachines();renderMachineList();renderHomeMachineList();renderOverdueAlerts();renderCalendar();renderDailyChecks();renderVORRegister();setConn(!s.metadata.fromCache,s.metadata.fromCache?"Offline / cached assets":s.metadata.hasPendingWrites?"Saving changes…":"Assets synced");
-},e=>setConn(false,"Error: "+e.message));
+  machines=s.docs.map(d=>({id:d.id,...d.data()}));populateServiceMachineSelect();populateBookingMachineSelect();populateAdHocMachines();renderMachineList();renderHomeMachineList();renderOverdueAlerts();renderCalendar();renderDailyChecks();renderVORRegister();
+  if(!s.metadata.fromCache){firestoreServerSeen=true;setConn(true,s.metadata.hasPendingWrites?'Saving changes…':'Assets synced');}
+  else if(firestoreServerSeen){setConn(true,'Using local data — syncing…');}
+  else{setConn(false,'Connecting to CheckPlant…');refreshMachinesFromServer();}
+},e=>{console.error('Machines listener error',e);setConn(false,'Connection error — retrying…');refreshMachinesFromServer();});
 db.collection('engineers').orderBy('name').onSnapshot(s=>{engineers=s.docs.map(d=>({id:d.id,...d.data()}));renderEngineerAdmin();},e=>console.error("Engineer list error",e));
 db.collection('liveJobs').onSnapshot(s=>{liveJobs=s.docs.map(d=>({id:d.id,...d.data()})).filter(j=>j.status!=='completed'&&j.status!=='cancelled');renderEngineerLiveJobs();renderEngineerActivityOverview();if(currentLiveJob){const fresh=liveJobs.find(j=>j.id===currentLiveJob.id);if(fresh){currentLiveJob=fresh;renderLiveJobState();}}if(currentServiceLiveJob){const freshSvc=liveJobs.find(j=>j.id===currentServiceLiveJob.id);if(freshSvc){currentServiceLiveJob=freshSvc;renderServiceLiveState();}}},e=>console.error("Live jobs error",e));
 db.collection('categories').onSnapshot(async s=>{
