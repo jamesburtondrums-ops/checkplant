@@ -216,10 +216,7 @@ th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;}
 const firebaseConfig={apiKey:"AIzaSyD60Z04IRIvv-EaSyPzoA33fEQ3yT6wsQQ",authDomain:"checkplant-kcm.firebaseapp.com",projectId:"checkplant-kcm",storageBucket:"checkplant-kcm.firebasestorage.app",messagingSenderId:"492245064396",appId:"1:492245064396:web:c79e64b32b9856766bc069"};
 firebase.initializeApp(firebaseConfig);
 const db=firebase.firestore();
-try{db.settings({experimentalAutoDetectLongPolling:true,useFetchStreams:false});}catch(e){console.warn('Firestore transport settings unavailable',e);}
 function setConn(o,t){document.getElementById('connDot').className='conn-dot '+(o?'online':'offline');document.getElementById('connText').textContent=t;}
-async function ensureManagerFirestoreNetwork(){try{await db.enableNetwork();return true;}catch(e){console.error('ManagerDash Firestore reconnect failed',e);setConn(false,'Reconnecting…');return false;}}
-window.addEventListener('online',()=>{setConn(true,'Reconnecting…');ensureManagerFirestoreNetwork();});window.addEventListener('offline',()=>setConn(false,'Device offline'));
 
 let machines=[];
 let records=[];
@@ -262,7 +259,7 @@ function bootManagerDash(){
  else{const el=document.getElementById('managerPinInput');if(el)setTimeout(()=>el.focus(),50);}
 }
 function initListeners(){
-  setConn(true,'Connecting...');ensureManagerFirestoreNetwork();
+  setConn(true,'Connecting...');
   document.getElementById('monthPicker').value = todayISO().slice(0,7);const pjd=document.getElementById('plannedJobDate');if(pjd&&!pjd.value)pjd.value=todayISO();const ehd=document.getElementById('engineerHoursDate');if(ehd&&!ehd.value)ehd.value=todayISO();populateAssignmentCategories();
 
   db.collection('machines').orderBy('name').onSnapshot(s=>{
