@@ -103,7 +103,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focu
 <body>
 <header><div><b>CheckPlant</b> — KCM Waste Management</div>
 <nav><button id="navHome" onclick="goHome()">Home</button><button id="navOffice" onclick="requestBackOffice()">Back Office</button></nav></header>
-<div class="sync-banner"><span class="conn-dot online" id="connDot"></span><span id="connText">Connecting...</span><button type="button" id="connDiagBtn" class="btn btn-secondary btn-sm" style="margin-left:10px;display:none" onclick="showConnectionDiagnostics()">Connection details</button></div>
+<div class="sync-banner"><span class="conn-dot online" id="connDot"></span><span id="connText">Connecting...</span></div>
 <main>
 <div class="screen active" id="screen-home">
 <h1 style="color:var(--navy)">CheckPlant</h1><p>Plant machinery servicing &amp; safety check records</p>
@@ -368,53 +368,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focu
 const firebaseConfig={apiKey:"AIzaSyD60Z04IRIvv-EaSyPzoA33fEQ3yT6wsQQ",authDomain:"checkplant-kcm.firebaseapp.com",projectId:"checkplant-kcm",storageBucket:"checkplant-kcm.firebasestorage.app",messagingSenderId:"492245064396",appId:"1:492245064396:web:c79e64b32b9856766bc069"};
 firebase.initializeApp(firebaseConfig);
 const db=firebase.firestore();
-try{
-  db.settings({experimentalAutoDetectLongPolling:true,useFetchStreams:false});
-}catch(e){console.warn('Firestore transport settings unavailable',e);}
-let firestoreServerSeen=false,firestoreRetryTimer=null;
 function setConn(o,t){document.getElementById('connDot').className='conn-dot '+(o?'online':'offline');document.getElementById('connText').textContent=t;}
-let lastFirestoreError=null;
-function recordFirestoreError(err,context){
-  lastFirestoreError={context:context||'Firestore',code:err&&err.code?String(err.code):'',message:err&&err.message?String(err.message):String(err||'Unknown error'),at:new Date().toISOString()};
-  const b=document.getElementById('connDiagBtn');if(b)b.style.display='inline-block';
-}
-function showConnectionDiagnostics(){
-  const e=lastFirestoreError;
-  if(!e){alert('No Firestore error has been captured. Current browser online state: '+(navigator.onLine?'online':'offline')+'.');return;}
-  alert('CheckPlant connection diagnostic\n\nArea: '+e.context+'\nCode: '+(e.code||'none')+'\nMessage: '+e.message+'\nTime: '+e.at+'\nBrowser online: '+(navigator.onLine?'yes':'no'));
-}
-async function ensureFirestoreNetwork(){
-  if(typeof navigator!=='undefined'&&navigator.onLine===false){setConn(false,'Device offline');return false;}
-  try{
-    await db.enableNetwork();
-    return true;
-  }catch(err){
-    console.error('Firestore network enable failed',err);recordFirestoreError(err,'enableNetwork');
-    setConn(false,'Reconnecting to CheckPlant…');
-    return false;
-  }
-}
-async function refreshMachinesFromServer(){
-  try{
-    await ensureFirestoreNetwork();
-    const snap=await db.collection('machines').orderBy('name').get();
-    machines=snap.docs.map(d=>({id:d.id,...d.data()}));
-    populateServiceMachineSelect();populateBookingMachineSelect();populateAdHocMachines();renderMachineList();renderHomeMachineList();renderOverdueAlerts();renderCalendar();renderDailyChecks();renderVORRegister();
-    if(snap.metadata&&snap.metadata.fromCache){
-      setConn(true,'Using cached data — syncing in background');
-    }else{
-      firestoreServerSeen=true;
-      setConn(true,'Assets synced');
-    }
-    return true;
-  }catch(err){
-    console.error('Firestore refresh failed',err);recordFirestoreError(err,'machines refresh');
-    setConn(false,(typeof navigator!=='undefined'&&navigator.onLine===false)?'Device offline':'Connection interrupted — local data still available');
-    return false;
-  }
-}
-window.addEventListener('online',()=>{setConn(true,'Reconnecting…');ensureFirestoreNetwork();});
-window.addEventListener('offline',()=>setConn(false,'Device offline'));
 function isFireExtinguisherItem(name){return /fire\s*extinguisher/i.test(String(name||''));}
 const REQUIRED_SERVICE_ITEMS=["Filters Changed","Oils Topped up/ Changed"];
 function serviceItemsWithRequired(categoryKey,items){
@@ -618,14 +572,10 @@ async function createOrLinkCheckDefect(item,record,operatorName){
 }
 function initFirestoreListeners(){
 setConn(true,"Connecting...");
-ensureFirestoreNetwork();
 loadPinSetting();
 db.collection('machines').orderBy('name').onSnapshot({includeMetadataChanges:true},s=>{
-  machines=s.docs.map(d=>({id:d.id,...d.data()}));populateServiceMachineSelect();populateBookingMachineSelect();populateAdHocMachines();renderMachineList();renderHomeMachineList();renderOverdueAlerts();renderCalendar();renderDailyChecks();renderVORRegister();
-  if(!s.metadata.fromCache){firestoreServerSeen=true;setConn(true,s.metadata.hasPendingWrites?'Saving changes…':'Assets synced');}
-  else if(firestoreServerSeen){setConn(true,'Using local data — syncing…');}
-  else{setConn(true,'Using cached data — connecting…');}
-},e=>{console.error('Machines listener error',e);recordFirestoreError(e,'machines listener');setConn(false,'Connection interrupted — local data retained');});
+  machines=s.docs.map(d=>({id:d.id,...d.data()}));populateServiceMachineSelect();populateBookingMachineSelect();populateAdHocMachines();renderMachineList();renderHomeMachineList();renderOverdueAlerts();renderCalendar();renderDailyChecks();renderVORRegister();setConn(!s.metadata.fromCache,s.metadata.fromCache?"Offline / cached assets":s.metadata.hasPendingWrites?"Saving changes…":"Assets synced");
+},e=>setConn(false,"Error: "+e.message));
 db.collection('engineers').orderBy('name').onSnapshot(s=>{engineers=s.docs.map(d=>({id:d.id,...d.data()}));renderEngineerAdmin();},e=>console.error("Engineer list error",e));
 db.collection('liveJobs').onSnapshot(s=>{liveJobs=s.docs.map(d=>({id:d.id,...d.data()})).filter(j=>j.status!=='completed'&&j.status!=='cancelled');renderEngineerLiveJobs();renderEngineerActivityOverview();if(currentLiveJob){const fresh=liveJobs.find(j=>j.id===currentLiveJob.id);if(fresh){currentLiveJob=fresh;renderLiveJobState();}}if(currentServiceLiveJob){const freshSvc=liveJobs.find(j=>j.id===currentServiceLiveJob.id);if(freshSvc){currentServiceLiveJob=freshSvc;renderServiceLiveState();}}},e=>console.error("Live jobs error",e));
 db.collection('categories').onSnapshot(async s=>{
@@ -1020,7 +970,7 @@ async function writeMachineIdentity(ref,patch,isNew){
     const current=isNew?null:await tx.get(ref);
     if(!isNew&&!current.exists)throw new Error('This asset no longer exists. Reload the asset list.');
     const candidate={...(current?current.data():{}),...patch};
-    const snapshot=await db.collection('machines').get();
+    const snapshot=await db.collection('machines').get({source:'server'});
     const match=snapshot.docs.find(d=>d.id!==ref.id&&sameAsset(candidate,d.data()));
     if(match)throw new Error('An asset already matches: '+match.data().name+'. Open its profile instead.');
     if(isNew)tx.set(ref,patch);else tx.update(ref,patch);
