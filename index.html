@@ -212,7 +212,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focu
 <div class="row"><div><label>Name <span class="required-star">*</span></label><input type="text" id="svcSignName"></div><div><label>Date <span class="required-star">*</span></label><input type="date" id="svcSignDate"></div></div>
 <canvas class="sigPad" id="sigPadService"></canvas>
 <button class="btn btn-secondary" onclick="clearSig('sigPadService')">Clear Signature</button></div>
-<button class="btn btn-primary btn-block" id="completeServiceJobBtn" style="display:none" onclick="completeAndShare('service')">Complete Service &amp; Share PDF</button></div>
+<button class="btn btn-primary btn-block" id="completeServiceJobBtn" style="display:none" onclick="completeAndShare('service')">Complete Service</button>
+<p class="progress-note" id="serviceCompleteStatus" style="text-align:center;margin-top:8px"></p></div>
 <div class="screen" id="screen-check-category">
 <button class="back-link" onclick="goHome()">← Back</button>
 <div class="card"><div class="section-title">✅ Select Machine Category</div><div class="cat-grid" id="categoryGrid"></div></div></div>
@@ -758,25 +759,61 @@ document.getElementById('defSignName').value='';document.getElementById('defSign
 showScreen('defect-form');setTimeout(()=>initSigPad('sigPadDefect'),50);}
 async function completeAndShare(mode){
 if(mode==='service'){
-if(!currentEngineer){toast('Engineer sign-in required');requestEngineerSignIn();return;}
-if(!currentServiceMachine){toast('Select a machine first');return;}
-if(!currentServiceLiveJob){toast('Mark the service live before completing it');return;}
-if(!engineerIsLead(currentServiceLiveJob)){toast('Only the lead engineer can complete this service');return;}
-const techName=document.getElementById('svcTechName').value.trim();const signName=document.getElementById('svcSignName').value.trim();
-const signDate=document.getElementById('svcSignDate').value;const hours=document.getElementById('svcHours').value;const sig=sigPads['sigPadService'];
-if(!signName||!signDate){toast('Enter name and date');return;}if(!sig||!sig.hasSignature){toast('Draw signature');return;}if(hours===''){toast('Enter hours');return;}
+const completeBtn=document.getElementById('completeServiceJobBtn'),completeStatus=document.getElementById('serviceCompleteStatus');
+const fail=(msg)=>{if(completeStatus)completeStatus.textContent=msg;if(completeBtn){completeBtn.disabled=false;completeBtn.textContent='Complete Service';}toast(msg);};
+if(!currentEngineer){fail('Engineer sign-in required');requestEngineerSignIn();return;}
+if(!currentServiceMachine){fail('Select a machine first');return;}
+if(!currentServiceLiveJob){fail('Mark the service live before completing it');return;}
+if(!engineerIsLead(currentServiceLiveJob)){fail('Only the lead engineer can complete this service');return;}
+const techName=(document.getElementById('svcTechName').value||currentEngineer.name||'').trim();
+const signName=(document.getElementById('svcSignName').value||currentEngineer.name||'').trim();
+const signDate=document.getElementById('svcSignDate').value||todayISO();
+const hours=document.getElementById('svcHours').value;
+const sig=sigPads['sigPadService'];
+if(!signName){fail('Enter engineer name');return;}
+if(hours===''){fail('Enter machine hours');return;}
 const items=collectItems('serviceItemsList',machineChecklistItems(currentServiceMachine));
+const incomplete=items.filter(i=>i.status==='Not checked');
+if(incomplete.length){fail(incomplete.length+' service checklist item'+(incomplete.length===1?' is':'s are')+' still unanswered');return;}
+if(completeBtn){completeBtn.disabled=true;completeBtn.textContent='Completing Service…';}
+if(completeStatus)completeStatus.textContent='Saving completed service…';
 const lolerCertDate=document.getElementById('lolerCertDate').value,lolerNextDue=document.getElementById('lolerNextDue').value,lolerExaminer=document.getElementById('lolerExaminer').value.trim();
 const lolerSection={status:pendingLolerStatus,certDate:lolerCertDate,nextDueDate:lolerNextDue,examinerName:lolerExaminer};
-const hoursNum=Number(hours);const nextDue=hoursNum+SERVICE_HOURS_LIMIT;
+const hoursNum=Number(hours),nextDue=hoursNum+SERVICE_HOURS_LIMIT;
 const svcCompletedAt=Date.now();let svcDurationMs=Number(currentServiceLiveJob.accumulatedMs)||0;if(currentServiceLiveJob.status==='active')svcDurationMs+=Math.max(0,svcCompletedAt-tsToMs(currentServiceLiveJob.activeStartedAt));
-const record={recordId:currentServiceLiveJob.jobId,type:'service',machineId:currentServiceMachine.id,subject:currentServiceMachine.name,serialNumber:currentServiceMachine.serialNumber||'',branch:currentServiceMachine.branch||'',technician:techName,date:document.getElementById('svcDate').value,items,notes:document.getElementById('svcNotes').value.trim(),signName,signDate,signatureData:sig.canvas.toDataURL('image/png'),hoursReading:hoursNum,nextServiceDueHours:nextDue,lolerSection,startedAt:currentServiceLiveJob.startedAt,completedAt:firebase.firestore.Timestamp.fromMillis(svcCompletedAt),jobDurationMs:svcDurationMs,jobDurationFormatted:formatDuration(svcDurationMs),progressNotes:currentServiceLiveJob.progressNotes||[],billingStatus:'awaiting_authorisation',createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending'};
-await db.collection('machines').doc(currentServiceMachine.id).update({currentHours:hoursNum,lastServiceHours:hoursNum,nextServiceDueHours:nextDue});
-if(lolerSection.status!=='na'){await db.collection('machines').doc(currentServiceMachine.id).update({loler:{applies:true,lastExamDate:lolerCertDate||null,nextDueDate:lolerNextDue||null,examinerName:lolerExaminer||''}});}
-if(lolerSection.status==='defect'){const defectId=await getNextDefectId();await db.collection('defects').add({defectId,machineId:currentServiceMachine.id,machineName:currentServiceMachine.name,itemName:'LOLER — Statutory: exam overdue/expired',dateRaised:todayISO(),raisedAt:firebase.firestore.Timestamp.now(),status:'open',resolvedDate:null,resolvedAt:null,resolvedBy:null,resolutionRecordId:null,severity:'statutory'});}
-await db.collection('liveJobs').doc(currentServiceLiveJob.id).update({status:'completed',completedAt:firebase.firestore.Timestamp.fromMillis(svcCompletedAt),jobDurationMs:svcDurationMs,updatedAt:firebase.firestore.Timestamp.now()});
-stopServiceTimer();currentServiceLiveJob=null;
-await saveRecordToFirestore(record);
+const recordRef=db.collection('records').doc();
+const record={id:recordRef.id,recordId:currentServiceLiveJob.jobId,type:'service',machineId:currentServiceMachine.id,machineName:currentServiceMachine.name,subject:currentServiceMachine.name,serialNumber:currentServiceMachine.serialNumber||'',branch:currentServiceMachine.branch||'',technician:techName,date:document.getElementById('svcDate').value||todayISO(),items,notes:document.getElementById('svcNotes').value.trim(),signName,signDate,signatureData:(sig&&sig.hasSignature)?sig.canvas.toDataURL('image/png'):'',hoursReading:hoursNum,nextServiceDueHours:nextDue,lolerSection,startedAt:currentServiceLiveJob.startedAt,completedAt:firebase.firestore.Timestamp.fromMillis(svcCompletedAt),jobDurationMs:svcDurationMs,jobDurationFormatted:formatDuration(svcDurationMs),progressNotes:currentServiceLiveJob.progressNotes||[],billingStatus:'awaiting_authorisation',createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending'};
+try{
+  await recordRef.set(record);
+}catch(err){
+  console.error('Service record save failed',err);
+  fail('Could not save completed service. Please try again.');
+  return;
+}
+try{
+  await db.collection('machines').doc(currentServiceMachine.id).update({currentHours:hoursNum,lastServiceHours:hoursNum,nextServiceDueHours:nextDue});
+  if(lolerSection.status!=='na')await db.collection('machines').doc(currentServiceMachine.id).update({loler:{applies:true,lastExamDate:lolerCertDate||null,nextDueDate:lolerNextDue||null,examinerName:lolerExaminer||''}});
+}catch(machineErr){console.error('Service machine update failed',machineErr);}
+if(lolerSection.status==='defect'){
+  try{
+    const defectId=await getNextDefectId();
+    await db.collection('defects').add({defectId,machineId:currentServiceMachine.id,machineName:currentServiceMachine.name,itemName:'LOLER — Statutory: exam overdue/expired',dateRaised:todayISO(),raisedAt:firebase.firestore.Timestamp.now(),status:'open',resolvedDate:null,resolvedAt:null,resolvedBy:null,resolutionRecordId:null,severity:'statutory'});
+  }catch(defErr){console.error('LOLER defect creation failed',defErr);}
+}
+try{
+  await db.collection('liveJobs').doc(currentServiceLiveJob.id).update({status:'completed',completedAt:firebase.firestore.Timestamp.fromMillis(svcCompletedAt),jobDurationMs:svcDurationMs,activeStartedAt:null,updatedAt:firebase.firestore.Timestamp.now()});
+}catch(jobErr){
+  console.error('Service live job completion update failed',jobErr);
+  fail('Service record saved, but live job status could not be updated. Please retry.');
+  return;
+}
+stopServiceTimer();currentServiceLiveJob=null;lastGeneratedRecord=record;lastGeneratedDoc=null;
+if(completeStatus)completeStatus.textContent='Service completed successfully.';
+showScreen('pdf-ready');
+try{generatePDF(record);}catch(pdfErr){console.error('Service PDF generation error',pdfErr);}
+try{afterRecordCreated(record);}catch(syncErr){console.error('Service post-save sync error',syncErr);}
+if(completeBtn){completeBtn.disabled=false;completeBtn.textContent='Complete Service';}
+toast('Service completed successfully');
 }else if(mode==='check'){
 if(!currentCheckCategory){toast('Select a category');return;}if(!currentCheckMachine){toast('Select a machine');return;}if(!checkStartedAtMs){toast('Start the machine check first');return;}
 const signName=document.getElementById('chkSignName').value.trim(),signDate=document.getElementById('chkSignDate').value||todayISO(),hours=document.getElementById('chkHours').value,sig=sigPads['sigPadCheck'];
@@ -1268,6 +1305,7 @@ async function submitAdHocJob(markVOR){
 function stopServiceTimer(){if(serviceTimerInterval){clearInterval(serviceTimerInterval);serviceTimerInterval=null;}}
 function startServiceTimer(){stopServiceTimer();const tick=()=>{const el=document.getElementById('serviceTimer');if(el&&currentServiceLiveJob)el.textContent=formatDuration(liveElapsedMs(currentServiceLiveJob));};tick();serviceTimerInterval=setInterval(tick,1000);}
 function renderServiceLiveState(){
+  const svcSign=document.getElementById('svcSignName'),svcDate=document.getElementById('svcSignDate');if(svcSign&&!svcSign.value&&currentEngineer)svcSign.value=currentEngineer.name||'';if(svcDate&&!svcDate.value)svcDate.value=todayISO();
   const live=!!currentServiceLiveJob,panel=document.getElementById('serviceTimerPanel');if(!panel)return;
   panel.style.display=live?'block':'none';document.getElementById('serviceProgressCard').style.display=live?'block':'none';document.getElementById('openServiceJobBtn').style.display=live?'none':'block';document.getElementById('completeServiceJobBtn').style.display=live&&engineerIsLead(currentServiceLiveJob)?'block':'none';
   const badge=document.getElementById('serviceLiveId');badge.style.display=live?'inline-block':'none';badge.textContent=live?(currentServiceLiveJob.jobId||'LIVE'):'';
