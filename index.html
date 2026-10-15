@@ -630,21 +630,32 @@ function escapeHtml(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({"&":"&
 function escapeAttr(s){return escapeHtml(s).replace(/'/g,"&#39;");}
 function todayISO(){return new Date().toISOString().slice(0,10);}
 function daysBetween(a,b){return Math.round((new Date(b)-new Date(a))/86400000);}
+function latestServiceRecordForMachine(machineId){
+  return records.find(r=>r.type==='service'&&r.machineId===machineId)||null;
+}
+function effectiveServiceBaseline(m){
+  const rec=latestServiceRecordForMachine(m.id);
+  const recHours=rec&&Number.isFinite(Number(rec.hoursReading))?Number(rec.hoursReading):null;
+  const stored=Number(m.lastServiceHours)||0;
+  const last=recHours!=null?Math.max(stored,recHours):stored;
+  const next=recHours!=null&&recHours>=stored?recHours+SERVICE_HOURS_LIMIT:(m.nextServiceDueHours!=null?Number(m.nextServiceDueHours):last+SERVICE_HOURS_LIMIT);
+  return {last,next,record:rec};
+}
 function renderOverdueAlerts(){
 const w=document.getElementById('overdueAlerts');const sO=[],sD=[],lO=[],lD=[];const t=todayISO();
-machines.forEach(m=>{const cur=m.currentHours||0,last=m.lastServiceHours||0,since=cur-last;
-if(since>=SERVICE_HOURS_LIMIT)sO.push({m,since});else if(since>=SERVICE_HOURS_LIMIT-SERVICE_DUE_SOON_WINDOW)sD.push({m,since});
+machines.forEach(m=>{const cur=Number(m.currentHours)||0,svc=effectiveServiceBaseline(m),last=svc.last,since=Math.max(0,cur-last);
+if(since>=SERVICE_HOURS_LIMIT)sO.push({m,since,next:svc.next});else if(since>=SERVICE_HOURS_LIMIT-SERVICE_DUE_SOON_WINDOW)sD.push({m,since,next:svc.next});
 if(m.loler&&m.loler.applies&&m.loler.nextDueDate){const d=daysBetween(t,m.loler.nextDueDate);if(d<0)lO.push({m,d});else if(d<=LOLER_DUE_SOON_DAYS)lD.push({m,d});}});
 let h='';
 if(sO.length||sD.length){h+='<div class="alert-panel service-alert"><div class="section-title" style="color:var(--amber)">🔧 Service Due</div>';
-sO.forEach(x=>h+='<div class="alert-row"><span>🔴 '+escapeHtml(x.m.name)+'</span><span>'+x.since+' hrs — OVERDUE (due at '+(x.m.nextServiceDueHours!=null?x.m.nextServiceDueHours:((x.m.lastServiceHours||0)+SERVICE_HOURS_LIMIT))+' hrs)</span></div>');
-sD.forEach(x=>h+='<div class="alert-row"><span>🟠 '+escapeHtml(x.m.name)+'</span><span>'+x.since+' hrs — due soon (due at '+(x.m.nextServiceDueHours!=null?x.m.nextServiceDueHours:((x.m.lastServiceHours||0)+SERVICE_HOURS_LIMIT))+' hrs)</span></div>');h+='</div>';}
+sO.forEach(x=>h+='<div class="alert-row"><span>🔴 '+escapeHtml(x.m.name)+'</span><span>'+x.since+' hrs — OVERDUE (due at '+x.next+' hrs)</span></div>');
+sD.forEach(x=>h+='<div class="alert-row"><span>🟠 '+escapeHtml(x.m.name)+'</span><span>'+x.since+' hrs — due soon (due at '+x.next+' hrs)</span></div>');h+='</div>';}
 if(lO.length||lD.length){h+='<div class="alert-panel loler-alert"><div class="section-title" style="color:var(--red)">⚖️ LOLER Due</div>';
 lO.forEach(x=>h+='<div class="alert-row"><span>🔴 '+escapeHtml(x.m.name)+'</span><span>Overdue '+Math.abs(x.d)+'d</span></div>');
 lD.forEach(x=>h+='<div class="alert-row"><span>🟠 '+escapeHtml(x.m.name)+'</span><span>Due in '+x.d+'d</span></div>');h+='</div>';}
 w.innerHTML=h;}
-function machineHoursStatus(m){const s=(m.currentHours||0)-(m.lastServiceHours||0);if(s>=SERVICE_HOURS_LIMIT)return{label:'Overdue',cls:'red'};if(s>=SERVICE_HOURS_LIMIT-SERVICE_DUE_SOON_WINDOW)return{label:'Due soon',cls:'amber'};return{label:'OK',cls:'green'};}
-function machineNextServiceDue(m){return m.nextServiceDueHours!=null ? m.nextServiceDueHours : ((m.lastServiceHours||0)+SERVICE_HOURS_LIMIT);}
+function machineHoursStatus(m){const svc=effectiveServiceBaseline(m),s=Math.max(0,(Number(m.currentHours)||0)-svc.last);if(s>=SERVICE_HOURS_LIMIT)return{label:'Overdue',cls:'red'};if(s>=SERVICE_HOURS_LIMIT-SERVICE_DUE_SOON_WINDOW)return{label:'Due soon',cls:'amber'};return{label:'OK',cls:'green'};}
+function machineNextServiceDue(m){return effectiveServiceBaseline(m).next;}
 function renderHomeMachineList(){const w=document.getElementById('homeMachineList');if(!w)return;w.innerHTML='';if(!machines.length){w.innerHTML='<p class="progress-note">No machines yet.</p>';return;}
 const visible=machines.filter(m=>assetMatchesSearch(m,'homeAssetSearch'));if(!visible.length){w.innerHTML='<p class="empty-state">No matching machines.</p>';return;}
 visible.forEach(m=>{const ls=records.find(r=>r.type==='service'&&r.machineId===m.id);const st=machineHoursStatus(m);const row=document.createElement('div');row.className='machine-list-item';row.onclick=()=>openMachineProfile(m.id);row.tabIndex=0;row.setAttribute('role','button');row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openMachineProfile(m.id);}};
@@ -656,7 +667,7 @@ w.innerHTML=up.map(b=>'<div class="alert-row"><span>'+escapeHtml(b.machineName)+
 function openMachineProfile(id){currentProfileMachineId=id;const m=machines.find(x=>x.id===id);if(!m)return;
 document.getElementById('profileMachineName').textContent=m.name+(m.serialNumber?' (S/N: '+m.serialNumber+')':'');
 document.getElementById('profileItemCount').textContent=machineChecklistItems(m).length+' items · '+(m.currentHours||0)+' hrs · '+(m.branch||'No branch');
-const st=machineHoursStatus(m),since=(m.currentHours||0)-(m.lastServiceHours||0);
+const st=machineHoursStatus(m),svc=effectiveServiceBaseline(m),since=Math.max(0,(Number(m.currentHours)||0)-svc.last);
 document.getElementById('profileStatusCard').innerHTML='<span class="badge '+st.cls+'">'+st.label+'</span><p class="progress-note">'+since+' hrs since last service · Next service due at <strong>'+machineNextServiceDue(m)+' hrs</strong> · Serial: '+escapeHtml(m.serialNumber||'-')+'</p>';
 const mr=records.filter(r=>r.type==='service'&&r.machineId===id);const lc=document.getElementById('lastServiceCard');
 if(!mr.length){lc.innerHTML='<div class="empty-state">No service recorded yet.</div>';}else{const last=mr[0];
