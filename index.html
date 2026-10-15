@@ -395,6 +395,8 @@ baler:{label:"Baler (Cardboard/Tyre)",emoji:"📦",lolerApplies:true,items:["Eme
 const BRANCHES=["Rotherham","Shires","Sheffield"];
 const SERVICE_HOURS_LIMIT=500,SERVICE_DUE_SOON_WINDOW=100,LOLER_DUE_SOON_DAYS=30;
 let machines=[],categories={},records=[],defects=[],bookings=[],engineers=[],liveJobs=[];
+let recordsFullLoaded=false,recordsFullLoading=null;
+const RECENT_RECORD_LIMIT=300;
 const DEFAULT_SHEETS_URL="https://script.google.com/macros/s/AKfycbypRwQyTWNeBKliniJ5hYxeLLY6UWaZS0-HD8uSWDzsg8QNpA1kIwwisiSilBWzsrOD/exec";
 let settings=JSON.parse(localStorage.getItem('cpsettings')||'{}');
 if(!settings.sheetsWebhookUrl) settings.sheetsWebhookUrl = DEFAULT_SHEETS_URL;
@@ -570,11 +572,39 @@ async function createOrLinkCheckDefect(item,record,operatorName){
   });
   return {action:'created',defectId};
 }
+function applyRecentRecordsSnapshot(s){
+  const recent=s.docs.map(d=>({id:d.id,...d.data()}));
+  if(recordsFullLoaded){
+    const merged=new Map(records.map(r=>[r.id,r]));
+    recent.forEach(r=>merged.set(r.id,r));
+    records=Array.from(merged.values()).sort((a,b)=>{
+      const am=a.createdAt&&a.createdAt.toMillis?a.createdAt.toMillis():0;
+      const bm=b.createdAt&&b.createdAt.toMillis?b.createdAt.toMillis():0;
+      return bm-am;
+    });
+  }else records=recent;
+  renderRecordsTable();renderHomeMachineList();renderDailyChecks();renderCalendar();
+}
+async function ensureFullRecordsLoaded(){
+  if(recordsFullLoaded)return true;
+  if(recordsFullLoading)return recordsFullLoading;
+  recordsFullLoading=db.collection('records').orderBy('createdAt','desc').get().then(s=>{
+    records=s.docs.map(d=>({id:d.id,...d.data()}));
+    recordsFullLoaded=true;
+    renderRecordsTable();renderHomeMachineList();renderDailyChecks();renderCalendar();
+    return true;
+  }).catch(err=>{
+    console.error('Full records load failed',err);
+    toast('Could not load full record history');
+    return false;
+  }).finally(()=>{recordsFullLoading=null;});
+  return recordsFullLoading;
+}
 function initFirestoreListeners(){
 setConn(true,"Connecting...");
 loadPinSetting();
-db.collection('machines').orderBy('name').onSnapshot({includeMetadataChanges:true},s=>{
-  machines=s.docs.map(d=>({id:d.id,...d.data()}));populateServiceMachineSelect();populateBookingMachineSelect();populateAdHocMachines();renderMachineList();renderHomeMachineList();renderOverdueAlerts();renderCalendar();renderDailyChecks();renderVORRegister();setConn(!s.metadata.fromCache,s.metadata.fromCache?"Offline / cached assets":s.metadata.hasPendingWrites?"Saving changes…":"Assets synced");
+db.collection('machines').orderBy('name').onSnapshot(s=>{
+  machines=s.docs.map(d=>({id:d.id,...d.data()}));populateServiceMachineSelect();populateBookingMachineSelect();populateAdHocMachines();renderMachineList();renderHomeMachineList();renderOverdueAlerts();renderCalendar();renderDailyChecks();renderVORRegister();setConn(!s.metadata.fromCache,s.metadata.fromCache?"Offline / cached assets":"Assets synced");
 },e=>setConn(false,"Error: "+e.message));
 db.collection('engineers').orderBy('name').onSnapshot(s=>{engineers=s.docs.map(d=>({id:d.id,...d.data()}));renderEngineerAdmin();},e=>console.error("Engineer list error",e));
 db.collection('liveJobs').onSnapshot(s=>{liveJobs=s.docs.map(d=>({id:d.id,...d.data()})).filter(j=>j.status!=='completed'&&j.status!=='cancelled');renderEngineerLiveJobs();renderEngineerActivityOverview();if(currentLiveJob){const fresh=liveJobs.find(j=>j.id===currentLiveJob.id);if(fresh){currentLiveJob=fresh;renderLiveJobState();}}if(currentServiceLiveJob){const freshSvc=liveJobs.find(j=>j.id===currentServiceLiveJob.id);if(freshSvc){currentServiceLiveJob=freshSvc;renderServiceLiveState();}}},e=>console.error("Live jobs error",e));
@@ -584,7 +614,7 @@ db.collection('categories').onSnapshot(async s=>{
   categories={};s.docs.forEach(d=>categories[d.id]=d.data());
   renderCategoryGrid();renderCategoryList();populateNewMachineCategorySelect();
 },e=>setConn(false,"Cat error: "+e.message));
-db.collection('records').orderBy('createdAt','desc').onSnapshot(s=>{records=s.docs.map(d=>({id:d.id,...d.data()}));renderRecordsTable();renderHomeMachineList();renderDailyChecks();renderCalendar();},e=>setConn(false,"Rec error: "+e.message));
+db.collection('records').orderBy('createdAt','desc').limit(RECENT_RECORD_LIMIT).onSnapshot(applyRecentRecordsSnapshot,e=>setConn(false,"Rec error: "+e.message));
 db.collection('defects').orderBy('dateRaised','desc').onSnapshot(s=>{defects=s.docs.map(d=>({id:d.id,...d.data()})).filter(d=>!isFireExtinguisherItem(d.itemName||d.inspectionItemName));renderDefectsTable();renderOutstandingDefectsList();},e=>setConn(false,"Def error: "+e.message));
 db.collection('bookings').orderBy('date').onSnapshot(s=>{bookings=s.docs.map(d=>({id:d.id,...d.data()}));renderCalendar();renderHomeUpcomingBookings();},e=>setConn(false,"Book error: "+e.message));
 }
@@ -784,27 +814,21 @@ const svcCompletedAt=Date.now();let svcDurationMs=Number(currentServiceLiveJob.a
 const recordRef=db.collection('records').doc();
 const record={id:recordRef.id,recordId:currentServiceLiveJob.jobId,type:'service',machineId:currentServiceMachine.id,machineName:currentServiceMachine.name,subject:currentServiceMachine.name,serialNumber:currentServiceMachine.serialNumber||'',branch:currentServiceMachine.branch||'',technician:techName,date:document.getElementById('svcDate').value||todayISO(),items,notes:document.getElementById('svcNotes').value.trim(),signName,signDate,signatureData:(sig&&sig.hasSignature)?sig.canvas.toDataURL('image/png'):'',hoursReading:hoursNum,nextServiceDueHours:nextDue,lolerSection,startedAt:currentServiceLiveJob.startedAt,completedAt:firebase.firestore.Timestamp.fromMillis(svcCompletedAt),jobDurationMs:svcDurationMs,jobDurationFormatted:formatDuration(svcDurationMs),progressNotes:currentServiceLiveJob.progressNotes||[],billingStatus:'awaiting_authorisation',createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending'};
 try{
-  await recordRef.set(record);
-}catch(err){
-  console.error('Service record save failed',err);
-  fail('Could not save completed service. Please try again.');
-  return;
-}
-try{
-  await db.collection('machines').doc(currentServiceMachine.id).update({currentHours:hoursNum,lastServiceHours:hoursNum,nextServiceDueHours:nextDue});
-  if(lolerSection.status!=='na')await db.collection('machines').doc(currentServiceMachine.id).update({loler:{applies:true,lastExamDate:lolerCertDate||null,nextDueDate:lolerNextDue||null,examinerName:lolerExaminer||''}});
-}catch(machineErr){console.error('Service machine update failed',machineErr);}
-if(lolerSection.status==='defect'){
-  try{
+  const batch=db.batch();
+  const machinePatch={currentHours:hoursNum,lastServiceHours:hoursNum,nextServiceDueHours:nextDue};
+  if(lolerSection.status!=='na')machinePatch.loler={applies:true,lastExamDate:lolerCertDate||null,nextDueDate:lolerNextDue||null,examinerName:lolerExaminer||''};
+  batch.set(recordRef,record);
+  batch.update(db.collection('machines').doc(currentServiceMachine.id),machinePatch);
+  batch.update(db.collection('liveJobs').doc(currentServiceLiveJob.id),{status:'completed',completedAt:firebase.firestore.Timestamp.fromMillis(svcCompletedAt),jobDurationMs:svcDurationMs,activeStartedAt:null,updatedAt:firebase.firestore.Timestamp.now()});
+  if(lolerSection.status==='defect'){
     const defectId=await getNextDefectId();
-    await db.collection('defects').add({defectId,machineId:currentServiceMachine.id,machineName:currentServiceMachine.name,itemName:'LOLER — Statutory: exam overdue/expired',dateRaised:todayISO(),raisedAt:firebase.firestore.Timestamp.now(),status:'open',resolvedDate:null,resolvedAt:null,resolvedBy:null,resolutionRecordId:null,severity:'statutory'});
-  }catch(defErr){console.error('LOLER defect creation failed',defErr);}
-}
-try{
-  await db.collection('liveJobs').doc(currentServiceLiveJob.id).update({status:'completed',completedAt:firebase.firestore.Timestamp.fromMillis(svcCompletedAt),jobDurationMs:svcDurationMs,activeStartedAt:null,updatedAt:firebase.firestore.Timestamp.now()});
-}catch(jobErr){
-  console.error('Service live job completion update failed',jobErr);
-  fail('Service record saved, but live job status could not be updated. Please retry.');
+    const defectRef=db.collection('defects').doc();
+    batch.set(defectRef,{defectId,machineId:currentServiceMachine.id,machineName:currentServiceMachine.name,itemName:'LOLER — Statutory: exam overdue/expired',dateRaised:todayISO(),raisedAt:firebase.firestore.Timestamp.now(),status:'open',resolvedDate:null,resolvedAt:null,resolvedBy:null,resolutionRecordId:null,severity:'statutory'});
+  }
+  await batch.commit();
+}catch(err){
+  console.error('Service completion batch failed',err);
+  fail('Could not save completed service. Please try again.');
   return;
 }
 stopServiceTimer();currentServiceLiveJob=null;lastGeneratedRecord=record;lastGeneratedDoc=null;
@@ -830,8 +854,10 @@ const signatureData=(sig&&sig.hasSignature)?sig.canvas.toDataURL('image/png'):''
 const checkRef=db.collection('records').doc();
 const record={id:checkRef.id,recordId:'CP-CHK-'+checkRef.id.slice(0,8).toUpperCase(),type:'check',categoryKey:currentCheckCategory,machineId:currentCheckMachine.id,machineName:currentCheckMachine.name,subject:cat.label+' — '+currentCheckMachine.name,serialNumber:currentCheckMachine.serialNumber||'',branch:currentCheckMachine.branch||'',technician:signName,date:document.getElementById('chkDate').value||todayISO(),items,notes:document.getElementById('chkNotes').value.trim(),signName,signDate,signatureData,hoursReading:Number(hours),checkStartedAt:firebase.firestore.Timestamp.fromMillis(checkStartedAtMs),checkCompletedAt:firebase.firestore.Timestamp.fromMillis(checkCompletedAtMs),checkDurationMs,checkDurationFormatted:formatDuration(checkDurationMs),createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending'};
 try{
-  await checkRef.set(record);
-  await db.collection('machines').doc(record.machineId).update({currentHours:Number(hours)});
+  const batch=db.batch();
+  batch.set(checkRef,record);
+  batch.update(db.collection('machines').doc(record.machineId),{currentHours:Number(hours)});
+  await batch.commit();
 }catch(err){
   console.error('Check save failed',err);if(completeBtn){completeBtn.disabled=false;completeBtn.textContent='Complete Check';}if(completeStatus)completeStatus.textContent='Could not save check. Please try again.';toast('Check could not be saved — please try again');return;
 }
@@ -945,7 +971,7 @@ pushRecordToSheets({type:'check',subject:'Test row',technician:'Test',date:today
 function switchOfficeTab(tab){document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
 document.querySelectorAll('.office-tab').forEach(el=>el.style.display='none');document.getElementById('office-'+tab).style.display='block';
 if(tab==='daily')renderDailyChecks();if(tab==='machines')renderMachineList();if(tab==='categories')renderCategoryList();if(tab==='defects')renderDefectsTable();
-if(tab==='calendar')renderCalendar();if(tab==='vor')renderVORRegister();if(tab==='engineeractivity')renderEngineerActivityOverview();if(tab==='records')renderRecordsTable();if(tab==='sheets')renderSheetsStatus();if(tab==='security')renderEngineerAdmin();}
+if(tab==='calendar')renderCalendar();if(tab==='vor')renderVORRegister();if(tab==='engineeractivity')renderEngineerActivityOverview();if(tab==='records'){renderRecordsTable();ensureFullRecordsLoaded();}if(tab==='sheets')renderSheetsStatus();if(tab==='security')renderEngineerAdmin();}
 function populateNewMachineCategorySelect(){const sel=document.getElementById('newMachineCategory');if(!sel)return;const cv=sel.value;sel.innerHTML='<option value="">Choose category</option>';
 Object.entries(categories).forEach(([k,c])=>{const o=document.createElement('option');o.value=k;o.textContent=c.emoji+' '+c.label;sel.appendChild(o);});sel.value=cv;}
 function renderMachineBranchFilter(){const w=document.getElementById('machineBranchFilter');if(!w)return;
@@ -1295,9 +1321,12 @@ async function submitAdHocJob(markVOR){
   if(markVOR&&!confirm('Place '+m.name+' into VOR / Out Of Service now? Operator checks will be blocked until Back Office signs it back into service.'))return;
   const completedAt=Date.now();let durationMs=Number(currentLiveJob.accumulatedMs)||0;if(currentLiveJob.status==='active')durationMs+=Math.max(0,completedAt-tsToMs(currentLiveJob.activeStartedAt));
   const record={recordId:currentLiveJob.jobId,type:'adhoc',machineId:m.id,machineName:m.name,subject:m.name+' — '+currentLiveJob.jobCategory,serialNumber:m.serialNumber||'',branch:m.branch||'',technician:currentEngineer.name,engineerId:currentEngineer.id,date:currentLiveJob.date||todayISO(),jobCategory:currentLiveJob.jobCategory,jobDescription:currentLiveJob.jobDescription||'',jobSource:currentLiveJob.source||'',outcome,items:[{name:currentLiveJob.jobCategory,status:outcome}],notes,progressNotes:currentLiveJob.progressNotes||[],signName:currentEngineer.name,signDate:todayISO(),signatureData:'',hoursReading:Number(currentLiveJob.hoursReading),startedAt:currentLiveJob.startedAt,completedAt:firebase.firestore.Timestamp.fromMillis(completedAt),jobDurationMs:durationMs,jobDurationFormatted:formatDuration(durationMs),createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending',vorRaised:!!markVOR,isDamage:!!adHocDamage,damageDriver:document.getElementById('damageDriver').value.trim(),damageIncident:document.getElementById('damageIncident').value.trim(),billingStatus:'awaiting_authorisation'};
-  await db.collection('machines').doc(m.id).update({currentHours:Number(currentLiveJob.hoursReading),...(markVOR?{outOfService:true,outOfServiceReason:currentLiveJob.jobCategory+' — '+notes,outOfServiceSince:todayISO(),outOfServiceRecordId:record.recordId,outOfServiceBy:currentEngineer.name}: {})});
-  await db.collection('records').add(record);
-  await db.collection('liveJobs').doc(currentLiveJob.id).update({status:'completed',outcome,finalNotes:notes,completedAt:firebase.firestore.Timestamp.fromMillis(completedAt),jobDurationMs:durationMs,updatedAt:firebase.firestore.Timestamp.now(),vorRaised:!!markVOR});
+  const recordRef=db.collection('records').doc();record.id=recordRef.id;
+  const batch=db.batch();
+  batch.update(db.collection('machines').doc(m.id),{currentHours:Number(currentLiveJob.hoursReading),...(markVOR?{outOfService:true,outOfServiceReason:currentLiveJob.jobCategory+' — '+notes,outOfServiceSince:todayISO(),outOfServiceRecordId:record.recordId,outOfServiceBy:currentEngineer.name}: {})});
+  batch.set(recordRef,record);
+  batch.update(db.collection('liveJobs').doc(currentLiveJob.id),{status:'completed',outcome,finalNotes:notes,completedAt:firebase.firestore.Timestamp.fromMillis(completedAt),jobDurationMs:durationMs,updatedAt:firebase.firestore.Timestamp.now(),vorRaised:!!markVOR});
+  await batch.commit();
   afterRecordCreated(record);generatePDF(record);if(markVOR)toast('Job completed — machine is now VOR / Out Of Service');else toast('Job completed in '+formatDuration(durationMs));
   stopLiveTimer();currentAdHocMachine=null;currentLiveJob=null;
 }
@@ -1393,7 +1422,7 @@ function pdfForExport(record){
   if(active){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(active)?.classList.add('active');}
   return doc;
 }
-async function exportAllPDFs(){
+async function exportAllPDFs(){await ensureFullRecordsLoaded();
   if(!records.length&&!defects.length)return toast('No PDFs to export');if(!window.JSZip)return toast('ZIP library unavailable — refresh and try again');
   const zip=new JSZip();let n=0;
   for(const r of records){
@@ -1410,7 +1439,7 @@ async function exportAllPDFs(){
   const blob=await zip.generateAsync({type:'blob'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='CheckPlant_All_PDFs_'+todayISO()+'.zip';a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);toast('Exported '+n+' PDFs');
 }
 
-function exportData(){const data={machines,categories,records,defects,bookings,engineers:engineers.map(e=>({id:e.id,name:e.name,active:e.active!==false})),exportedAt:new Date().toISOString()};
+async function exportData(){await ensureFullRecordsLoaded();const data={machines,categories,records,defects,bookings,engineers:engineers.map(e=>({id:e.id,name:e.name,active:e.active!==false})),exportedAt:new Date().toISOString()};
 const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);
 const a=document.createElement('a');a.href=url;a.download='CheckPlant_Backup_'+todayISO()+'.json';a.click();URL.revokeObjectURL(url);toast('Exported');}
 document.getElementById('svcDate').value=todayISO();document.getElementById('svcSignDate').value=todayISO();
