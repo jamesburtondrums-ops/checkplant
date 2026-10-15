@@ -484,7 +484,15 @@ async function completeJobOnBehalf(id){
  };
  try{
    await recordRef.set(record);
-   try{if(j.machineId)await db.collection('machines').doc(j.machineId).set({currentHours:Number(j.hoursReading)||0},{merge:true});}catch(machineErr){console.error('Machine hours update failed',machineErr);}
+   try{
+     if(j.machineId){
+       const hrs=Number(j.hoursReading)||0;
+       const machineUpdate=j.jobType==='service'
+         ? {currentHours:hrs,lastServiceHours:hrs,nextServiceDueHours:hrs+500}
+         : {currentHours:hrs};
+       await db.collection('machines').doc(j.machineId).set(machineUpdate,{merge:true});
+     }
+   }catch(machineErr){console.error('Machine hours update failed',machineErr);}
    await db.collection('liveJobs').doc(id).update({status:'completed',outcome,finalNotes:notes,completedAt,jobDurationMs:durationMs,activeStartedAt:null,managerCompleted:true,managerCompletedBy:'ManagerDash',managerCompletionReason:reason,progressNotes:firebase.firestore.FieldValue.arrayUnion(managerNote),updatedAt:now});
    toast('Job completed on behalf of '+(j.engineerName||'engineer')+' — awaiting hours authorisation');
  }catch(err){
