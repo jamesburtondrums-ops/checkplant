@@ -183,7 +183,7 @@ function drawReport(){
 async function saveOperation(form,callback){
  if(busy)return;
  const button=form.querySelector('button[type="submit"]');
- try{busy=true;button.disabled=true;await callback();form.reset();["refuel-date","delivery-date","transfer-date","dip-date"].forEach(id=>$(id).value=dateLocal());notify("Saved successfully");}
+ try{busy=true;button.disabled=true;await callback();form.reset();if(form.id==="form-refuel")switchFuelAsset();["refuel-date","delivery-date","transfer-date","dip-date"].forEach(id=>$(id).value=dateLocal());notify("Saved successfully");}
  catch(e){notify("Not saved: "+e.message,true);console.error(e)}
  finally{busy=false;button.disabled=false}
 }
