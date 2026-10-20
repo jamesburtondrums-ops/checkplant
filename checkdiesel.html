@@ -34,27 +34,27 @@ button{font:inherit;cursor:pointer}.btn{border:none;border-radius:10px;backgroun
 <header><div><h1>CheckDiesel</h1><small>Fuel management · CheckPlant ecosystem</small></div><div><a href="index.html">CheckPlant</a> <a href="managerdash.html">ManagerDash</a></div></header>
 <div id="connection" role="status">Connecting to the CheckPlant machine register…</div>
 <main>
-<div class="titleline"><div><h2>Site diesel control</h2><p>Live tank balances, diesel movements and fuel costs by machine.</p></div></div>
+<div class="titleline"><div><h2>Site diesel control</h2><p>Manage diesel issued to both plant machinery and road vehicles.</p></div><a href="checkdiesel-intelligence.html" class="btn" style="text-decoration:none">Plant &amp; Fleet Efficiency →</a></div>
 <div class="stats"><div class="stat"><div class="num" id="metric-stock">—</div><div class="lbl">Litres in tanks</div></div><div class="stat"><div class="num" id="metric-issued">—</div><div class="lbl">Litres issued · 30 days</div></div><div class="stat"><div class="num" id="metric-cost">—</div><div class="lbl">Issued fuel value · 30 days</div></div><div class="stat"><div class="num" id="metric-low">—</div><div class="lbl">Tanks below reorder level</div></div></div>
 <section class="card"><h3>Site tanks &amp; mobile bowsers</h3><div class="tank-grid" id="tank-grid"><p class="empty">Loading tanks…</p></div></section>
 <nav class="tabs" aria-label="Diesel operations">
-<button class="tab active" data-panel="refuel" type="button">Refuel machine</button>
+<button class="tab active" data-panel="refuel" type="button">Refuel asset</button>
 <button class="tab" data-panel="delivery" type="button">Receive delivery</button>
 <button class="tab" data-panel="transfer" type="button">Transfer diesel</button>
 <button class="tab" data-panel="dip" type="button">Tank stock check</button>
 <button class="tab" data-panel="history" type="button">Usage &amp; reports</button>
 <button class="tab" data-panel="setup" type="button">Add tank / bowser</button>
 </nav>
-<section class="card panel active" id="panel-refuel"><h3>Record a machine refuel</h3>
+<section class="card panel active" id="panel-refuel"><h3>Record a plant or road vehicle refuel</h3>
 <form id="form-refuel" class="formgrid">
 <div><label for="refuel-tank">Diesel tank / bowser *</label><select id="refuel-tank" required></select></div>
-<div><label for="refuel-machine">CheckPlant machine *</label><select id="refuel-machine" required></select></div>
+<div><label for="refuel-kind">Asset type *</label><select id="refuel-kind"><option value="plant">Plant machinery</option><option value="vehicle">Road vehicle</option></select></div><div id="refuel-plant-row"><label for="refuel-machine">CheckPlant machine *</label><select id="refuel-machine" required></select></div><div id="refuel-vehicle-row" hidden><label for="refuel-vehicle">Registered road vehicle *</label><select id="refuel-vehicle" disabled></select><p class="hint">Register vehicles in <a href="checkdiesel-intelligence.html">Fuel Intelligence</a> first.</p></div>
 <div><label for="refuel-litres">Litres dispensed *</label><input id="refuel-litres" type="number" min=".01" step=".01" required></div>
-<div><label for="refuel-hours">Hour meter <span class="muted">(optional)</span></label><input id="refuel-hours" type="number" min="0" step=".1" placeholder="Current machine hours"></div>
+<div><label id="refuel-reading-label" for="refuel-hours">Engine hours <span class="muted">(optional)</span></label><input id="refuel-hours" type="number" min="0" step=".1" placeholder="Current engine hours"></div>
 <div><label for="refuel-operator">Dispensed by *</label><input id="refuel-operator" maxlength="100" required placeholder="Operative name"></div>
 <div><label for="refuel-date">Date *</label><input id="refuel-date" type="date" required></div>
 <div class="wide"><label for="refuel-note">Reference / notes</label><input id="refuel-note" maxlength="300" placeholder="Job, shift, or fill-up note"></div>
-<div class="wide"><p class="hint">Uses live CheckPlant machinery and branch details. Hour-meter data is recorded against the diesel event, not silently overwritten on the machine record.</p><div class="actions"><button class="btn" type="submit">Save refuelling</button></div></div>
+<div class="wide"><p class="hint">Uses CheckPlant machinery or the CheckDiesel road-vehicle register. Meter readings are stored with the fill and never overwrite CheckPlant service hours.</p><div class="actions"><button class="btn" type="submit">Save refuelling</button></div></div>
 </form></section>
 <section class="card panel" id="panel-delivery"><h3>Record incoming diesel</h3><form id="form-delivery" class="formgrid">
 <div><label for="delivery-tank">Tank / bowser *</label><select id="delivery-tank" required></select></div>
@@ -91,8 +91,8 @@ button{font:inherit;cursor:pointer}.btn{border:none;border-radius:10px;backgroun
 <button class="btn secondary" id="export-csv" type="button">Export CSV</button>
 </div>
 <p class="hint">Fuel-per-hour is shown only where two or more increasing hour-meter readings exist; the first fill is excluded from the calculated interval.</p>
-<h3>Machine fuel use</h3><div class="tablewrap"><table><thead><tr><th>Machine</th><th>Site</th><th>Litres issued</th><th>Cost allocated</th><th>Litres/hour*</th></tr></thead><tbody id="machine-usage"></tbody></table></div>
-<h3 style="margin-top:23px">Movement history</h3><div class="tablewrap"><table><thead><tr><th>Date</th><th>Type</th><th>Site</th><th>Tank</th><th>Machine / counterparty</th><th>Litres +/-</th><th>Operator</th><th>Value</th><th>Reference</th></tr></thead><tbody id="movement-list"></tbody></table></div>
+<h3>Asset fuel use</h3><div class="tablewrap"><table><thead><tr><th>Machine</th><th>Site</th><th>Litres issued</th><th>Cost allocated</th><th>Litres/hour*</th></tr></thead><tbody id="machine-usage"></tbody></table></div>
+<p class="hint"><a href="checkdiesel-intelligence.html">Open Fuel Intelligence</a> for road-vehicle MPG, plant L/hour, unmapped dispenser records and Excel import.</p><h3 style="margin-top:23px">Movement history</h3><div class="tablewrap"><table><thead><tr><th>Date</th><th>Type</th><th>Site</th><th>Tank</th><th>Machine / counterparty</th><th>Litres +/-</th><th>Operator</th><th>Value</th><th>Reference</th></tr></thead><tbody id="movement-list"></tbody></table></div>
 </section>
 <section class="card panel" id="panel-setup"><h3>Register a site tank or mobile bowser</h3><form id="form-setup" class="formgrid">
 <div><label for="setup-name">Tank name / identifier *</label><input id="setup-name" maxlength="100" required placeholder="Main bunded diesel tank"></div>
@@ -118,13 +118,14 @@ const litres=n=>Number(n||0).toLocaleString("en-GB",{maximumFractionDigits:2})+"
 const cash=n=>"£"+Number(n||0).toLocaleString("en-GB",{minimumFractionDigits:2,maximumFractionDigits:2});
 const num=id=>Number($(id).value);
 const val=id=>$(id).value.trim();
-let tanks=[],machines=[],movements=[],readyCount=0,busy=false,notifyHandle;const streamsReady={machines:false,tanks:false,movements:false};
+let tanks=[],machines=[],vehicles=[],movements=[],readyCount=0,busy=false,notifyHandle;const streamsReady={machines:false,tanks:false,vehicles:false,movements:false};
 const tankById=id=>tanks.find(t=>t.id===id);
 const machineById=id=>machines.find(m=>m.id===id);
+const vehicleById=id=>vehicles.find(m=>m.id===id);
 const quantity=n=>Math.round(Number(n)*100)/100;
 const moneyValue=n=>Math.round(Number(n)*10000)/10000;
 function notify(msg,error){const m=$("message");m.textContent=msg;m.className="show"+(error?" error":"");clearTimeout(notifyHandle);notifyHandle=setTimeout(()=>m.className="",5500)}
-function setReady(key){if(streamsReady[key])return;streamsReady[key]=true;readyCount++;$("connection").textContent=readyCount===3?"Connected to live CheckPlant / diesel records":"Loading live data…"}
+function setReady(key){if(streamsReady[key])return;streamsReady[key]=true;readyCount++;$("connection").textContent=readyCount===4?"Connected to live CheckPlant / diesel records":"Loading live data…"}
 function failed(what,e){$("connection").textContent="Connection error: "+what+" — "+e.message;notify(what+": "+e.message,true)}
 function fillSelect(id,items,label,placeholder){const el=$(id),prior=el.value;el.replaceChildren();const first=new Option(placeholder,"");el.add(first);items.forEach(i=>el.add(new Option(label(i),i.id)));if(items.some(i=>i.id===prior))el.value=prior}
 function populate(){
@@ -132,7 +133,8 @@ function populate(){
  ["refuel-tank","delivery-tank","transfer-from","transfer-to","dip-tank"].forEach(id=>fillSelect(id,tanks,tankLabel,"Choose tank"));
  const machineLabel=m=>m.name+(m.branch?" · "+m.branch:"")+(m.serialNumber?" · "+m.serialNumber:"");
  ["refuel-machine","report-machine"].forEach(id=>fillSelect(id,machines,machineLabel,id==="report-machine"?"All machines":"Choose machine"));
- const sites=[...new Set([...tanks.map(t=>t.site),...machines.map(m=>m.branch)].filter(Boolean))].sort();
+ fillSelect("refuel-vehicle",vehicles,v=>v.registration+" · "+v.name+" · "+(v.site||"Unknown branch"),"Choose road vehicle");
+ const sites=[...new Set([...tanks.map(t=>t.site),...machines.map(m=>m.branch),...vehicles.map(v=>v.site)].filter(Boolean))].sort();
  const old=$("report-site").value;
  $("report-site").replaceChildren(new Option("All sites",""));
  sites.forEach(s=>$("report-site").add(new Option(s,s)));
@@ -163,10 +165,11 @@ function reportData(){
 function drawReport(){
  const data=reportData(),body=$("movement-list");
  if(!data.length)body.innerHTML='<tr><td colspan="9" class="empty">No transactions match the filters.</td></tr>';
- else body.innerHTML=data.map(m=>'<tr><td>'+esc(m.date||"")+'</td><td>'+esc(({issue:"Refuel",delivery:"Delivery",transfer_out:"Transfer out",transfer_in:"Transfer in",adjustment:"Stock check",opening:"Opening stock"})[m.type]||m.type)+'</td><td>'+esc(m.site||"")+'</td><td>'+esc(m.tankName||"")+'</td><td>'+esc(m.machineName||m.counterparty||"—")+'</td><td>'+esc((Number(m.deltaLitres)>0?"+":"")+Number(m.deltaLitres||0).toFixed(2))+'</td><td>'+esc(m.operator||"")+'</td><td>'+esc(m.totalCost==null?"—":cash(m.totalCost))+'</td><td>'+esc(m.reference||"")+'</td></tr>').join("");
+ else body.innerHTML=data.map(m=>'<tr><td>'+esc(m.date||"")+'</td><td>'+esc(({issue:"Refuel",delivery:"Delivery",transfer_out:"Transfer out",transfer_in:"Transfer in",adjustment:"Stock check",opening:"Opening stock"})[m.type]||m.type)+'</td><td>'+esc(m.site||"")+'</td><td>'+esc(m.tankName||"")+'</td><td>'+esc(m.vehicleName||m.machineName||m.counterparty||"—")+'</td><td>'+esc((Number(m.deltaLitres)>0?"+":"")+Number(m.deltaLitres||0).toFixed(2))+'</td><td>'+esc(m.operator||"")+'</td><td>'+esc(m.totalCost==null?"—":cash(m.totalCost))+'</td><td>'+esc(m.reference||"")+'</td></tr>').join("");
  const machinesData={};
  data.filter(m=>m.type==="issue").forEach(m=>{
- const x=machinesData[m.machineId]||(machinesData[m.machineId]={machine:m.machineName,site:m.site,total:0,cost:0,entries:[]});
+ const bucket=(m.assetKind==="vehicle"?"vehicle:":"plant:")+(m.assetId||m.machineId||m.vehicleId||"unknown");
+ const x=machinesData[bucket]||(machinesData[bucket]={machine:m.vehicleName||m.machineName,site:m.site,total:0,cost:0,entries:[],assetKind:m.assetKind||"plant"});
  x.total+=Number(m.litres)||0;x.cost+=Number(m.totalCost)||0;x.entries.push(m);
  });
  const stats=Object.values(machinesData).sort((a,b)=>b.total-a.total);
@@ -174,7 +177,7 @@ function drawReport(){
  const entries=x.entries.filter(m=>Number.isFinite(Number(m.hours))&&m.hours!==null&&m.hours!=="" ).sort((a,b)=>String(a.date).localeCompare(String(b.date))||((a.createdAt?.toMillis?.()||0)-(b.createdAt?.toMillis?.()||0)));
  let runLitres=0,runHours=0;
  for(let i=1;i<entries.length;i++){const diff=Number(entries[i].hours)-Number(entries[i-1].hours);if(diff>0){runHours+=diff;runLitres+=Number(entries[i].litres)||0}}
- return '<tr><td>'+esc(x.machine||"Unknown asset")+'</td><td>'+esc(x.site||"")+'</td><td>'+esc(litres(x.total))+'</td><td>'+esc(cash(x.cost))+'</td><td>'+(runHours>0?(runLitres/runHours).toFixed(2):"—")+'</td></tr>'
+ return '<tr><td>'+esc(x.machine||"Unknown asset")+(x.assetKind==="vehicle"?" · Road vehicle":" · Plant")+'</td><td>'+esc(x.site||"")+'</td><td>'+esc(litres(x.total))+'</td><td>'+esc(cash(x.cost))+'</td><td>'+(x.assetKind==="vehicle"?"See Fuel Intelligence":(runHours>0?(runLitres/runHours).toFixed(2)+" L/h":"—"))+'</td></tr>'
  }).join(""):'<tr><td colspan="5" class="empty">No machine fills this month.</td></tr>';
 }
 async function saveOperation(form,callback){
@@ -218,16 +221,17 @@ async function deliver(e){
  })}
 async function refuel(e){
  e.preventDefault();await saveOperation(e.currentTarget,async()=>{
- const t=requireTank(val("refuel-tank")),m=machineById(val("refuel-machine")),amount=requirePositive(num("refuel-litres"),"Litres"),operator=val("refuel-operator"),date=val("refuel-date"),reference=val("refuel-note"),raw=$("refuel-hours").value,hrs=raw===""?null:requireNonNegative(Number(raw),"Hour meter");
- validateDate(date);if(!m||!operator)throw Error("Choose a machine and enter the operator.");
- if(m.branch&&m.branch!==t.site&&!confirm("Machine branch differs from the tank site. Record this site refuel anyway?"))throw Error("Refuelling cancelled before saving.");
+ const t=requireTank(val("refuel-tank")),kind=val("refuel-kind"),m=kind==="vehicle"?vehicleById(val("refuel-vehicle")):machineById(val("refuel-machine")),amount=requirePositive(num("refuel-litres"),"Litres"),operator=val("refuel-operator"),date=val("refuel-date"),reference=val("refuel-note"),raw=$("refuel-hours").value,hrs=raw===""?null:requireNonNegative(Number(raw),"Meter reading");
+ validateDate(date);if(!m||!operator)throw Error("Choose an asset and enter the operator.");
+ const homeSite=kind==="vehicle"?m.site:m.branch;
+ if(homeSite&&homeSite!==t.site&&!confirm("Asset home branch differs from the tank site. Record this site refuel anyway?"))throw Error("Refuelling cancelled before saving.");
  const ref=db.collection("dieselTanks").doc(t.id),mov=db.collection("dieselMovements").doc();
  await db.runTransaction(async tx=>{
  const snap=await tx.get(ref);if(!snap.exists)throw Error("Tank not found.");
  const stock=Number(snap.data().stockLitres)||0,next=quantity(stock-amount);checkCapacity(next,snap.data().capacityLitres);
  const unitCost=Number(snap.data().averageCostPerLitre)||0;
  tx.update(ref,{stockLitres:next,updatedAt:nowStamp()});
- tx.set(mov,{...recordBase(t,operator,date,"issue"),deltaLitres:-amount,litres:amount,unitCost,totalCost:moneyValue(amount*unitCost),machineId:m.id,machineName:m.name,assetBranch:m.branch||"",hours:hrs,reference,stockAfterLitres:next});
+ tx.set(mov,{...recordBase(t,operator,date,"issue"),deltaLitres:-amount,litres:amount,unitCost,totalCost:moneyValue(amount*unitCost),assetKind:kind,assetId:m.id,machineId:kind==="plant"?m.id:null,machineName:kind==="plant"?m.name:null,vehicleId:kind==="vehicle"?m.id:null,vehicleName:kind==="vehicle"?m.name:null,assetBranch:homeSite||"",hours:kind==="plant"?hrs:null,reading:kind==="vehicle"?hrs:null,readingUnit:kind==="vehicle"?(m.odometerUnit||"mi"):"hours",reference,stockAfterLitres:next});
  });
  })}
 async function transfer(e){
@@ -267,6 +271,7 @@ function exportCsv(){
 }
 function listen(){
  db.collection("machines").orderBy("name").onSnapshot(s=>{machines=s.docs.map(d=>({id:d.id,...d.data()}));setReady("machines");populate();drawReport()},e=>failed("CheckPlant machines",e));
+ db.collection("dieselVehicles").onSnapshot(s=>{vehicles=s.docs.map(d=>({id:d.id,...d.data()}));setReady("vehicles");populate();},e=>failed("Road vehicles",e));
  db.collection("dieselTanks").onSnapshot(s=>{tanks=s.docs.map(d=>({id:d.id,...d.data()}));setReady("tanks");draw()},e=>failed("Diesel tanks",e));
  db.collection("dieselMovements").onSnapshot(s=>{movements=s.docs.map(d=>({id:d.id,...d.data()}));setReady("movements");draw()},e=>failed("Fuel movements",e));
 }
@@ -275,6 +280,11 @@ document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{
  document.querySelectorAll(".panel").forEach(x=>x.classList.toggle("active",x.id==="panel-"+b.dataset.panel));
  if(b.dataset.panel==="history")drawReport();
 }));
+function switchFuelAsset(){const isFleet=val("refuel-kind")==="vehicle";$("refuel-plant-row").hidden=isFleet;$("refuel-vehicle-row").hidden=!isFleet;$("refuel-machine").disabled=isFleet;$("refuel-vehicle").disabled=!isFleet;$("refuel-machine").required=!isFleet;$("refuel-vehicle").required=isFleet;const v=vehicleById(val("refuel-vehicle"));
+ $("refuel-reading-label").textContent=isFleet?"Odometer ("+(v?.odometerUnit==="km"?"km":"miles")+") · optional":"Engine hours · optional";$("refuel-hours").placeholder=isFleet?"Current odometer":"Current engine hours";$("refuel-hours").value="";}
+$("refuel-kind").addEventListener("change",switchFuelAsset);
+$("refuel-vehicle").addEventListener("change",switchFuelAsset);
+switchFuelAsset();
 [["form-refuel",refuel],["form-delivery",deliver],["form-transfer",transfer],["form-dip",dip],["form-setup",setup]].forEach(a=>$(a[0]).addEventListener("submit",a[1]));
 ["report-month","report-site","report-machine"].forEach(id=>$(id).addEventListener("change",drawReport));
 $("export-csv").addEventListener("click",exportCsv);
