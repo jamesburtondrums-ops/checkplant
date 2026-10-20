@@ -95,3 +95,10 @@ The supplied Excel had **323 issues totalling 55,802.41 litres**, **101 distinct
 - Consider server-side import with job IDs, duplicate cross-source matching, immutable importer identity and Firestore pagination for larger history.
 
 All changes remain on the draft PR branch and should not be launched as a writable production app until security checks pass.
+
+## Usability-first dashboard (October 20, 2026)
+
+- `checkdiesel-dashboard.html` offers a polished front end, filtering by date, source account, asset class and identifier; usage visualisations, sortable browsing, detailed per-asset history, manual alias confirmation and XLSX/CSV browser import.
+- A standalone version preloaded with the October user export is provided privately to the user. **Do not commit/upload that private transaction seed to this repository or publish it on Cloudflare.** The repository and public preview only include an empty, client-side import app.
+- Imported data and classification choices are kept in browser localStorage for this development preview, not a shared database. That means **not** accessible across devices. The existing Firestore-backed CheckDiesel operations and separate intelligence proof remain on the feature branch for later unified integration, after authenticated permissions are developed and tested.
+- Cloudflare development Worker `checkdiesel-site-preview` hosts the same blank client-side import front end. Production requires secure cloud persistence, user authentication, access control and source-to-tank reconciliation.
