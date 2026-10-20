@@ -266,9 +266,9 @@ function exportCsv(){
  link.href=url;link.download="CheckDiesel_"+(val("report-month")||"all-dates")+".csv";link.click();setTimeout(()=>URL.revokeObjectURL(url),2000);
 }
 function listen(){
- db.collection("machines").orderBy("name").onSnapshot(s=>{machines=s.docs.map(d=>({id:d.id,...d.data()}));setReady("machines")populate();drawReport()},e=>failed("CheckPlant machines",e));
- db.collection("dieselTanks").onSnapshot(s=>{tanks=s.docs.map(d=>({id:d.id,...d.data()}));setReady("tanks")draw()},e=>failed("Diesel tanks",e));
- db.collection("dieselMovements").onSnapshot(s=>{movements=s.docs.map(d=>({id:d.id,...d.data()}));setReady("movements")draw()},e=>failed("Fuel movements",e));
+ db.collection("machines").orderBy("name").onSnapshot(s=>{machines=s.docs.map(d=>({id:d.id,...d.data()}));setReady("machines");populate();drawReport()},e=>failed("CheckPlant machines",e));
+ db.collection("dieselTanks").onSnapshot(s=>{tanks=s.docs.map(d=>({id:d.id,...d.data()}));setReady("tanks");draw()},e=>failed("Diesel tanks",e));
+ db.collection("dieselMovements").onSnapshot(s=>{movements=s.docs.map(d=>({id:d.id,...d.data()}));setReady("movements");draw()},e=>failed("Fuel movements",e));
 }
 document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{
  document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===b));
