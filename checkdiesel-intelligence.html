@@ -106,7 +106,7 @@ function siteOptions(){
  $("siteList").replaceChildren();arr.forEach(s=>{let opt=document.createElement("option");opt.value=s;$("siteList").append(opt)});
 }
 const val=id=>safe($(id).value);
-function qualityReading(raw){const n=Number(raw);return raw!==null&&raw!==undefined&&String(raw)!==""&&Number.isFinite(n)&&n>0&&n!==999999?n:null}
+function qualityReading(raw){const n=Number(raw);const placeholders=new Set([111111,222222,333333,444444,555555,565656,666666,777777,888888,999999,123456]);return raw!==null&&raw!==undefined&&String(raw)!==""&&Number.isFinite(n)&&n>0&&!placeholders.has(n)?n:null}
 function normalizeDate(v){
  const str=safe(v);
  if(/^\d{2}\/\d{2}\/\d{4}$/.test(str)){const p=str.split("/");const d=new Date(Date.UTC(+p[2],+p[1]-1,+p[0]));if(d.getUTCDate()!==+p[0]||d.getUTCMonth()!==+p[1]-1)throw Error("Invalid date");return p[2]+"-"+p[1]+"-"+p[0]}
@@ -160,7 +160,7 @@ function extractRows(matrix){
   const v={date:"",time:"",identifier:rawId,rawOdometer:odo,unit,driver,litres:qty,row:i+1,issues:[]};
   try{v.date=normalizeDate(r[index[0]])}catch(_){v.issues.push("Invalid date")}
   try{v.time=normalizeTime(r[index[1]])}catch(_){v.issues.push("Invalid time")}
-  if(!rawId||rawId==="0")v.issues.push("Missing/unknown asset code");
+  if(!rawId||rawId==="0")v.issues.push("Missing/unknown asset code (retain as unallocated fuel)");
   if(!Number.isFinite(qty)||qty<=0)v.issues.push("Invalid litres");
   if(qty>500)v.issues.push("Large dispense: confirm bowser/bulk");
   if(!qualityReading(odo))v.issues.push("Invalid/missing meter reading");
@@ -185,19 +185,18 @@ function combined(){
 function monthRecords(){const month=val("month"),site=val("site"),source=val("src");return combined().filter(r=>(!month||String(r.date).slice(0,7)===month)&&(!site||r.site===site)&&(!source||r.source===source))}
 function allAssetRecords(kind,id){const month=val("month"),site=val("site"),source=val("src");return combined().filter(r=>{const c=classify(r);return c.kind===kind&&c.id===id&&(!site||r.site===site)&&(!source||r.source===source)&&(!month||String(r.date||"").slice(0,7)<=month)}).sort((a,b)=>(a.date+" "+(a.time||"")).localeCompare(b.date+" "+(b.time||"")))}
 function calculateRate(events,meterType,unit){
- let last=null,unmeasuredLitres=0,span=0,allocated=0,intervals=0,invalid=0;
+ let last=null,lastDate=null,pendingLitres=0,span=0,allocated=0,intervals=0,invalid=0;
  for(const r of events){
-  const amount=Number(r.litres)||0;unmeasuredLitres+=amount;
+  const amount=Number(r.litres)||0;pendingLitres+=amount;
   const raw=r.source==="manual"?(r.rawOdometer??r.reading??r.hours):r.rawOdometer,reading=qualityReading(raw);
   if(reading===null){invalid++;continue}
   if(last!==null){
-   const diff=reading-last;
-   if(diff>0){span+=diff;allocated+=unmeasuredLitres;intervals++;unmeasuredLitres=0}
-   else invalid++;
-  }else unmeasuredLitres=0;
-  last=reading;
+   const diff=reading-last,days=Math.max(1,Math.ceil((Date.parse(r.date)-Date.parse(lastDate))/86400000)),limit=meterType==="plant"?24*days:(unit==="km"?1900:1200)*days;
+   if(diff>0&&diff<=limit){span+=diff;allocated+=pendingLitres;intervals++;pendingLitres=0;last=reading;lastDate=r.date}
+   else{invalid++;if(diff>limit){pendingLitres=0;last=reading;lastDate=r.date}}
+  }else{pendingLitres=0;last=reading;lastDate=r.date}
  }
- if(intervals===0||span<=0)return {span:0,rate:null,mpg:null,l100:null,intervals,invalid};
+ if(intervals===0||span<=0||allocated<=0)return {span:0,rate:null,mpg:null,l100:null,intervals,invalid};
  const km=meterType==="vehicle"?(unit==="km"?span:span*1.609344):null;
  const mi=meterType==="vehicle"?(unit==="mi"?span:span/1.609344):null;
  return {span,rate:allocated/span,mpg:mi*4.54609/allocated,l100:allocated*100/km,intervals,invalid};
@@ -284,14 +283,14 @@ async function previewFile(){
  if(file.size>12*1024*1024)throw Error("File exceeds 12 MB; export a smaller date window.");
  const arr=ext==="csv"?parseCsv(await file.text()):await parseXlsx(await file.arrayBuffer());
  preview=extractRows(arr);
- const valid=preview.filter(r=>r.date&&r.time&&r.identifier&&r.identifier!=="0"&&Number.isFinite(r.litres)&&r.litres>0);
+ const valid=preview.filter(r=>r.date&&r.time&&r.identifier&&Number.isFinite(r.litres)&&r.litres>0);
  const invalidCount=preview.length-valid.length;
  const existingKeys=new Set(external.map(r=>r.fingerprint)),within=new Set();let duplicates=0;
  for(const r of valid){r.fingerprint=await fingerprint(r);if(existingKeys.has(r.fingerprint)||within.has(r.fingerprint))duplicates++;within.add(r.fingerprint)}
  $("impCount").textContent=valid.length.toLocaleString("en-GB");$("impLitres").textContent=litres(valid.reduce((a,r)=>a+r.litres,0));
  $("impUnknown").textContent=[...new Set(valid.filter(r=>!aliasIndex().has(norm(r.identifier))).map(r=>norm(r.identifier)))].length.toString();
  $("impFlags").textContent=String(preview.filter(r=>r.issues.length).length);
- $("importStatus").textContent=preview.length+" rows · "+invalidCount+" cannot be imported · "+duplicates+" existing/duplicate fingerprints · source file "+file.name;
+ $("importStatus").textContent=preview.length+" rows · "+invalidCount+" cannot be imported · "+duplicates+" existing/duplicate fingerprints · source file "+file.name+". Identifier 0 is retained as unallocated fuel.";
  $("previewTable").innerHTML=preview.slice(0,150).map(r=>'<tr><td>'+escapeHTML(r.date||"Invalid")+'</td><td>'+escapeHTML(r.time)+'</td><td>'+escapeHTML(r.identifier)+'</td><td>'+escapeHTML(r.rawOdometer)+'</td><td>'+escapeHTML(r.driver)+'</td><td>'+fmt(r.litres)+'</td><td>'+tag(r.issues.length?"review":"ok")+' <span class="sub">'+escapeHTML(r.issues.join("; ")||"OK")+'</span></td></tr>').join("");
  $("importBtn").disabled=!valid.length;
  renderMaps();
@@ -299,7 +298,7 @@ async function previewFile(){
 async function importRecords(){
  if(!val("importName"))throw Error("Enter who is importing the file.");
  const site=val("importSite"),file=$("importFile").files?.[0];if(!site)throw Error("Enter the source site's name.");
- const valid=preview.filter(r=>r.date&&r.time&&r.identifier&&r.identifier!=="0"&&Number.isFinite(r.litres)&&r.litres>0&&r.fingerprint);
+ const valid=preview.filter(r=>r.date&&r.time&&r.identifier&&Number.isFinite(r.litres)&&r.litres>0&&r.fingerprint);
  if(!valid.length)throw Error("No importable rows. Preview the file first.");
  const unique=[...new Map(valid.map(r=>[r.fingerprint,r])).values()];
  for(let i=0;i<unique.length;i+=350){
