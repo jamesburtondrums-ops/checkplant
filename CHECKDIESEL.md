@@ -3,10 +3,10 @@
 **Status:** Development preview. The feature is isolated on a feature branch. Do **not** deploy to a publicly writable Firestore database until server-enforced access controls are confirmed.
 
 ## Why this is integrated
-- Uses the existing CheckPlant Firebase/Firestore project and live \`machines\` documents (machine IDs, names, serial numbers and branches).
-- The CheckPlant home screen and ManagerDash quick links link to \`checkdiesel.html\`.
-- No duplicate machine master is created. A fill references the existing \`machineId\`, with a snapshot of name and branch for audit history.
-- Fuel does **not** overwrite \`machines.currentHours\`: this prevents historic or late fuel entries from rolling back a service interval.
+- Uses the existing CheckPlant Firebase/Firestore project and live `machines` documents (machine IDs, names, serial numbers and branches).
+- The CheckPlant home screen and ManagerDash quick links link to `checkdiesel.html`.
+- No duplicate machine master is created. A fill references the existing `machineId`, with a snapshot of name and branch for audit history.
+- Fuel does **not** overwrite `machines.currentHours`: this prevents historic or late fuel entries from rolling back a service interval.
 
 ## Main operator workflows
 1. **Add tank/bowser:** site, capacity, reorder quantity and opening stock; an opening-stock ledger event is written.
@@ -18,16 +18,16 @@
 
 ## Firestore document contracts
 
-\`dieselTanks/{tankId}\`
-- \`name\`, \`site\`, \`kind\` (\`fixed\` or \`bowser\`)
-- \`capacityLitres\`, \`stockLitres\`, \`reorderLitres\`
-- \`averageCostPerLitre\` in GBP ex VAT, \`active\`, \`updatedAt\`, \`createdAt\`
+`dieselTanks/{tankId}`
+- `name`, `site`, `kind` (`fixed` or `bowser`)
+- `capacityLitres`, `stockLitres`, `reorderLitres`
+- `averageCostPerLitre` in GBP ex VAT, `active`, `updatedAt`, `createdAt`
 
-\`dieselMovements/{movementId}\`
-- \`type\`: \`opening\`, \`delivery\`, \`issue\`, \`transfer_out\`, \`transfer_in\`, \`adjustment\`
-- \`tankId\`, \`tankName\`, \`site\`, \`date\`, \`createdAt\`, \`operator\`
-- \`litres\` (absolute), \`deltaLitres\` (signed), \`unitCost\`, \`totalCost\`
-- Optional \`machineId\`, \`machineName\`, \`assetBranch\`, \`hours\`, \`reference\`, \`counterparty\`, \`transferId\`, \`stockBeforeLitres\`, \`stockAfterLitres\`
+`dieselMovements/{movementId}`
+- `type`: `opening`, `delivery`, `issue`, `transfer_out`, `transfer_in`, `adjustment`
+- `tankId`, `tankName`, `site`, `date`, `createdAt`, `operator`
+- `litres` (absolute), `deltaLitres` (signed), `unitCost`, `totalCost`
+- Optional `machineId`, `machineName`, `assetBranch`, `hours`, `reference`, `counterparty`, `transferId`, `stockBeforeLitres`, `stockAfterLitres`
 
 Stock-changing operations use Firestore transactions with tank document reads and ledger-document writes in the same commit. Movement events are append-only in the UI; stock cannot fall below zero or exceed capacity.
 
@@ -46,7 +46,7 @@ Stock-changing operations use Firestore transactions with tank document reads an
 
 ## Smoke test
 
-Run \`node tests/checkdiesel.cjs\` to check the JavaScript syntax, simulated stock operations, weighted-average pricing and overdraw prevention. This is an in-memory test only; it does **not** prove Firestore rules, connectivity, live deployment or race-condition safety.
+Run `node tests/checkdiesel.cjs` to check the JavaScript syntax, simulated stock operations, weighted-average pricing and overdraw prevention. This is an in-memory test only; it does **not** prove Firestore rules, connectivity, live deployment or race-condition safety.
 
 ## Potential next phase
 
