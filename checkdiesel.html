@@ -118,13 +118,13 @@ const litres=n=>Number(n||0).toLocaleString("en-GB",{maximumFractionDigits:2})+"
 const cash=n=>"£"+Number(n||0).toLocaleString("en-GB",{minimumFractionDigits:2,maximumFractionDigits:2});
 const num=id=>Number($(id).value);
 const val=id=>$(id).value.trim();
-let tanks=[],machines=[],movements=[],readyCount=0,busy=false,notifyHandle;
+let tanks=[],machines=[],movements=[],readyCount=0,busy=false,notifyHandle;const streamsReady={machines:false,tanks:false,movements:false};
 const tankById=id=>tanks.find(t=>t.id===id);
 const machineById=id=>machines.find(m=>m.id===id);
 const quantity=n=>Math.round(Number(n)*100)/100;
 const moneyValue=n=>Math.round(Number(n)*10000)/10000;
 function notify(msg,error){const m=$("message");m.textContent=msg;m.className="show"+(error?" error":"");clearTimeout(notifyHandle);notifyHandle=setTimeout(()=>m.className="",5500)}
-function setReady(){readyCount++;$("connection").textContent=readyCount===3?"Connected to live CheckPlant / diesel records":"Loading live data…"}
+function setReady(key){if(streamsReady[key])return;streamsReady[key]=true;readyCount++;$("connection").textContent=readyCount===3?"Connected to live CheckPlant / diesel records":"Loading live data…"}
 function failed(what,e){$("connection").textContent="Connection error: "+what+" — "+e.message;notify(what+": "+e.message,true)}
 function fillSelect(id,items,label,placeholder){const el=$(id),prior=el.value;el.replaceChildren();const first=new Option(placeholder,"");el.add(first);items.forEach(i=>el.add(new Option(label(i),i.id)));if(items.some(i=>i.id===prior))el.value=prior}
 function populate(){
@@ -186,13 +186,14 @@ async function saveOperation(form,callback){
 }
 function requirePositive(n,label){if(!Number.isFinite(n)||n<=0)throw Error(label+" must be greater than zero.");return quantity(n)}
 function requireNonNegative(n,label){if(!Number.isFinite(n)||n<0)throw Error(label+" must be zero or greater.");return quantity(n)}
+function requireUnitCost(n){if(!Number.isFinite(n)||n<0)throw Error("Unit price must be zero or greater.");return moneyValue(n)}
 function requireTank(id){const t=tankById(id);if(!t||t.active===false)throw Error("Tank is not available.");return t}
 function recordBase(t,operator,date,type){return {type,tankId:t.id,tankName:t.name,site:t.site,operator,date,createdAt:nowStamp(),source:"checkdiesel-v1"}}
 function validateDate(d){if(!/^\d{4}-\d{2}-\d{2}$/.test(d))throw Error("Select a valid date.")}
 function checkCapacity(stock,cap){if(stock>Number(cap)+0.005)throw Error("Tank capacity exceeded.");if(stock<-.005)throw Error("Insufficient stock in tank.")}
 async function setup(e){
  e.preventDefault();await saveOperation(e.currentTarget,async()=>{
- const name=val("setup-name"),site=val("setup-site"),kind=val("setup-kind"),capacity=requirePositive(num("setup-capacity"),"Capacity"),opening=requireNonNegative(num("setup-opening"),"Opening stock"),reorder=requireNonNegative(num("setup-reorder"),"Reorder level"),cost=requireNonNegative(num("setup-cost"),"Unit cost"),operator=val("setup-operator");
+ const name=val("setup-name"),site=val("setup-site"),kind=val("setup-kind"),capacity=requirePositive(num("setup-capacity"),"Capacity"),opening=requireNonNegative(num("setup-opening"),"Opening stock"),reorder=requireNonNegative(num("setup-reorder"),"Reorder level"),cost=requireUnitCost(num("setup-cost")),operator=val("setup-operator");
  if(!name||!site||!operator)throw Error("Complete all mandatory fields.");
  if(opening>capacity||reorder>capacity)throw Error("Opening/reorder quantities cannot exceed capacity.");
  if(tanks.some(t=>t.name.toLowerCase()===name.toLowerCase()&&t.site.toLowerCase()===site.toLowerCase()))throw Error("A tank with this name already exists at this site.");
@@ -204,7 +205,7 @@ async function setup(e){
  })}
 async function deliver(e){
  e.preventDefault();await saveOperation(e.currentTarget,async()=>{
- const t=requireTank(val("delivery-tank")),amount=requirePositive(num("delivery-litres"),"Delivered litres"),price=requireNonNegative(num("delivery-price"),"Price per litre"),operator=val("delivery-operator"),supplier=val("delivery-supplier"),reference=val("delivery-ref"),date=val("delivery-date");
+ const t=requireTank(val("delivery-tank")),amount=requirePositive(num("delivery-litres"),"Delivered litres"),price=requireUnitCost(num("delivery-price")),operator=val("delivery-operator"),supplier=val("delivery-supplier"),reference=val("delivery-ref"),date=val("delivery-date");
  validateDate(date);if(!operator||!supplier||!reference)throw Error("Receiver, supplier and delivery reference are required.");
  const ref=db.collection("dieselTanks").doc(t.id),mov=db.collection("dieselMovements").doc();
  await db.runTransaction(async tx=>{
@@ -219,7 +220,7 @@ async function refuel(e){
  e.preventDefault();await saveOperation(e.currentTarget,async()=>{
  const t=requireTank(val("refuel-tank")),m=machineById(val("refuel-machine")),amount=requirePositive(num("refuel-litres"),"Litres"),operator=val("refuel-operator"),date=val("refuel-date"),reference=val("refuel-note"),raw=$("refuel-hours").value,hrs=raw===""?null:requireNonNegative(Number(raw),"Hour meter");
  validateDate(date);if(!m||!operator)throw Error("Choose a machine and enter the operator.");
- if(m.branch&&m.branch!==t.site&&!confirm("Machine branch differs from the tank site. Record this site refuel anyway?"))return;
+ if(m.branch&&m.branch!==t.site&&!confirm("Machine branch differs from the tank site. Record this site refuel anyway?"))throw Error("Refuelling cancelled before saving.");
  const ref=db.collection("dieselTanks").doc(t.id),mov=db.collection("dieselMovements").doc();
  await db.runTransaction(async tx=>{
  const snap=await tx.get(ref);if(!snap.exists)throw Error("Tank not found.");
@@ -265,9 +266,9 @@ function exportCsv(){
  link.href=url;link.download="CheckDiesel_"+(val("report-month")||"all-dates")+".csv";link.click();setTimeout(()=>URL.revokeObjectURL(url),2000);
 }
 function listen(){
- db.collection("machines").orderBy("name").onSnapshot(s=>{machines=s.docs.map(d=>({id:d.id,...d.data()}));if(!machines._ready){machines._ready=true;setReady()}populate();drawReport()},e=>failed("CheckPlant machines",e));
- db.collection("dieselTanks").onSnapshot(s=>{tanks=s.docs.map(d=>({id:d.id,...d.data()}));if(!tanks._ready){tanks._ready=true;setReady()}draw()},e=>failed("Diesel tanks",e));
- db.collection("dieselMovements").onSnapshot(s=>{movements=s.docs.map(d=>({id:d.id,...d.data()}));if(!movements._ready){movements._ready=true;setReady()}draw()},e=>failed("Fuel movements",e));
+ db.collection("machines").orderBy("name").onSnapshot(s=>{machines=s.docs.map(d=>({id:d.id,...d.data()}));setReady("machines")populate();drawReport()},e=>failed("CheckPlant machines",e));
+ db.collection("dieselTanks").onSnapshot(s=>{tanks=s.docs.map(d=>({id:d.id,...d.data()}));setReady("tanks")draw()},e=>failed("Diesel tanks",e));
+ db.collection("dieselMovements").onSnapshot(s=>{movements=s.docs.map(d=>({id:d.id,...d.data()}));setReady("movements")draw()},e=>failed("Fuel movements",e));
 }
 document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{
  document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===b));
