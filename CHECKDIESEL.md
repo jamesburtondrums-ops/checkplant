@@ -102,3 +102,45 @@ All changes remain on the draft PR branch and should not be launched as a writab
 - A standalone version preloaded with the October user export is provided privately to the user. **Do not commit/upload that private transaction seed to this repository or publish it on Cloudflare.** The repository and public preview only include an empty, client-side import app.
 - Imported data and classification choices are kept in browser localStorage for this development preview, not a shared database. That means **not** accessible across devices. The existing Firestore-backed CheckDiesel operations and separate intelligence proof remain on the feature branch for later unified integration, after authenticated permissions are developed and tested.
 - Cloudflare development Worker `checkdiesel-site-preview` hosts the same blank client-side import front end. Production requires secure cloud persistence, user authentication, access control and source-to-tank reconciliation.
+
+## Confirmed October 2026 dispenser account and asset classification
+
+The pump export uses the column **DRIVER** as a *dispenser account* (not reliably the literal person dispensing fuel). This is essential: **PLANT2** is the main plant account but can include occasional road vehicles; all other accounts must be separately filterable rather than being silently classified as plant or fleet.
+
+Confirmed user-provided rules, applied automatically in `checkdiesel-dashboard.html`:
+
+| Raw code(s) | Canonical group | Category | Meaning |
+|---|---|---|---|
+| `FT2`, `FT4`, and `FT<number>` | `FLT<number>` | Plant | Forklift truck with corresponding number |
+| `G1`, `GRAB 1`, `GRAB1`, and similar numbers | `GRAB<number>` | Plant | Same numbered grab |
+| `INV` | `INV` | Plant | Inventhor |
+| `TANA` | `TANA` | Plant | Tana Shark |
+| `CASE210` | `CASE210` | Plant | Case 210 Excavator |
+| `JCB11`, `JCB12` | distinct `JCB11` and `JCB12` | Plant | Separate numbered JCB machines |
+| `TRACT`, `TRACTOR` | `TRACTOR` | Plant | Tractor |
+| `SHEF` | `SHEF` | Fuel transfer | Fuel taken to Sheffield branch |
+| `BOW` | `BOW` | Fuel transfer | Fuel to Shires or emergency refuelling; final destination is not known for an individual transaction |
+
+The source code stays on each original transaction; only *display and asset grouping* use a canonical alias. Other codes such as `GRB6`, `3RAB6`, `FLK2`, `GRAB50`, `B`, `TVV`, and person-name entries should not be silently collapsed into known assets without confirming their meaning. Numbers in `GRAB50` are treated literally.
+
+### Proven source totals, October 1–20, 2026
+
+- **PLANT2:** 169 transactions / **30,527.22 L**.
+- **All other dispenser accounts:** 154 transactions / **25,275.19 L**.
+- **Total:** 323 transactions / **55,802.41 L**.
+- Confirmed **grab** codes: 37 issues / **8,628.71 L**.
+- Confirmed **FLT** codes: 3 issues / **107.16 L**.
+- Confirmed **SHEF + BOW transfers:** 17 issues / **2,591.84 L** (16 issues on PLANT2 and 1 on another dispenser account).
+- Other user-confirmed plant codes including Inventhor, Tana, Case210, JCB11/12, Tractor: 19 issues / **6,489.59 L**.
+- Residual unresolved codes include some apparent vehicle registrations, code 0, and person-name or shorthand labels.
+
+### UX
+
+- Dedicated **Dispenser accounts** and **Transfers & bowsers** pages.
+- One-click top-level **PLANT2** vs **Other dispenser accounts** split, plus an account-group filter across the rest of the dashboard.
+- Branded human-readable asset names and canonical grouping with the original code preserved in transaction history.
+- Review prioritises unverified identifiers, large dispenses and questionable road odometers, not simply plant hour-meter blanks.
+- Standalone private HTML file with 323 preloaded records supplied directly to the user; public Cloudflare preview still starts with **no transaction data**.
+- The version has been smoke-tested in Chromium via in-memory HTML and Playwright for account totals, filtering, transfer separation, mapped group names and mapping forms; JS syntax passed. Browser file/localhost navigation was blocked by this execution environment, so the tests used Playwright `set_content`. Import from the physical XLSX remains to be manually verified on the actual Cloudflare preview.
+
+**Do not interpret BOW or SHEF as a final consumption event for a piece of plant.** Reconcile subsequent deliveries/dispenses separately to avoid double counting.
