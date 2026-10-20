@@ -135,7 +135,20 @@ function buildExternalJobCardPDF(e){
   block('Parts / materials used',e.externalMaterials||'None recorded');
   line('Completed by',e.externalCompletedBy||'-');
   line('Labour hours',e.externalLabourHours!=null?e.externalLabourHours:'-');
+  line('Labour rate',e.externalLabourRate!=null?money(e.externalLabourRate)+'/hr':'-');
   line('Downtime hours',e.downtimeHours!=null?e.downtimeHours:'-');
+
+  y+=6;title('Customer Charges');
+  line('Labour charge',money(e.labourCharge||0));
+  line('Parts / materials',money(e.partsCharge||0));
+  line('Call-out / travel',money(e.calloutCharge||0));
+  line('Other charges',money(e.otherCharge||0));
+  ensure(34);
+  doc.setFillColor(245,247,250);doc.roundedRect(m,y-10,w-(m*2),32,5,5,'F');
+  doc.setFontSize(11);doc.setFont(undefined,'bold');doc.setTextColor(46,46,143);
+  doc.text('TOTAL JOB COST',m+10,y+10);
+  doc.text(money(e.customerCharge||0),w-m-10,y+10,{align:'right'});
+  doc.setTextColor(28,31,38);y+=42;
 
   if(e.notes){y+=6;title('Follow-up / Notes');block('Notes',e.notes);}
 
