@@ -50,10 +50,10 @@ label{font-size:.8rem;font-weight:800;display:block;margin-bottom:5px}input,sele
 <button type="button" class="tab" data-tab="vehicles">Vehicle register</button>
 </div>
 <div id="panel-plant" class="panel active card"><h2>Plant machinery · consumption</h2>
-<p class="note">Live CheckPlant machine identities; consumption is litres per engine hour only when at least two valid increasing engine-hour readings exist. A fill-to-fill approach is indicative and may be distorted by partial fills, missing entries or unmetered transfers.</p>
+<p class="note">Live CheckPlant machine identities; consumption is litres per engine hour only when two valid increasing engine-hour readings exist, with the measured interval ending in the selected month. Results are indicative and may be distorted by partial fills, missing issues or unmetered transfers.</p>
 <div class="tablewrap"><table><thead><tr><th>Machine</th><th>Site</th><th>Issues</th><th>Fuel issued</th><th>Valid hour span</th><th>Litres/hour</th><th>Data quality</th></tr></thead><tbody id="plantTable"></tbody></table></div></div>
 <div id="panel-fleet" class="panel card"><h2>Road vehicles · diesel efficiency</h2>
-<p class="note">Use vehicle-specific miles or kilometres. MPG is UK imperial. Efficiency is an estimate unless the recordings represent complete consecutive fill-ups; missing/implausible odometers are excluded from rate calculations.</p>
+<p class="note">Use vehicle-specific miles or kilometres. MPG is UK imperial. Rates use plausible meter intervals ending in the selected month. They are estimates unless recordings represent complete consecutive fill-ups; missing/implausible readings are excluded.</p>
 <div class="tablewrap"><table><thead><tr><th>Vehicle</th><th>Site</th><th>Issues</th><th>Fuel issued</th><th>Valid distance</th><th>UK MPG</th><th>L/100 km</th><th>Data quality</th></tr></thead><tbody id="fleetTable"></tbody></table></div></div>
 <div id="panel-unmapped" class="panel card"><h2>Unallocated dispenser fuel</h2><p class="note">Source identifiers such as GRAB5, CASE, BOW, or a vehicle registration need a confirmed mapping before they can be scored. Large deliveries and bowser transfers should be assigned to "Transfer / bowser" so they are not treated as machine consumption.</p><div class="tablewrap"><table><thead><tr><th>Export code</th><th>Transactions</th><th>Litres</th><th>Odometer issues</th><th>Suggested category</th></tr></thead><tbody id="unmappedTable"></tbody></table></div></div>
 <div id="panel-import" class="panel card"><h2>Import dispenser transaction history</h2>
@@ -184,7 +184,7 @@ function combined(){
 }
 function monthRecords(){const month=val("month"),site=val("site"),source=val("src");return combined().filter(r=>(!month||String(r.date).slice(0,7)===month)&&(!site||r.site===site)&&(!source||r.source===source))}
 function allAssetRecords(kind,id){const month=val("month"),site=val("site"),source=val("src");return combined().filter(r=>{const c=classify(r);return c.kind===kind&&c.id===id&&(!site||r.site===site)&&(!source||r.source===source)&&(!month||String(r.date||"").slice(0,7)<=month)}).sort((a,b)=>(a.date+" "+(a.time||"")).localeCompare(b.date+" "+(b.time||"")))}
-function calculateRate(events,meterType,unit){
+function calculateRate(events,meterType,unit,periodMonth){
  let last=null,lastDate=null,pendingLitres=0,span=0,allocated=0,intervals=0,invalid=0;
  for(const r of events){
   const amount=Number(r.litres)||0;pendingLitres+=amount;
@@ -192,7 +192,7 @@ function calculateRate(events,meterType,unit){
   if(reading===null){invalid++;continue}
   if(last!==null){
    const diff=reading-last,days=Math.max(1,Math.ceil((Date.parse(r.date)-Date.parse(lastDate))/86400000)),limit=meterType==="plant"?24*days:(unit==="km"?1900:1200)*days;
-   if(diff>0&&diff<=limit){span+=diff;allocated+=pendingLitres;intervals++;pendingLitres=0;last=reading;lastDate=r.date}
+   if(diff>0&&diff<=limit){if(!periodMonth||String(r.date).startsWith(periodMonth)){span+=diff;allocated+=pendingLitres;intervals++}pendingLitres=0;last=reading;lastDate=r.date}
    else{invalid++;if(diff>limit){pendingLitres=0;last=reading;lastDate=r.date}}
   }else{pendingLitres=0;last=reading;lastDate=r.date}
  }
@@ -219,11 +219,11 @@ function render(){
  $("kpi-plant").textContent=litres(sum("plant"));$("kpi-road").textContent=litres(sum("vehicle"));$("kpi-unknown").textContent=litres(un.reduce((a,r)=>a+Number(r.litres),0));
  const pi=plantIndex(),vi=vehicleIndex();
  const pt=summarise("plant");$("plantTable").innerHTML=pt.length?pt.map(g=>{
-  const p=pi.get(g.id)||{},record=calculateRate(selectedEventsUntilMonth("plant",g.id),"plant","hours");
+  const p=pi.get(g.id)||{},record=calculateRate(selectedEventsUntilMonth("plant",g.id),"plant","hours",val("month"));
   return '<tr><td><b>'+escapeHTML(p.name||g.id)+'</b></td><td>'+escapeHTML(p.branch||"—")+'</td><td>'+g.count+'</td><td>'+litres(g.total)+'</td><td>'+ (record.span?fmt(record.span)+" h":"—")+'</td><td><b>'+(record.rate==null?"—":record.rate.toFixed(2)+" L/h")+'</b></td><td>'+qualityText(g,record)+'</td></tr>'
  }).join(""):'<tr><td colspan="7" class="no-data">No allocated plant fuel for this period. Map the dispenser codes first.</td></tr>';
  const vt=summarise("vehicle");$("fleetTable").innerHTML=vt.length?vt.map(g=>{
-  const v=vi.get(g.id)||{},record=calculateRate(selectedEventsUntilMonth("vehicle",g.id),"vehicle",v.odometerUnit||"mi");
+  const v=vi.get(g.id)||{},record=calculateRate(selectedEventsUntilMonth("vehicle",g.id),"vehicle",v.odometerUnit||"mi",val("month"));
   const distance=record.span?fmt(record.span)+" "+(v.odometerUnit==="km"?"km":"mi"):"—";
   return '<tr><td><b>'+escapeHTML(v.name||g.id)+'</b><div class="sub">'+escapeHTML(v.registration||"")+'</div></td><td>'+escapeHTML(v.site||"—")+'</td><td>'+g.count+'</td><td>'+litres(g.total)+'</td><td>'+distance+'</td><td><b>'+(record.mpg==null?"—":record.mpg.toFixed(1))+'</b></td><td>'+(record.l100==null?"—":record.l100.toFixed(1))+'</td><td>'+qualityText(g,record)+'</td></tr>'
  }).join(""):'<tr><td colspan="8" class="no-data">No allocated vehicle fuel for this period. Register vehicles and map their dispenser codes.</td></tr>';
