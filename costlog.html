@@ -152,13 +152,7 @@ function buildExternalJobCardPDF(e){
 
   if(e.notes){y+=6;title('Follow-up / Notes');block('Notes',e.notes);}
 
-  ensure(100);y+=12;doc.setDrawColor(190,190,190);doc.line(m,y,w-m,y);y+=22;
-  doc.setFontSize(10);doc.setFont(undefined,'bold');doc.text('Customer acknowledgement',m,y);y+=28;
-  doc.setFont(undefined,'normal');doc.setFontSize(9);
-  doc.text('Name: ____________________________________',m,y);
-  doc.text('Date: __________________',m+315,y);y+=30;
-  doc.text('Signature: ________________________________',m,y);
-
+  ensure(28);y+=12;doc.setDrawColor(190,190,190);doc.line(m,y,w-m,y);
   doc.setFontSize(8);doc.setTextColor(130,130,130);doc.text('Generated from CostLog · '+new Date().toLocaleString('en-GB'),m,812);
   return doc;
 }
