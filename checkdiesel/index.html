@@ -167,6 +167,8 @@ function accountIdentity(account){
 function rowIdentity(r){
  // DRIVER is the dispenser account in this export; REG. NUMBER may be a person or equipment label.
  const acc=codeKey(r.driver),raw=codeKey(r.code),override=mappings[raw]||mappings[plantOrTransferAlias(raw)]||null;
+ // Confirmed Sheffield and bowser movements are transfers even if issued on another account.
+ if(acc!=='PLANT2'&&knownRule(raw)?.type==='transfer')return {key:plantOrTransferAlias(raw),type:'transfer',name:knownRule(raw).name,verified:true,source:'confirmed fuel movement'};
  if(acc!=='PLANT2')return accountIdentity(acc||'(blank)');
  // Shared PLANT2 account: use the individual identifier to allocate the specific issue.
  const rule=knownRule(raw);
