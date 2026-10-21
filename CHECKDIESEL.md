@@ -144,3 +144,7 @@ The source code stays on each original transaction; only *display and asset grou
 - The version has been smoke-tested in Chromium via in-memory HTML and Playwright for account totals, filtering, transfer separation, mapped group names and mapping forms; JS syntax passed. Browser file/localhost navigation was blocked by this execution environment, so the tests used Playwright `set_content`. Import from the physical XLSX remains to be manually verified on the actual Cloudflare preview.
 
 **Do not interpret BOW or SHEF as a final consumption event for a piece of plant.** Reconcile subsequent deliveries/dispenses separately to avoid double counting.
+
+### Confirmed Grab 6 aliases (21 October 2026)
+
+The user confirmed that dispenser identifiers `GRB6` and `3RAB6` **both mean Grab 6**. The dashboard's `canonicalCode` now normalises both to `GRAB6` (in addition to `G6` and `GRAB6`). Raw transaction identifiers remain unchanged. The October source contains `GRB6` = 264.54 L and `3RAB6` = 240.85 L, totalling **505.39 litres** allocated to Grab 6.
