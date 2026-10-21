@@ -102,6 +102,7 @@ function knownRegistrations(){
  const regs=new Set();
  for(const r of rows){if(isReg(r.code))regs.add(regKey(r.code))}
  for(const m of meters){if(m.kind==='road'&&isReg(m.asset))regs.add(regKey(m.asset))}
+ for(const a of Object.values(accountMappings)){if(isReg(a?.registration))regs.add(regKey(a.registration))}
  for(const [k,v] of Object.entries(mappings)){
   if(isReg(k))regs.add(regKey(k));
   if(isReg(v?.registration))regs.add(regKey(v.registration));
@@ -161,7 +162,7 @@ function accountIdentity(account){
  if(!reg&&/^[A-Z]{3}$/.test(acc)){const opts=regs.filter(r=>r.endsWith(acc));if(opts.length===1)reg=opts[0]}
  if(!reg&&/^[A-Z]{2}[A-Z]{3}$/.test(acc)){const opts=regs.filter(r=>r.startsWith(acc.slice(0,2))&&r.endsWith(acc.slice(-3)));if(opts.length===1)reg=opts[0]}
  const type=over.type||'road',key=type==='road'?(reg||'ACCOUNT:'+acc):'ACCOUNT:'+acc;
- return {key,type,name:reg||over.name||'Fuel account '+acc,account:acc,registration:reg||'',verified:Boolean(reg||over.type),source:'dispenser account'};
+ return {key,type,name:type==='road'?(reg||over.name||'Vehicle account '+acc):(over.name||'Fuel account '+acc),account:acc,registration:type==='road'?(reg||''):'',verified:Boolean(reg||over.type),source:'dispenser account'};
 }
 function rowIdentity(r){
  // DRIVER is the dispenser account in this export; REG. NUMBER may be a person or equipment label.
@@ -364,37 +365,66 @@ function drawAccounts(data){const grouped=new Map();for(const r of data){const k
 function drawTransfers(data){const gs=group(data).filter(g=>typeOf(g.code)==='transfer');$('transferTable').innerHTML=gs.map(g=>'<tr><td><button class="linklike" data-asset="'+esc(g.code)+'">'+esc(labelFor(g.code))+'</button></td><td>'+esc(knownRule(g.code)?.destination||'Movement purpose requires confirmation')+'</td><td>'+fmt(g.count)+'</td><td><b>'+litres(g.total)+'</b></td><td>'+esc([...new Set(g.events.map(r=>r.driver))].join(', '))+'</td><td><button class="btn small light" data-asset="'+esc(g.code)+'">View →</button></td></tr>').join('')||'<tr><td colspan="6" class="empty">No identified bowser/transfer issues in these filters.</td></tr>'}
 function drawReview(data){const arr=group(data).filter(needsReview);$('reviewTable').innerHTML=arr.map(g=>'<tr><td><button class="linklike" data-asset="'+esc(g.code)+'">'+esc(g.code)+'</button></td><td>'+badge(g.code)+'</td><td><b>'+litres(g.total)+'</b></td><td>'+fmt(g.count)+'</td><td>'+(g.flags?'<span class="badge flag">'+g.flags+' flags</span>':'—')+'</td><td><button class="btn small light" data-map="'+esc(g.code)+'">Classify →</button></td></tr>').join('')||'<tr><td colspan="6" class="empty">No outstanding flags in this selection.</td></tr>'}
 function drawTx(data){const list=data.slice().reverse(),size=35,page=Math.min(pageTx,Math.max(1,Math.ceil(list.length/size)));pageTx=page;$('transactionsTable').innerHTML=list.slice((page-1)*size,page*size).map(r=>'<tr><td>'+r.date+'<div class="smalltxt">'+esc(r.time)+'</div></td><td><button class="linklike" data-asset="'+esc(rowIdentity(r).key)+'">'+esc(r.code)+'</button></td><td>'+badge(rowIdentity(r).key)+'</td><td>'+esc(r.driver)+'</td><td>'+esc(String(r.reading))+'</td><td><b>'+litres(r.litres)+'</b></td><td>'+(r.issues?.length?'<span class="badge flag" title="'+esc(r.issues.join('; '))+'">'+r.issues.length+' flag(s)</span>':'—')+'</td></tr>').join('')||'<tr><td colspan="7" class="empty">No transactions</td></tr>';pager('transactionsPager',list,page,size)}
+function drawAccountMappings(){
+ const regList=knownRegistrations(),accs=new Map();
+ for(const r of rows){const acc=codeKey(r.driver)||'(blank)';if(acc==='PLANT2')continue;
+  const g=accs.get(acc)||{count:0,litres:0,sourceLabels:new Set()};
+  g.count++;g.litres+=Number(r.litres||0);g.sourceLabels.add(codeKey(r.code));accs.set(acc,g);
+ }
+ const list=[...accs].sort((a,b)=>b[1].litres-a[1].litres);
+ $('accountMappingTable').innerHTML=list.length?list.map(([acc,g])=>{
+  const setting=accountMappings[acc]||{},identity=accountIdentity(acc),type=setting.type||'road',
+  selected=isReg(setting.registration)?regKey(setting.registration):identity.registration,
+  regs=[...new Set([...regList,...(selected?[selected]:[])])].sort();
+  const options='<option value="">No confirmed registration</option>'+regs.map(reg=>'<option value="'+esc(reg)+'" '+(reg===selected?'selected':'')+'>'+esc(reg)+'</option>').join('');
+  const summary=[...g.sourceLabels].slice(0,6).join(', ');
+  return '<tr data-account="'+esc(acc)+'"><td><b>'+esc(acc)+'</b><div class="smalltxt">Original REG. NUMBER notes: '+esc(summary)+(g.sourceLabels.size>6?' …':'')+'</div></td>'+
+   '<td>'+fmt(g.count)+' refuels<div class="smalltxt">'+litres(g.litres)+'</div></td>'+
+   '<td><select data-acc-type="'+esc(acc)+'"><option value="road" '+(type==='road'?'selected':'')+'>Road vehicle</option><option value="plant" '+(type==='plant'?'selected':'')+'>Plant machinery</option><option value="transfer" '+(type==='transfer'?'selected':'')+'>Transfer / bowser</option><option value="unmapped" '+(type==='unmapped'?'selected':'')+'>Unclassified</option></select></td>'+
+   '<td><select data-acc-reg="'+esc(acc)+'">'+options+'</select><input data-acc-newreg="'+esc(acc)+'" placeholder="Or enter full registration" maxlength="12" style="min-width:150px;margin-top:5px"></td>'+
+   '<td><input data-acc-name="'+esc(acc)+'" placeholder="Optional friendly name" value="'+esc(setting.name||'')+'"></td>'+
+   '<td><button class="btn small light" data-save-account="'+esc(acc)+'">Save</button><div class="smalltxt">'+(identity.registration?'✓ Matched to '+esc(identity.registration):'Uses account ID until registration is known')+'</div></td></tr>';
+ }).join(''):'<tr><td colspan="6" class="empty">Unlock the October archive or import fuel records to see dispenser accounts.</td></tr>';
+}
+function saveAccount(account){
+ const acc=codeKey(account),el=k=>document.querySelector('['+k+'="'+CSS.escape(acc)+'"]');
+ if(!acc||acc==='PLANT2')return toast('PLANT2 must be allocated per individual fuel issue');
+ const type=el('data-acc-type')?.value||'road',name=el('data-acc-name')?.value.trim()||'',
+ manual=regKey(el('data-acc-newreg')?.value||''),chosen=regKey(el('data-acc-reg')?.value||''),registration=manual||chosen;
+ if(registration&&!isReg(registration))return toast('Enter a full, valid vehicle registration');
+ if(registration&&type!=='road')return toast('A vehicle registration requires Road vehicle allocation');
+ if(isReg(acc)&&type==='road'&&registration&&registration!==regKey(acc))return toast('A full dispenser registration cannot be assigned to a different registration');
+ accountMappings[acc]={type,name,registration:type==='road'?registration:'',confirmedAt:new Date().toISOString()};
+ try{localStorage.setItem(K_ACCOUNTS,JSON.stringify(accountMappings))}catch{toast('Saved for this session, but browser storage is full')}
+ toast('Account '+acc+(registration?' → '+registration:'')+' mapping saved');draw();
+}
 function drawMappings(){
- const regs=knownRegistrations(),filter=$('mappingAccount').value||'all',groups=new Map();
- const plant2Rows=rows.filter(r=>codeKey(r.driver)==='PLANT2');
- const countType=t=>plant2Rows.filter(r=>typeOf(r.code)===t).reduce((sum,r)=>sum+Number(r.litres||0),0);
+ drawAccountMappings();
+ const regs=knownRegistrations(),filter=$('mappingAccount').value||'all',groups=new Map(),
+ plant2Rows=rows.filter(r=>codeKey(r.driver)==='PLANT2'),
+ countType=t=>plant2Rows.filter(r=>rowType(r)===t).reduce((sum,r)=>sum+Number(r.litres||0),0);
  $('mapPlant2Machinery').textContent=litres(countType('plant'));
  $('mapPlant2Vehicles').textContent=litres(countType('road'));
  $('mapPlant2Unknown').textContent=litres(countType('unmapped'));
-
- for(const row of rows){
-  const code=codeKey(row.code),plant2=codeKey(row.driver)==='PLANT2',item=groups.get(code)||{code,total:0,plant2:0,other:0,accounts:new Set()};
-  item.total+=Number(row.litres)||0;if(plant2)item.plant2+=Number(row.litres)||0;else item.other+=Number(row.litres)||0;
-  item.accounts.add(codeKey(row.driver)||'(blank)');groups.set(code,item);
+ for(const row of plant2Rows){
+  const code=codeKey(row.code),item=groups.get(code)||{code,count:0,total:0,example:row};
+  item.count++;item.total+=Number(row.litres||0);groups.set(code,item);
  }
- const gs=[...groups.values()].filter(g=>filter==='all'||(filter==='plant2'?g.plant2>0:filter==='other'?g.other>0:typeOf(g.code)===filter))
- .sort((a,b)=>filter==='plant2'?b.plant2-a.plant2:filter==='other'?b.other-a.other:b.total-a.total);
+ const gs=[...groups.values()].filter(g=>filter==='all'||rowType(g.example)===filter)
+ .sort((a,b)=>b.total-a.total);
  $('mappingTable').innerHTML=gs.map(g=>{
-  const code=g.code,alias=canonicalCode(code),map=mappings[code]||{},rule=knownRule(code),suggest=suggestedReg(code),t=isReg(alias)?'road':map.type||rule?.type||infer(code),
-  selectedReg=isReg(code)?regKey(code):(map.registration||suggest||'');
-  const regOpts='<option value="">No registration link</option>'+regs.map(reg=>'<option value="'+esc(reg)+'" '+(reg===selectedReg?'selected':'')+'>'+esc(reg)+'</option>').join(''),
-  locked=isReg(code)?' disabled title="This code is already a full registration"':'',
-  linkedId=map.checkPlantId||machineForCode(code)?.id||'',
-  plantOpts='<option value="">No CheckPlant machine link</option>'+plantMachines.map(m=>'<option value="'+esc(m.id)+'" '+(m.id===linkedId?'selected':'')+'>'+esc(m.name)+' · '+esc(m.branch||'no branch')+'</option>').join('')+(linkedId&&!plantMachines.some(m=>m.id===linkedId)?'<option value="'+esc(linkedId)+'" selected>'+esc(linkedId)+' (saved)</option>':'');
-  return '<tr data-code="'+esc(code)+'"><td><button class="linklike" data-asset="'+esc(alias)+'">'+esc(code)+'</button>'+(alias!==code?'<div class="smalltxt">Groups under '+esc(alias)+'</div>':'')+'</td>'+
-  '<td>'+[...g.accounts].map(v=>'<span class="badge '+(v==='PLANT2'?'plant':'road')+'">'+esc(v)+'</span>').join(' ')+'</td>'+
-  '<td>'+litres(filter==='plant2'?g.plant2:filter==='other'?g.other:g.total)+'</td>'+
-  '<td><select class="row-select" data-map-type="'+esc(code)+'"><option value="unmapped" '+(t==='unmapped'?'selected':'')+'>Unclassified</option><option value="road" '+(t==='road'?'selected':'')+'>Road vehicle (even on PLANT2)</option><option value="plant" '+(t==='plant'?'selected':'')+'>Plant machinery</option><option value="transfer" '+(t==='transfer'?'selected':'')+'>Bowser / transfer</option></select></td>'+
-  '<td><input class="row-name" data-map-name="'+esc(code)+'" value="'+esc(map.name||rule?.name||'')+'" placeholder="Optional name"></td>'+
-  '<td><select data-map-reg="'+esc(code)+'"'+locked+'>'+regOpts+'</select></td>'+
-  '<td><select data-map-cp="'+esc(code)+'">'+plantOpts+'</select></td>'+
-  '<td><button class="btn small light" data-save="'+esc(code)+'">Save</button></td></tr>'
- }).join('')||'<tr><td colspan="8" class="empty">No identifiers from this dispenser account. Unlock your records or import fuel data.</td></tr>';
+  const code=g.code,info=rowIdentity(g.example),alias=info.key,setting=mappings[code]||{},rule=knownRule(code),
+  t=info.type,matchedReg=isReg(alias)?alias:(setting.registration||suggestedReg(code)||'');
+  const regOpts='<option value="">No registration link</option>'+regs.map(reg=>'<option value="'+esc(reg)+'" '+(reg===matchedReg?'selected':'')+'>'+esc(reg)+'</option>').join(''),
+  plantId=setting.checkPlantId||machineForCode(code)?.id||'',
+  plantOpts='<option value="">No CheckPlant machine link</option>'+plantMachines.map(m=>'<option value="'+esc(m.id)+'" '+(m.id===plantId?'selected':'')+'>'+esc(m.name)+' · '+esc(m.branch||'')+'</option>').join('')+(plantId&&!plantMachines.some(m=>m.id===plantId)?'<option value="'+esc(plantId)+'" selected>'+esc(plantId)+' (saved)</option>':'');
+  return '<tr data-code="'+esc(code)+'"><td><button class="linklike" data-asset="'+esc(alias)+'">'+esc(code)+'</button>'+(alias!==code?'<div class="smalltxt">Allocated as '+esc(info.name)+'</div>':'')+'</td>'+
+   '<td><span class="badge plant">PLANT2</span><div class="smalltxt">'+fmt(g.count)+' issues</div></td><td>'+litres(g.total)+'</td>'+
+   '<td><select data-map-type="'+esc(code)+'"><option value="unmapped" '+(t==='unmapped'?'selected':'')+'>Unclassified</option><option value="road" '+(t==='road'?'selected':'')+'>Road vehicle</option><option value="plant" '+(t==='plant'?'selected':'')+'>Plant machinery</option><option value="transfer" '+(t==='transfer'?'selected':'')+'>Bowser / transfer</option></select></td>'+
+   '<td><input data-map-name="'+esc(code)+'" value="'+esc(setting.name||rule?.name||'')+'" placeholder="Optional name"></td><td><select data-map-reg="'+esc(code)+'">'+regOpts+'</select></td>'+
+   '<td><select data-map-cp="'+esc(code)+'">'+plantOpts+'</select></td>'+
+   '<td><button class="btn small light" data-save="'+esc(code)+'">Save</button></td></tr>';
+ }).join('')||'<tr><td colspan="8" class="empty">No PLANT2 entries match this filter.</td></tr>';
 }
 function draw(){const data=visible();showStatus();drawOverview(data);drawTypes(data);drawAccounts(data);drawTransfers(data);drawReview(data);drawTx(data);drawMappings();drawMeterHistory()}
 function navigate(view){active=view;document.querySelectorAll('[data-view]').forEach(x=>x.classList.toggle('active',x.dataset.view===view));document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id==='view-'+view));let name={overview:'Fuel overview',fleet:'Road vehicle efficiency',plant:'Plant machinery efficiency',accounts:'Dispenser accounts',transfers:'Transfers & bowsers',unmapped:'Needs review',transactions:'All fuel dispenses',mapping:'Asset mapping',meterhistory:'Mileage & engine hours',import:'Import dispenser data'};$('pageTitle').textContent=name[view]||name.overview;$('pageSubtitle').textContent={overview:'Your entire site fuel usage at a glance',fleet:'Consumption, MPG and vehicle performance',plant:'Engine-hour efficiency and machine-level usage',accounts:'Compare PLANT2 with the fleet and other fuel accounts',transfers:'Sheffield branch and Shires/emergency fuel movements',unmapped:'Investigate unclassified assets and suspect meter readings',transactions:'Search the complete dispenser audit trail',mapping:'Manually separate PLANT2 machinery and road vehicles, with CheckPlant links',meterhistory:'Import road mileage and read dated CheckPlant engine hours',import:'Bring dispenser exports straight into your dashboard'}[view];$('sidebar').classList.remove('open');window.scrollTo(0,0)}
@@ -449,6 +479,7 @@ async function unlockHistory(){
 async function loadFile(file){if(!file)return;if(file.size>20_000_000)throw Error('File is too large (20MB maximum).');let matrix;if(/\.csv$/i.test(file.name))matrix=parseCSV(await file.text());else if(/\.xlsx$/i.test(file.name))matrix=await parseXLSX(file);else throw Error('Select .xlsx or .csv.');const result=processFile(matrix);if(!result.length)throw Error('No valid fuel issues found in the file.');const merged=mergeRows(rows,result);if(!confirm('Add '+merged.added+' new dispense rows and skip '+merged.skipped+' exact duplicates?'))return;rows=merged.rows;try{localStorage.setItem(K_DATA,JSON.stringify(rows))}catch(e){toast('Imported, but browser storage limit reached; data is only available for this session.')}filterSetup();draw();navigate('overview');toast(merged.added+' new dispenses imported');$('importResult').textContent=merged.added+' new records added · '+merged.skipped+' duplicates skipped from '+file.name}
 function handleClicks(ev){let el=ev.target.closest('[data-view],[data-account-group],[data-source-account],[data-goto],[data-asset],[data-page],[data-direction],[data-map],[data-save]');if(!el)return;if(el.dataset.view)navigate(el.dataset.view);if(el.dataset.accountGroup!==undefined){$('filterAccountGroup').value=el.dataset.accountGroup;$('filterDriver').value='';navigate('overview');draw()}if(el.dataset.sourceAccount){$('filterAccountGroup').value='';$('filterDriver').value=el.dataset.sourceAccount;navigate('transactions');draw()}if(el.dataset.goto)navigate(el.dataset.goto);if(el.dataset.asset)drawer(el.dataset.asset);if(el.dataset.map){closeDrawer();navigate('mapping');let q=document.querySelector('[data-map-type="'+CSS.escape(el.dataset.map)+'"]');q?.focus();q?.scrollIntoView({block:'center',behavior:'smooth'})}if(el.dataset.save)saveMap(el.dataset.save);if(el.dataset.page){const d=Number(el.dataset.direction);if(el.dataset.page==='overviewPager')pageAssets=Math.max(1,pageAssets+d);else pageTx=Math.max(1,pageTx+d);draw()}}
 document.addEventListener('click',handleClicks);
+document.addEventListener('click',ev=>{const b=ev.target.closest('[data-save-account]');if(b)saveAccount(b.dataset.saveAccount)});
 $('mappingAccount').addEventListener('change',drawMappings);
 $('mileageTemplate').addEventListener('click',()=>csvTemplate('road'));
 $('hoursTemplate').addEventListener('click',()=>csvTemplate('plant'));
