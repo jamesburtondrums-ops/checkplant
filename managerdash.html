@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ManagerDash — KCM Waste Management</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+:root{--navy:#2E2E8F;--green:#2FAE4E;--green-dark:#268F40;--red:#dc2626;--amber:#d97706;--grey:#6b7280;--light:#f4f6f8;--dark:#1c1f26;--radius:14px;}
+*{box-sizing:border-box;}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--light);color:var(--dark);}
+header{background:var(--navy);color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:50;box-shadow:0 2px 8px rgba(0,0,0,.15);}
+header .brand{display:flex;flex-direction:column;line-height:1.15;}
+header .brand .app-name{font-weight:800;font-size:1.25rem;}
+header .brand .company-name{font-weight:600;font-size:.68rem;color:var(--green);letter-spacing:.03em;text-transform:uppercase;}
+main{max-width:1300px;margin:0 auto;padding:20px 16px 80px;}
+.card{background:#fff;border-radius:var(--radius);padding:20px;margin-bottom:16px;box-shadow:0 2px 6px rgba(0,0,0,.04);border:1px solid #eceef1;}
+.section-title{font-size:1.05rem;font-weight:800;margin:0 0 10px;display:flex;align-items:center;gap:8px;color:var(--navy);justify-content:space-between;flex-wrap:wrap;}
+.links-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+@media (max-width:800px){.links-grid{grid-template-columns:repeat(2,1fr);}}
+.link-card{background:#fff;border:2px solid #e5e7eb;border-radius:12px;padding:18px 14px;text-align:center;cursor:pointer;text-decoration:none;color:var(--dark);display:block;}
+.link-card:hover{border-color:var(--navy);}
+.link-card .li-icon{font-size:1.8rem;margin-bottom:6px;}
+.link-card .li-name{font-weight:800;font-size:.92rem;color:var(--navy);}
+.link-card .li-desc{font-size:.72rem;color:var(--grey);margin-top:2px;}
+.stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;}
+@media (max-width:900px){.stat-row{grid-template-columns:repeat(2,1fr);}}
+.stat-box{background:#fff;border-radius:12px;padding:16px;border:1px solid #eceef1;}
+.stat-box .num{font-size:1.7rem;font-weight:800;color:var(--navy);}
+.stat-box .lbl{font-size:.7rem;color:var(--grey);text-transform:uppercase;font-weight:700;margin-top:2px;}
+.stat-box .sub{font-size:.72rem;color:var(--grey);margin-top:4px;}
+.stat-box.warn .num{color:var(--red);}
+.row{display:flex;gap:12px;flex-wrap:wrap;}
+.row>*{flex:1;min-width:150px;}
+select,input{width:100%;padding:9px;border-radius:9px;border:1.5px solid #dde1e6;font-size:.88rem;background:#fff;}
+.btn{padding:9px 15px;border-radius:9px;border:none;font-weight:700;cursor:pointer;font-size:.82rem;}
+.btn-primary{background:var(--green);color:#fff;}
+.btn-secondary{background:#eceef1;color:var(--dark);}
+.btn-danger{background:var(--red);color:#fff;}
+.btn-sm{padding:6px 11px;font-size:.75rem;}
+table{width:100%;border-collapse:collapse;font-size:.83rem;}
+th,td{text-align:left;padding:9px 8px;border-bottom:1px solid #eef0f2;}
+th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;}
+.pill{padding:3px 10px;border-radius:20px;font-size:.7rem;font-weight:800;text-transform:uppercase;}
+.pill.oos{background:#fee2e2;color:var(--red);}
+.pill.inservice{background:#dcfce7;color:var(--green-dark);}
+.badge{background:var(--green);color:#fff;border-radius:20px;padding:2px 10px;font-size:.7rem;font-weight:800;}
+.badge.red{background:var(--red);}
+.badge.grey{background:#9aa1ab;}
+.machine-row{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1.5px solid #e5e7eb;border-radius:10px;margin-bottom:8px;}
+.machine-row.oos{border-color:var(--red);background:#fff5f5;}
+.mname{font-weight:700;font-size:.9rem;}
+.mmeta{font-size:.72rem;color:var(--grey);margin-top:2px;}
+.empty-state{text-align:center;color:var(--grey);padding:24px 10px;font-size:.88rem;}
+.sync-banner{font-size:.78rem;color:var(--grey);display:flex;align-items:center;padding:6px 14px;}
+.conn-dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:6px;}
+.conn-dot.online{background:var(--green);}
+.conn-dot.offline{background:var(--red);}
+.chart-bar-wrap{display:flex;flex-direction:column;gap:6px;margin-top:10px;}
+.chart-bar-row{display:flex;align-items:center;gap:10px;font-size:.78rem;}
+.chart-bar-label{width:150px;flex-shrink:0;color:var(--grey);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.chart-bar-track{flex:1;background:#eef0f3;border-radius:6px;height:18px;}
+.chart-bar-fill{background:var(--navy);height:100%;border-radius:6px;}
+.chart-bar-val{width:70px;text-align:right;flex-shrink:0;font-weight:700;}
+.manager-tabs{display:flex;gap:8px;margin:0 0 18px;position:sticky;top:0;z-index:20;background:#f5f6f8;padding:10px 0 8px}.manager-tab{border:1px solid #d8dce3;background:#fff;color:var(--navy);padding:10px 16px;border-radius:10px;font-weight:800;cursor:pointer}.manager-tab.active{background:var(--navy);color:#fff;border-color:var(--navy)}.manager-panel{display:none}.manager-panel.active{display:block}.job-section-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}.job-summary{font-size:.78rem;color:var(--grey)}.job-card{border:1px solid #e2e5ea;border-radius:12px;padding:14px;margin-bottom:10px;background:#fff}.job-card.live{border-left:5px solid var(--green)}.job-card.paused{border-left:5px solid var(--amber)}.job-card.planned{border-left:5px solid var(--navy)}.job-card.assigned{border-left:5px solid #64748b}.engineer-pin-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #eceef1}.engineer-pin-row:first-child{border-top:0}.engineer-pin-value{font-family:monospace;font-size:1rem;font-weight:800;letter-spacing:.18em;min-width:90px;text-align:center}
+.engineer-day-card{border:1px solid #e2e5ea;border-radius:12px;padding:14px;margin-bottom:12px;background:#fff}.engineer-day-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:10px}.engineer-day-total{font-size:1.15rem;font-weight:900;color:var(--navy)}.engineer-job-row{display:grid;grid-template-columns:minmax(150px,1.4fr) minmax(120px,1fr) minmax(100px,.8fr) 95px;gap:10px;align-items:start;padding:10px 0;border-top:1px solid #eceef1;font-size:.82rem}.engineer-job-row:first-of-type{border-top:0}.engineer-job-duration{text-align:right;font-weight:800}@media(max-width:760px){.engineer-job-row{grid-template-columns:1fr}.engineer-job-duration{text-align:left}}
+.job-main{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}.job-title{font-weight:800;color:var(--navy)}.job-meta{font-size:.78rem;color:var(--grey);margin-top:4px}.job-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.job-edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}.job-edit-grid .full{grid-column:1/-1}.job-large-textarea{width:100%;min-height:150px;resize:vertical;font-size:1rem;line-height:1.45;padding:12px 14px;box-sizing:border-box}.manager-complete-panel{margin-top:12px;padding:12px 14px;border:1px solid #d9e2ea;border-radius:10px;background:#f8fafc}.manager-complete-panel summary{cursor:pointer;font-weight:800;color:var(--navy)}.manager-complete-panel .row{margin-top:10px}@media(max-width:760px){.job-main{display:block}.job-actions{margin-top:10px}.job-edit-grid{grid-template-columns:1fr}.job-edit-grid .full{grid-column:auto}}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 20px;border-radius:10px;font-size:.9rem;font-weight:600;z-index:200;box-shadow:0 6px 20px rgba(0,0,0,.2);opacity:0;transition:opacity .25s;pointer-events:none;}
+.toast.show{opacity:1;}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="app-name">ManagerDash</span><span class="company-name">KCM Waste Management</span></div>
+  <button class="btn btn-secondary btn-sm" onclick="lockManagerDash()">Lock</button>
+</header>
+<div class="sync-banner"><span class="conn-dot online" id="connDot"></span><span id="connText">Locked</span></div>
+<div id="managerPinGate" style="max-width:360px;margin:70px auto;padding:24px">
+  <div class="card" style="text-align:center">
+    <div class="section-title">ManagerDash Locked</div>
+    <p class="progress-note">Enter manager PIN to continue.</p>
+    <input type="password" id="managerPinInput" maxlength="4" inputmode="numeric" pattern="[0-9]*" style="text-align:center;font-size:1.8rem;letter-spacing:.45em;padding:16px" onkeydown="if(event.key==='Enter')unlockManagerDash()">
+    <button class="btn btn-primary" style="width:100%;margin-top:14px" onclick="unlockManagerDash()">Unlock ManagerDash</button>
+  </div>
+</div>
+<main id="managerMain" style="display:none">
+<div class="manager-tabs">
+  <button class="manager-tab active" id="tab-overview" onclick="switchManagerTab('overview')">Overview</button>
+  <button class="manager-tab" id="tab-engineering" onclick="switchManagerTab('engineering')">Engineering Jobs</button>
+</div>
+<div class="manager-panel active" id="manager-overview">
+
+<div class="card">
+  <div class="section-title">Quick Links</div>
+  <div class="links-grid">
+    <a class="link-card" href="index.html"><div class="li-icon">🔧</div><div class="li-name">CheckPlant</div><div class="li-desc">Service, Check & Defect Resolution</div></a>
+    <a class="link-card" href="costlog.html"><div class="li-icon">💷</div><div class="li-name">CostLog</div><div class="li-desc">Repair costs & downtime</div></a>
+    <a class="link-card" href="checkgrease.html"><div class="li-icon">🛢️</div><div class="li-name">CheckGrease</div><div class="li-desc">Lubrication & greasing schedule</div></a>
+    <a class="link-card" href="#" onclick="document.getElementById('oosCard').scrollIntoView({behavior:'smooth'});return false;"><div class="li-icon">🚫</div><div class="li-name">Out of Service</div><div class="li-desc">Jump to register below</div></a>
+  </div>
+</div>
+
+<div class="row" style="margin-bottom:16px">
+  <div><label style="font-weight:700;font-size:.8rem;color:var(--grey)">Month</label><input type="month" id="monthPicker"></div>
+  <div style="max-width:160px;flex:0 0 auto;align-self:flex-end"><button class="btn btn-secondary" onclick="loadAll()">Refresh</button></div>
+</div>
+
+<div class="stat-row">
+  <div class="stat-box"><div class="num" id="statMonthCost">£0</div><div class="lbl">Total Cost This Month</div><div class="sub" id="statMonthCostSub"></div></div>
+  <div class="stat-box"><div class="num" id="statCheckEfficiency">0%</div><div class="lbl">Check Completion Rate</div><div class="sub" id="statCheckEfficiencySub"></div></div>
+  <div class="stat-box"><div class="num" id="statResolutionRate">0%</div><div class="lbl">Defect Resolution Rate</div><div class="sub" id="statResolutionRateSub"></div></div>
+  <div class="stat-box" id="avgResBox"><div class="num" id="statAvgResolution">0d</div><div class="lbl">Avg Resolution Time</div><div class="sub" id="statAvgResolutionSub"></div></div>
+</div>
+
+<div class="stat-row">
+  <div class="stat-box"><div class="num" id="statInternalCost">£0</div><div class="lbl">Internal Work Cost</div><div class="sub" id="statInternalCostSub"></div></div>
+  <div class="stat-box"><div class="num" id="statExternalCost">£0</div><div class="lbl">External Work Cost</div><div class="sub" id="statExternalCostSub"></div></div>
+</div>
+
+<div class="stat-row">
+  <div class="stat-box"><div class="num" id="statOpenDefects">0</div><div class="lbl">Open Defects</div></div>
+  <div class="stat-box"><div class="num" id="statOverdueDefects">0</div><div class="lbl">Overdue &gt;7 Days</div></div>
+  <div class="stat-box"><div class="num" id="statChecksThisMonth">0</div><div class="lbl">Checks Logged</div></div>
+  <div class="stat-box warn"><div class="num" id="statOOSCount">0</div><div class="lbl">Machines Out of Service</div></div>
+</div>
+
+<div class="card">
+  <div class="section-title">Driver / Operator Check Times</div>
+  <div id="checkTimeOverview"></div>
+</div>
+
+<div class="card">
+  <div class="section-title">Monthly Cost by Asset (Top 10) <span style="font-size:.72rem;font-weight:600;color:var(--grey)">■ Internal &nbsp; <span style="color:var(--amber)">■</span> External</span></div>
+  <div class="chart-bar-wrap" id="costChart"></div>
+</div>
+
+</div>
+<div class="manager-panel" id="manager-engineering">
+<div class="card">
+  <div class="job-section-head"><div><div class="section-title">Assign / Plan Engineering Work</div><div class="job-summary">Create immediate or planned work for a lead engineer.</div></div></div>
+  <div class="row">
+    <select id="assignJobType" onchange="updateAssignmentForm()">
+      <option value="adhoc">Ad-Hoc Job</option>
+      <option value="service">Service</option>
+      <option value="defect">Outstanding Defect</option>
+    </select>
+    <select id="assignMachine" onchange="updateDefectOptions()"><option value="">-- Select asset --</option></select>
+    <select id="assignJobCategory"><option value="">-- Job category --</option></select>
+    <select id="assignDefect" style="display:none"><option value="">-- Select defect --</option></select>
+    <select id="assignEngineer"><option value="">-- Select engineer --</option></select>
+  </div>
+  <div id="adhocAssignmentDetails" style="margin-top:10px">
+    <label>Job Description / Work Requested</label>
+    <textarea id="assignJobDescription" class="job-large-textarea" rows="6" placeholder="Describe exactly what needs doing."></textarea>
+    <div class="row" style="margin-top:10px"><select id="assignDamageStatus"><option value="no">Not Damage</option><option value="yes">Damage</option></select></div>
+  </div>
+  <div class="row" style="margin-top:12px">
+    <button class="btn btn-primary" id="assignNowBtn" onclick="createAssignedJob()">Assign Now</button>
+    <input type="date" id="plannedJobDate" aria-label="Planned work date">
+    <button class="btn btn-secondary" id="planJobBtn" onclick="createAssignedJob('planned')">Plan For Date</button>
+  </div>
+  <p class="progress-note" id="assignJobStatus" style="margin-top:10px"></p>
+</div>
+
+<div class="card">
+  <div class="job-section-head"><div><div class="section-title">Live & Paused Jobs</div><div class="job-summary">Current engineering work and timers.</div></div><span class="badge" id="liveJobBoardCount">0</span></div>
+  <div id="liveJobsBoard"></div>
+</div>
+
+<div class="card">
+  <div class="job-section-head"><div><div class="section-title">Assigned & Planned Jobs</div><div class="job-summary">Upcoming work waiting to be started.</div></div><span class="badge" id="plannedJobBoardCount">0</span></div>
+  <div id="plannedJobsBoard"></div>
+</div>
+<div class="card">
+  <div class="job-section-head">
+    <div><div class="section-title">Engineer PINs</div><div class="job-summary">PINs are hidden by default. Reveal only when needed.</div></div>
+  </div>
+  <div id="engineerPinList"></div>
+</div>
+<div class="card">
+  <div class="job-section-head">
+    <div><div class="section-title">Engineer Daily Hours</div><div class="job-summary">Completed jobs shown using final authorised labour hours for the selected day.</div></div>
+    <div style="min-width:165px"><input type="date" id="engineerHoursDate" onchange="renderEngineerDailyHours()"></div>
+  </div>
+  <div id="engineerDailyHours"></div>
+</div>
+</div>
+<div class="manager-panel active manager-overview-tail" id="manager-overview-tail"><div class="card">
+  <div class="section-title">Damage Investigations</div>
+  <div id="damageInvestigations"></div>
+</div>
+<div class="card">
+  <div class="section-title">Asset Cost & Labour Overview</div>
+  <div class="chart-bar-wrap" id="assetCostHoursChart"></div>
+</div>
+<div class="card" id="oosCard">
+  <div class="section-title">Out of Service / Inoperable Register</div>
+  <div class="row">
+    <select id="oosMachineSelect"><option value="">-- Select machine to mark Out of Service --</option></select>
+    <input type="text" id="oosReason" placeholder="Reason (optional)">
+    <div style="max-width:140px;flex:0 0 140px"><button class="btn btn-danger" style="width:100%" onclick="markOutOfService()">Mark OOS</button></div>
+  </div>
+  <div style="margin-top:16px" id="oosList"></div>
+</div>
+
+<div class="card">
+  <div class="section-title">Recent Defect Resolutions <span class="badge" id="recentResCount">0</span></div>
+  <div style="overflow-x:auto"><table id="resTable"><thead><tr><th>Defect ID</th><th>Machine</th><th>Raised</th><th>Resolved</th><th>Days to Resolve</th><th>By</th></tr></thead><tbody></tbody></table></div>
+</div>
+
+</div></main>
+<div class="toast" id="toast"></div>
+
+<script>
+const firebaseConfig={apiKey:"AIzaSyD60Z04IRIvv-EaSyPzoA33fEQ3yT6wsQQ",authDomain:"checkplant-kcm.firebaseapp.com",projectId:"checkplant-kcm",storageBucket:"checkplant-kcm.firebasestorage.app",messagingSenderId:"492245064396",appId:"1:492245064396:web:c79e64b32b9856766bc069"};
+firebase.initializeApp(firebaseConfig);
+const db=firebase.firestore();
+function setConn(o,t){document.getElementById('connDot').className='conn-dot '+(o?'online':'offline');document.getElementById('connText').textContent=t;}
+
+let machines=[];
+let records=[];
+let defects=[];
+let costEntries=[];let liveJobs=[];let engineers=[];
+const ENGINEERING_JOB_CATEGORIES=["Hydraulic Hose","Hydraulic Ram / Cylinder","Hydraulics - Other","Engine","Cooling System","Oils / Fluids","Filters","Electrical","Battery","Tyres / Wheels / Tracks","Bearings","Belts / Chains","Guards / Safety Devices","Welding / Fabrication","Conveyor / Belt","Drum / Roller","Pump / Motor","Other"];
+
+function todayISO(){return new Date().toISOString().slice(0,10);}
+function escapeHtml(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600);}
+function money(n){return '£'+(Number(n)||0).toLocaleString('en-GB',{minimumFractionDigits:0,maximumFractionDigits:0});}
+function daysBetween(a,b){return Math.round((new Date(b)-new Date(a))/86400000);}
+function jobTsMs(v){if(!v)return 0;if(v.toMillis)return v.toMillis();if(v.toDate)return v.toDate().getTime();if(typeof v==='number')return v;return new Date(v).getTime()||0;}
+function jobElapsedMs(j){const base=Number(j&&j.accumulatedMs)||0;if(!j||j.status!=='active'||!j.activeStartedAt)return base;return base+Math.max(0,Date.now()-jobTsMs(j.activeStartedAt));}
+function jobDuration(ms){let s=Math.floor((Number(ms)||0)/1000),h=Math.floor(s/3600);s%=3600;let m=Math.floor(s/60);s%=60;return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');}
+function updateManagerJobTimers(){document.querySelectorAll('[data-manager-job-time]').forEach(el=>{const j=liveJobs.find(x=>x.id===el.dataset.managerJobTime);if(j)el.textContent=j.status==='active'?jobDuration(jobElapsedMs(j)):j.status==='paused'?jobDuration(jobElapsedMs(j)):'—';});}
+setInterval(updateManagerJobTimers,1000);
+function switchManagerTab(tab){
+ document.getElementById('manager-overview').classList.toggle('active',tab==='overview');
+ document.getElementById('manager-overview-tail').classList.toggle('active',tab==='overview');
+ document.getElementById('manager-engineering').classList.toggle('active',tab==='engineering');
+ document.getElementById('tab-overview').classList.toggle('active',tab==='overview');
+ document.getElementById('tab-engineering').classList.toggle('active',tab==='engineering');
+ if(tab==='engineering'){renderAssignmentBoard();renderEngineerDailyHours();renderEngineerPins();}
+ window.scrollTo(0,0);
+}
+
+const MANAGER_PIN='1994';
+let managerUnlocked=false,managerListenersStarted=false;
+function unlockManagerDash(){
+ const input=document.getElementById('managerPinInput'),pin=input?input.value.trim():'';
+ if(pin!==MANAGER_PIN){toast('Incorrect manager PIN');if(input){input.value='';input.focus();}return;}
+ managerUnlocked=true;sessionStorage.setItem('managerDashUnlocked','1');
+ document.getElementById('managerPinGate').style.display='none';document.getElementById('managerMain').style.display='block';
+ if(!managerListenersStarted){managerListenersStarted=true;initListeners();}
+}
+function lockManagerDash(){sessionStorage.removeItem('managerDashUnlocked');managerUnlocked=false;location.reload();}
+function bootManagerDash(){
+ if(sessionStorage.getItem('managerDashUnlocked')==='1'){managerUnlocked=true;document.getElementById('managerPinGate').style.display='none';document.getElementById('managerMain').style.display='block';managerListenersStarted=true;initListeners();}
+ else{const el=document.getElementById('managerPinInput');if(el)setTimeout(()=>el.focus(),50);}
+}
+function initListeners(){
+  setConn(true,'Connecting...');
+  document.getElementById('monthPicker').value = todayISO().slice(0,7);const pjd=document.getElementById('plannedJobDate');if(pjd&&!pjd.value)pjd.value=todayISO();const ehd=document.getElementById('engineerHoursDate');if(ehd&&!ehd.value)ehd.value=todayISO();populateAssignmentCategories();
+
+  db.collection('machines').orderBy('name').onSnapshot(s=>{
+    machines=s.docs.map(d=>({id:d.id,...d.data()}));
+    populateOOSSelect();renderAssignmentSelectors();
+    renderOOSList();
+    computeStats();
+  }, e=>setConn(false,'Machines error: '+e.message));
+
+  db.collection('records').onSnapshot(s=>{
+    records=s.docs.map(d=>({id:d.id,...d.data()}));
+    computeStats();renderDamageInvestigations();renderCheckTimeOverview();renderEngineerDailyHours();
+  }, e=>setConn(false,'Records error: '+e.message));
+
+  db.collection('defects').orderBy('dateRaised','desc').onSnapshot(s=>{
+    defects=s.docs.map(d=>({id:d.id,...d.data()}));
+    computeStats();
+    renderResolutions();
+    renderAssignmentSelectors();
+    setConn(true,'Connected');
+  }, e=>setConn(false,'Defects error: '+e.message));
+
+  db.collection('costEntries').onSnapshot(s=>{
+    costEntries=s.docs.map(d=>({id:d.id,...d.data()}));
+    computeStats();renderAssetCostHours();
+  }, e=>{});
+  db.collection('engineers').orderBy('name').onSnapshot(s=>{engineers=s.docs.map(d=>({id:d.id,...d.data()}));renderAssignmentSelectors();renderAssignmentBoard();renderEngineerDailyHours();renderEngineerPins();},e=>{});
+  db.collection('liveJobs').onSnapshot(s=>{liveJobs=s.docs.map(d=>({id:d.id,...d.data()})).filter(j=>j.status!=='completed'&&j.status!=='cancelled');renderAssignmentBoard();updateDefectOptions();},e=>{});
+
+}
+
+
+function populateAssignmentCategories(){
+ const sel=document.getElementById('assignJobCategory');if(!sel)return;
+ const current=sel.value;
+ sel.innerHTML='<option value="">-- Job category --</option>'+ENGINEERING_JOB_CATEGORIES.map(x=>'<option value="'+escapeHtml(x)+'">'+escapeHtml(x)+'</option>').join('');
+ if(ENGINEERING_JOB_CATEGORIES.includes(current))sel.value=current;
+}
+function renderAssignmentSelectors(){
+ const ms=document.getElementById('assignMachine'),es=document.getElementById('assignEngineer');if(!ms||!es)return;
+ const currentMachine=ms.value,currentEngineer=es.value;
+ ms.innerHTML='<option value="">-- Select asset --</option>'+machines.map(m=>'<option value="'+m.id+'">'+escapeHtml(m.name)+'</option>').join('');
+ if(machines.some(m=>m.id===currentMachine))ms.value=currentMachine;
+ es.innerHTML='<option value="">-- Select engineer --</option>'+engineers.filter(e=>e.active!==false).map(e=>'<option value="'+e.id+'">'+escapeHtml(e.name)+'</option>').join('');
+ if(engineers.some(e=>e.id===currentEngineer))es.value=currentEngineer;
+ updateAssignmentForm();
+}
+function updateAssignmentForm(){
+ const type=document.getElementById('assignJobType').value,isDefect=type==='defect',isAdHoc=type==='adhoc';
+ document.getElementById('assignDefect').style.display=isDefect?'block':'none';
+ document.getElementById('assignMachine').style.display='block';
+ const cat=document.getElementById('assignJobCategory');
+ if(cat){cat.style.display=type==='service'?'none':'block';if(type==='service')cat.value='';}
+ const adh=document.getElementById('adhocAssignmentDetails');if(adh)adh.style.display=isAdHoc?'block':'none';
+ updateDefectOptions();
+}
+function defectFullLabel(d){
+ const parts=[];
+ if(d.defectId)parts.push(d.defectId);
+ if(d.itemName||d.inspectionItemName)parts.push(d.itemName||d.inspectionItemName);
+ if(d.inspectionItemCode)parts.push('Code: '+d.inspectionItemCode);
+ if(d.severity)parts.push('Severity: '+d.severity);
+ if(d.lastObservedCondition)parts.push('Condition: '+d.lastObservedCondition);
+ if(d.dateRaised)parts.push('Raised: '+d.dateRaised);
+ return parts.join(' — ');
+}
+function updateDefectOptions(){
+ const type=document.getElementById('assignJobType').value,ds=document.getElementById('assignDefect');if(!ds)return;
+ if(type!=='defect'){ds.innerHTML='<option value="">-- Select defect --</option>';return;}
+ const machineId=document.getElementById('assignMachine').value;
+ if(!machineId){ds.innerHTML='<option value="">-- Select machine first --</option>';return;}
+ const open=defects.filter(d=>d.status==='open'&&d.machineId===machineId&&!liveJobs.some(j=>j.defectRefId===d.id&&j.status!=='completed'));
+ ds.innerHTML=open.length?'<option value="">-- Select defect --</option>'+open.map(d=>'<option value="'+d.id+'">'+escapeHtml(defectFullLabel(d))+'</option>').join(''):'<option value="">-- No unassigned open defects for this machine --</option>';
+}
+async function createAssignedJob(statusOverride){
+ const statusEl=document.getElementById('assignJobStatus'),assignBtn=document.getElementById('assignNowBtn'),planBtn=document.getElementById('planJobBtn');
+ const setBusy=(busy,msg)=>{if(assignBtn)assignBtn.disabled=busy;if(planBtn)planBtn.disabled=busy;if(assignBtn)assignBtn.textContent=busy?'Assigning…':'Assign Now';if(planBtn)planBtn.textContent=busy?'Saving…':'Plan For Date';if(statusEl)statusEl.textContent=msg||'';};
+ const engineerId=document.getElementById('assignEngineer').value,jobType=document.getElementById('assignJobType').value,e=engineers.find(x=>x.id===engineerId);
+ if(!e){if(statusEl)statusEl.textContent='Choose an engineer.';return toast('Choose an engineer');}
+ const status=statusOverride==='planned'?'planned':'assigned',plannedDate=status==='planned'?document.getElementById('plannedJobDate').value:'';
+ if(status==='planned'&&!plannedDate){if(statusEl)statusEl.textContent='Choose a planned work date.';return toast('Choose a planned work date');}
+ const machineId=document.getElementById('assignMachine').value,m=machines.find(x=>x.id===machineId);
+ if(!m){if(statusEl)statusEl.textContent='Choose a machine.';return toast('Choose a machine');}
+ const jobDescription=jobType==='adhoc'?(document.getElementById('assignJobDescription').value||'').trim():'';
+ const selectedCategory=jobType==='service'?'Service':(document.getElementById('assignJobCategory').value||'').trim();
+ const isDamage=jobType==='adhoc'&&document.getElementById('assignDamageStatus').value==='yes';
+ if((jobType==='adhoc'||jobType==='defect')&&!selectedCategory){if(statusEl)statusEl.textContent='Choose a job category.';return toast('Choose a job category');}
+ if(jobType==='adhoc'&&!jobDescription){if(statusEl)statusEl.textContent='Add an Ad-Hoc job description.';return toast('Add an Ad-Hoc job description');}
+
+ let defect=null;
+ if(jobType==='defect'){
+   const defectDocId=document.getElementById('assignDefect').value;
+   defect=defects.find(x=>x.id===defectDocId&&x.machineId===machineId);
+   if(!defect||defect.status!=='open'){if(statusEl)statusEl.textContent='Choose an outstanding defect for this machine.';return toast('Choose an outstanding defect for this machine');}
+   if(liveJobs.some(j=>j.defectRefId===defect.id&&j.status!=='completed'&&j.status!=='cancelled')){if(statusEl)statusEl.textContent='This defect is already assigned.';return toast('This defect is already assigned');}
+ }
+ setBusy(true,status==='planned'?'Saving planned job…':'Assigning job…');
+ try{
+   const liveRef=db.collection('liveJobs').doc();
+   const suffix=liveRef.id.slice(0,6).toUpperCase();
+   const prefix=jobType==='service'?'SVC':'AHJ';
+   const jobId='CP-'+prefix+'-M'+suffix;
+   const base={
+     jobId,status,machineId:m.id,machineName:m.name,serialNumber:m.serialNumber||'',branch:m.branch||'',hoursReading:Number(m.currentHours)||0,
+     date:status==='planned'?plannedDate:todayISO(),plannedDate:plannedDate||null,
+     engineerId:e.id,engineerName:e.name,accumulatedMs:0,progressNotes:[],supportEngineerIds:[],supportEngineerNames:[],
+     assignedAt:firebase.firestore.Timestamp.now(),createdAt:firebase.firestore.Timestamp.now(),updatedAt:firebase.firestore.Timestamp.now()
+   };
+   if(jobType==='defect'){
+     await liveRef.set({...base,jobType:'adhoc',jobCategory:selectedCategory,jobDescription:defect.lastObservedCondition||defect.itemName||'Outstanding defect repair',isDamage:false,damageDriver:'',damageIncident:'',defectRefId:defect.id,defectId:defect.defectId||'',defectItemName:defect.itemName||defect.inspectionItemName||'',defectDateRaised:defect.dateRaised||'',source:'managerdash_defect_assignment'});
+     try{
+       await db.collection('defects').doc(defect.id).set({assignedEngineerId:e.id,assignedEngineerName:e.name,assignedJobId:jobId,assignedAt:firebase.firestore.Timestamp.now(),assignmentStatus:status},{merge:true});
+     }catch(defErr){console.error('Defect assignment metadata update failed',defErr);}
+   }else{
+     await liveRef.set({...base,jobType,jobCategory:selectedCategory,jobDescription,isDamage,damageDriver:'',damageIncident:'',source:'managerdash_assignment'});
+   }
+   if(jobType==='adhoc'){document.getElementById('assignJobDescription').value='';document.getElementById('assignDamageStatus').value='no';}
+   if(jobType!=='service')document.getElementById('assignJobCategory').value='';
+   setBusy(false,status==='planned'?'Planned work added for '+e.name+'.':'Job assigned to '+e.name+'.');
+   toast(status==='planned'?'Planned work added for '+e.name:'Job assigned to '+e.name);
+ }catch(err){
+   console.error('Manager job assignment failed',err);
+   setBusy(false,'Could not assign job. Please try again.');
+   toast('Job assignment failed — please try again');
+ }
+}
+async function reassignJob(id){
+ const j=liveJobs.find(x=>x.id===id),sel=document.getElementById('reassign-'+id),engineerId=sel&&sel.value,e=engineers.find(x=>x.id===engineerId);if(!j||!e)return;
+ if(e.id===j.engineerId)return;
+ if(!confirm('Transfer lead responsibility for '+(j.jobId||'this job')+' to '+e.name+'?')){renderAssignmentBoard();return;}
+ let accumulatedMs=Number(j.accumulatedMs)||0,status=j.status,activeStartedAt=j.activeStartedAt||null;
+ const oldLeadName=j.engineerName||'Previous lead';
+ if(j.status==='active'){accumulatedMs+=Math.max(0,Date.now()-jobTsMs(j.activeStartedAt));status='paused';activeStartedAt=null;}
+ const oldIds=Array.isArray(j.supportEngineerIds)?j.supportEngineerIds:[],oldNames=Array.isArray(j.supportEngineerNames)?j.supportEngineerNames:[];
+ const keepIdx=oldIds.map((id,i)=>({id,name:oldNames[i]})).filter(x=>x.id!==e.id);
+ const note={text:'Lead responsibility transferred by ManagerDash from '+oldLeadName+' to '+e.name+(j.status==='active'?' — active job automatically paused for handover':''),by:'ManagerDash',at:new Date().toISOString(),event:'lead_transfer'};
+ await db.collection('liveJobs').doc(id).update({engineerId:e.id,engineerName:e.name,status,activeStartedAt,accumulatedMs,supportEngineerIds:keepIdx.map(x=>x.id),supportEngineerNames:keepIdx.map(x=>x.name),progressNotes:firebase.firestore.FieldValue.arrayUnion(note),transferredAt:firebase.firestore.Timestamp.now(),transferredFrom:oldLeadName,updatedAt:firebase.firestore.Timestamp.now()});
+ toast('Lead transferred to '+e.name+(j.status==='active'?' — job paused for handover':''));
+}
+async function addSupportEngineer(id){
+ const j=liveJobs.find(x=>x.id===id),sel=document.getElementById('support-'+id),engineerId=sel&&sel.value,e=engineers.find(x=>x.id===engineerId);if(!j||!e)return;
+ if(e.id===j.engineerId)return toast('That engineer is already the lead engineer');
+ const ids=Array.isArray(j.supportEngineerIds)?[...j.supportEngineerIds]:[],names=Array.isArray(j.supportEngineerNames)?[...j.supportEngineerNames]:[];
+ if(ids.includes(e.id))return toast(e.name+' is already supporting this job');
+ ids.push(e.id);names.push(e.name);
+ await db.collection('liveJobs').doc(id).update({supportEngineerIds:ids,supportEngineerNames:names,updatedAt:firebase.firestore.Timestamp.now()});
+ toast(e.name+' added as supporting engineer');
+}
+async function removeSupportEngineer(id,engineerId){
+ const j=liveJobs.find(x=>x.id===id);if(!j)return;
+ const ids=Array.isArray(j.supportEngineerIds)?j.supportEngineerIds:[],names=Array.isArray(j.supportEngineerNames)?j.supportEngineerNames:[];
+ const idx=ids.indexOf(engineerId);if(idx<0)return;
+ await db.collection('liveJobs').doc(id).update({supportEngineerIds:ids.filter(x=>x!==engineerId),supportEngineerNames:names.filter((n,i)=>i!==idx),updatedAt:firebase.firestore.Timestamp.now()});
+ toast('Supporting engineer removed');
+}
+async function pauseJobFromManager(id){
+ const j=liveJobs.find(x=>x.id===id);if(!j||j.status!=='active')return toast('Job is not currently live');
+ const now=Date.now(),added=Math.max(0,now-jobTsMs(j.activeStartedAt)),note={text:'Job paused by ManagerDash',by:'ManagerDash',at:new Date().toISOString(),event:'manager_pause'};
+ await db.collection('liveJobs').doc(id).update({status:'paused',accumulatedMs:(Number(j.accumulatedMs)||0)+added,activeStartedAt:null,progressNotes:firebase.firestore.FieldValue.arrayUnion(note),updatedAt:firebase.firestore.Timestamp.now()});
+ toast('Job paused');
+}
+async function saveManagerJobEdits(id){
+ const j=liveJobs.find(x=>x.id===id);if(!j)return;
+ const descEl=document.getElementById('jobdesc-'+id),noteEl=document.getElementById('jobnote-'+id);
+ const jobDescription=descEl?descEl.value.trim():'',note=noteEl?noteEl.value.trim():'';
+ const update={jobDescription,updatedAt:firebase.firestore.Timestamp.now()};
+ if(note){
+   update.progressNotes=firebase.firestore.FieldValue.arrayUnion({text:note,by:'ManagerDash',at:new Date().toISOString(),event:'manager_note'});
+   update.managerLatestNote=note;
+   update.managerLatestNoteAt=firebase.firestore.Timestamp.now();
+ }
+ await db.collection('liveJobs').doc(id).update(update);
+ if(noteEl)noteEl.value='';
+ toast('Job instructions updated');
+}
+async function rescheduleJob(id){
+ const j=liveJobs.find(x=>x.id===id),el=document.getElementById('jobdate-'+id);if(!j||!el)return;
+ const newDate=el.value;if(!newDate)return toast('Choose a new date');
+ const oldDate=j.plannedDate||j.date||'';
+ const note={text:'Job date changed by ManagerDash from '+(oldDate||'unscheduled')+' to '+newDate,by:'ManagerDash',at:new Date().toISOString(),event:'date_changed'};
+ const update={date:newDate,plannedDate:newDate,updatedAt:firebase.firestore.Timestamp.now(),progressNotes:firebase.firestore.FieldValue.arrayUnion(note)};
+ if(j.status==='assigned')update.status='planned';
+ await db.collection('liveJobs').doc(id).update(update);
+ toast('Job date updated');
+}
+async function cancelJobFromManager(id){
+ const j=liveJobs.find(x=>x.id===id);if(!j)return;
+ if(!confirm('Cancel '+(j.jobId||'this job')+'? It will be removed from engineer work lists but kept in the audit trail.'))return;
+ let accumulatedMs=Number(j.accumulatedMs)||0;
+ if(j.status==='active'&&j.activeStartedAt)accumulatedMs+=Math.max(0,Date.now()-jobTsMs(j.activeStartedAt));
+ const note={text:'Job cancelled by ManagerDash',by:'ManagerDash',at:new Date().toISOString(),event:'cancelled'};
+ await db.collection('liveJobs').doc(id).update({status:'cancelled',activeStartedAt:null,accumulatedMs,cancelledAt:firebase.firestore.Timestamp.now(),cancelledBy:'ManagerDash',progressNotes:firebase.firestore.FieldValue.arrayUnion(note),updatedAt:firebase.firestore.Timestamp.now()});
+ toast('Job cancelled');
+}
+async function completeJobOnBehalf(id){
+ const j=liveJobs.find(x=>x.id===id);if(!j)return toast('Job no longer available');
+ const reasonEl=document.getElementById('mgrcomplete-reason-'+id),outcomeEl=document.getElementById('mgrcomplete-outcome-'+id),notesEl=document.getElementById('mgrcomplete-notes-'+id);
+ const reason=reasonEl?reasonEl.value:'',outcome=outcomeEl?outcomeEl.value:'',notes=notesEl?notesEl.value.trim():'';
+ if(!reason)return toast('Choose why ManagerDash is completing this job');
+ if(!outcome)return toast('Choose the job outcome');
+ if(!notes)return toast('Add final work carried out notes');
+ if(!confirm('Complete '+(j.jobId||'this job')+' on behalf of '+(j.engineerName||'the engineer')+'?'))return;
+ const completedMs=Date.now();
+ let durationMs=Number(j.accumulatedMs)||0;
+ if(j.status==='active'&&j.activeStartedAt)durationMs+=Math.max(0,completedMs-jobTsMs(j.activeStartedAt));
+ const completedAt=firebase.firestore.Timestamp.fromMillis(completedMs),now=firebase.firestore.Timestamp.now();
+ const recordRef=db.collection('records').doc();
+ const managerNote={text:'Completed on behalf of engineer by ManagerDash — '+reason,by:'ManagerDash',at:new Date().toISOString(),event:'manager_completion'};
+ const progressNotes=[...(Array.isArray(j.progressNotes)?j.progressNotes:[]),managerNote];
+ const record={
+   id:recordRef.id,recordId:j.jobId||('CP-'+(j.jobType==='service'?'SVC':'AHJ')+'-'+recordRef.id.slice(0,8).toUpperCase()),
+   type:j.jobType==='service'?'service':'adhoc',
+   machineId:j.machineId||'',machineName:j.machineName||'',subject:(j.machineName||'Asset')+' — '+(j.jobCategory||j.jobType||'Job'),
+   serialNumber:j.serialNumber||'',branch:j.branch||'',technician:j.engineerName||'Engineer',engineerId:j.engineerId||'',
+   date:j.date||todayISO(),jobCategory:j.jobCategory||(j.jobType==='service'?'Service':'Ad-Hoc Job'),
+   jobDescription:j.jobDescription||'',jobSource:j.source||'managerdash_assignment',outcome,
+   items:[{name:j.jobCategory||(j.jobType==='service'?'Service':'Job'),status:outcome}],notes,progressNotes,
+   signName:j.engineerName||'Engineer',signDate:todayISO(),signatureData:'',hoursReading:Number(j.hoursReading)||0,
+   startedAt:j.startedAt||j.assignedAt||null,completedAt,jobDurationMs:durationMs,jobDurationFormatted:jobDuration(durationMs),
+   createdAt:now,syncStatus:'pending',isDamage:!!j.isDamage,damageDriver:j.damageDriver||'',damageIncident:j.damageIncident||'',
+   billingStatus:'awaiting_authorisation',managerCompleted:true,managerCompletedBy:'ManagerDash',managerCompletionReason:reason
+ };
+ try{
+   await recordRef.set(record);
+   try{
+     if(j.machineId){
+       const hrs=Number(j.hoursReading)||0;
+       const machineUpdate=j.jobType==='service'
+         ? {currentHours:hrs,lastServiceHours:hrs,nextServiceDueHours:hrs+500}
+         : {currentHours:hrs};
+       await db.collection('machines').doc(j.machineId).set(machineUpdate,{merge:true});
+     }
+   }catch(machineErr){console.error('Machine hours update failed',machineErr);}
+   await db.collection('liveJobs').doc(id).update({status:'completed',outcome,finalNotes:notes,completedAt,jobDurationMs:durationMs,activeStartedAt:null,managerCompleted:true,managerCompletedBy:'ManagerDash',managerCompletionReason:reason,progressNotes:firebase.firestore.FieldValue.arrayUnion(managerNote),updatedAt:now});
+   toast('Job completed on behalf of '+(j.engineerName||'engineer')+' — awaiting hours authorisation');
+ }catch(err){
+   console.error('Manager completion failed',err);
+   toast('Could not complete job — please try again');
+ }
+}
+function jobCardHtml(j){
+ const type=j.jobType==='service'?'Service':j.defectRefId?'Defect Job':'Ad-Hoc';
+ const status=(j.status||'').toUpperCase(),time=(j.status==='active'||j.status==='paused')?jobDuration(jobElapsedMs(j)):'';
+ const supportIds=Array.isArray(j.supportEngineerIds)?j.supportEngineerIds:[],supportNames=Array.isArray(j.supportEngineerNames)?j.supportEngineerNames:[];
+ const support=supportIds.length?supportIds.map((id,i)=>'<span class="badge" style="margin:3px">'+escapeHtml(supportNames[i]||'Support')+' <button type="button" title="Remove support" style="border:0;background:transparent;cursor:pointer" onclick="removeSupportEngineer(\''+j.id+'\',\''+id+'\')">×</button></span>').join(''):'<span class="job-meta">No supporting engineers</span>';
+ const supportOptions=engineers.filter(e=>e.active!==false&&e.id!==j.engineerId&&!supportIds.includes(e.id)).map(e=>'<option value="'+e.id+'">'+escapeHtml(e.name)+'</option>').join('');
+ return '<div class="job-card '+escapeHtml(j.status||'assigned')+'"><div class="job-main"><div><div class="job-title">'+escapeHtml(j.jobId||'Job')+' · '+escapeHtml(j.machineName||'Asset')+'</div><div class="job-meta">'+type+' · Lead: '+escapeHtml(j.engineerName||'Unassigned')+(j.isDamage?' · DAMAGE':'')+(j.plannedDate?' · '+escapeHtml(j.plannedDate):'')+'</div>'+(j.jobDescription?'<div style="margin-top:8px">'+escapeHtml(j.jobDescription)+'</div>':'')+'</div><div class="job-actions">'+(time?'<strong data-manager-job-time="'+j.id+'">'+time+'</strong>':'')+(j.status==='active'?'<button class="btn btn-secondary btn-sm" onclick="pauseJobFromManager(\''+j.id+'\')">Pause</button>':'')+'<select id="reassign-'+j.id+'" title="Lead engineer" onchange="reassignJob(\''+j.id+'\')">'+engineers.filter(e=>e.active!==false).map(e=>'<option value="'+e.id+'" '+(e.id===j.engineerId?'selected':'')+'>'+escapeHtml(e.name)+'</option>').join('')+'</select></div></div><div class="job-edit-grid"><div><label>Work Date</label><input type="date" id="jobdate-'+j.id+'" value="'+escapeHtml(j.plannedDate||j.date||todayISO())+'"></div><div style="align-self:end"><button class="btn btn-secondary btn-sm" onclick="rescheduleJob(\''+j.id+'\')">Change Date</button> <button class="btn btn-danger btn-sm" onclick="cancelJobFromManager(\''+j.id+'\')">Cancel</button></div><div class="full"><label>Job Description / Instructions</label><textarea class="job-large-textarea" rows="6" id="jobdesc-'+j.id+'">'+escapeHtml(j.jobDescription||'')+'</textarea></div><div class="full"><label>Add Manager Note</label><textarea class="job-large-textarea" rows="6" id="jobnote-'+j.id+'" placeholder="Add instruction or update"></textarea><button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="saveManagerJobEdits(\''+j.id+'\')">Save Update</button></div><div class="full"><details class="manager-complete-panel"><summary>Complete on Behalf of Engineer</summary><div class="row"><div><label>Reason</label><select id="mgrcomplete-reason-'+j.id+'"><option value="">-- Select reason --</option><option>Environment</option><option>Hazard / Unsafe to Use Device</option><option>No Signal / Connectivity</option><option>Other</option></select></div><div><label>Outcome</label><select id="mgrcomplete-outcome-'+j.id+'"><option value="">-- Select outcome --</option><option>Repaired</option><option>Ordered</option><option>Temporary Repair</option><option>Inspected / No Fault Found</option><option>Completed</option><option>Further Work Required</option></select></div></div><label style="margin-top:10px">Final Work Carried Out / Completion Notes</label><textarea class="job-large-textarea" rows="6" id="mgrcomplete-notes-'+j.id+'" placeholder="Enter the engineer\'s final work notes and anything needed for sign-off."></textarea><button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="completeJobOnBehalf(\''+j.id+'\')">Complete Job on Behalf</button></details></div><div class="full"><label>Supporting Engineers</label><div style="margin-bottom:6px">'+support+'</div><div class="row"><select id="support-'+j.id+'"><option value="">-- Add supporting engineer --</option>'+supportOptions+'</select><button class="btn btn-secondary btn-sm" onclick="addSupportEngineer(\''+j.id+'\')">Add Support</button></div></div></div></div>';
+}
+function renderAssignmentBoard(){
+ const liveWrap=document.getElementById('liveJobsBoard'),plannedWrap=document.getElementById('plannedJobsBoard');if(!liveWrap||!plannedWrap)return;
+ const live=liveJobs.filter(j=>j.status==='active'||j.status==='paused').sort((a,b)=>(a.status==='active'?0:1)-(b.status==='active'?0:1));
+ const planned=liveJobs.filter(j=>j.status==='assigned'||j.status==='planned').sort((a,b)=>String(a.plannedDate||a.date||'').localeCompare(String(b.plannedDate||b.date||'')));
+ document.getElementById('liveJobBoardCount').textContent=live.length;document.getElementById('plannedJobBoardCount').textContent=planned.length;
+ liveWrap.innerHTML=live.length?live.map(jobCardHtml).join(''):'<div class="empty-state">No live or paused engineering jobs.</div>';
+ plannedWrap.innerHTML=planned.length?planned.map(jobCardHtml).join(''):'<div class="empty-state">No assigned or planned engineering jobs.</div>';
+ updateManagerJobTimers();
+}
+function renderEngineerPins(){
+ const w=document.getElementById('engineerPinList');if(!w)return;
+ const list=engineers.filter(e=>e.active!==false).sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
+ if(!list.length){w.innerHTML='<div class="empty-state">No active engineers.</div>';return;}
+ w.innerHTML=list.map(e=>'<div class="engineer-pin-row"><div><strong>'+escapeHtml(e.name||'Engineer')+'</strong><div class="job-meta">Engineer sign-in PIN</div></div><div style="display:flex;align-items:center;gap:10px"><span class="engineer-pin-value" id="pin-'+e.id+'">••••</span><button class="btn btn-secondary btn-sm" id="pinbtn-'+e.id+'" onclick="toggleEngineerPin(\''+e.id+'\')">Reveal PIN</button></div></div>').join('');
+}
+function toggleEngineerPin(id){
+ const e=engineers.find(x=>x.id===id),value=document.getElementById('pin-'+id),btn=document.getElementById('pinbtn-'+id);if(!e||!value||!btn)return;
+ const hidden=btn.textContent==='Reveal PIN';
+ value.textContent=hidden?String(e.pin||'No PIN'):'••••';
+ btn.textContent=hidden?'Hide PIN':'Reveal PIN';
+}
+function completedJobDate(r){
+ if(r.completedAt&&r.completedAt.toDate)return r.completedAt.toDate().toISOString().slice(0,10);
+ if(r.completedAt){const d=new Date(r.completedAt);if(!isNaN(d))return d.toISOString().slice(0,10);}
+ return r.date||'';
+}
+function engineerRecordName(r){return String(r.signName||r.technician||r.engineerName||'Unknown engineer').trim()||'Unknown engineer';}
+function finalAuthorisedHoursForRecord(r){
+ const signed=costEntries.find(e=>e.linkedRecordId===r.id&&e.costStatus==='fully_signed_off');
+ if(signed&&Number.isFinite(Number(signed.authorisedHours)))return Number(signed.authorisedHours);
+ return null;
+}
+function renderEngineerDailyHours(){
+ const w=document.getElementById('engineerDailyHours'),dateEl=document.getElementById('engineerHoursDate');if(!w||!dateEl)return;
+ const date=dateEl.value||todayISO();
+ const jobs=records.filter(r=>(r.type==='adhoc'||r.type==='service')&&completedJobDate(r)===date);
+ const grouped={};
+ jobs.forEach(r=>{const name=engineerRecordName(r);if(!grouped[name])grouped[name]=[];grouped[name].push(r);});
+ const names=[...new Set([...engineers.filter(e=>e.active!==false).map(e=>e.name),...Object.keys(grouped)])].sort((a,b)=>String(a).localeCompare(String(b)));
+ if(!names.length){w.innerHTML='<div class="empty-state">No engineers available.</div>';return;}
+ w.innerHTML=names.map(name=>{
+   const list=(grouped[name]||[]).sort((a,b)=>jobTsMs(b.completedAt)-jobTsMs(a.completedAt));
+   const authorised=list.map(r=>({r,hours:finalAuthorisedHoursForRecord(r)}));
+   const totalHours=authorised.reduce((s,x)=>s+(x.hours==null?0:x.hours),0);
+   const rows=list.length?authorised.map(x=>{
+     const r=x.r,type=r.type==='service'?'Service':(r.jobCategory||'Ad-Hoc'),outcome=r.outcome||'—';
+     const hoursText=x.hours==null?'<span class="job-meta">Awaiting final authorisation</span>':x.hours.toFixed(2)+' h';
+     return '<div class="engineer-job-row"><div><strong>'+escapeHtml(r.recordId||r.id||'Job')+'</strong><div class="job-meta">'+escapeHtml(r.machineName||r.subject||'Asset')+'</div></div><div>'+escapeHtml(type)+'</div><div>'+escapeHtml(outcome)+'</div><div class="engineer-job-duration">'+hoursText+'</div></div>';
+   }).join(''):'<div class="empty-state" style="padding:12px 0">No completed jobs on this day.</div>';
+   const signedCount=authorised.filter(x=>x.hours!=null).length;
+   return '<div class="engineer-day-card"><div class="engineer-day-head"><div><strong>'+escapeHtml(name)+'</strong><div class="job-meta">'+list.length+' completed job'+(list.length===1?'':'s')+' · '+signedCount+' finally authorised</div></div><div class="engineer-day-total">'+totalHours.toFixed(2)+' h</div></div>'+rows+'</div>';
+ }).join('');
+}
+function renderDamageInvestigations(){
+ const w=document.getElementById('damageInvestigations');if(!w)return;const d=records.filter(r=>r.type==='adhoc'&&r.isDamage);
+ if(!d.length){w.innerHTML='<div class="empty-state">No damage jobs recorded.</div>';return;}
+ const byDriver={};d.forEach(r=>{const k=(r.damageDriver||'Unassigned / unknown').trim();if(!byDriver[k])byDriver[k]={count:0,assets:new Set()};byDriver[k].count++;byDriver[k].assets.add(r.machineName||'Unknown');});
+ const summary=Object.entries(byDriver).sort((a,b)=>b[1].count-a[1].count).map(([name,v])=>'<div class="alert-row"><span><strong>'+escapeHtml(name)+'</strong></span><span>'+v.count+' damage job'+(v.count===1?'':'s')+' · '+v.assets.size+' asset'+(v.assets.size===1?'':'s')+'</span></div>').join('');
+ w.innerHTML=summary+'<hr style="margin:14px 0">'+d.slice(0,20).map(r=>'<div class="alert-row"><span>'+escapeHtml(r.machineName)+' · '+escapeHtml(r.damageDriver||'Unknown driver')+'</span><span>'+escapeHtml(r.damageIncident||r.notes||'Damage investigation required')+'</span></div>').join('');
+}
+
+function formatCheckMinutes(ms){const min=(Number(ms)||0)/60000;return min<1?Math.round((Number(ms)||0)/1000)+' sec':min.toFixed(1)+' min'}
+function renderCheckTimeOverview(){
+ const w=document.getElementById('checkTimeOverview');if(!w)return;const checks=records.filter(r=>r.type==='check'&&Number(r.checkDurationMs)>0);
+ if(!checks.length){w.innerHTML='<div class="empty-state">No timed machine checks completed yet.</div>';return;}
+ const byDriver={};checks.forEach(r=>{const k=(r.signName||r.technician||'Unknown operator').trim();if(!byDriver[k])byDriver[k]={count:0,total:0};byDriver[k].count++;byDriver[k].total+=Number(r.checkDurationMs)||0;});
+ const driverRows=Object.entries(byDriver).sort((a,b)=>(b[1].total/b[1].count)-(a[1].total/a[1].count)).map(([name,v])=>'<div class="alert-row"><span><strong>'+escapeHtml(name)+'</strong> · '+v.count+' check'+(v.count===1?'':'s')+'</span><span>Avg '+formatCheckMinutes(v.total/v.count)+'</span></div>').join('');
+ const recent=[...checks].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,15).map(r=>'<div class="alert-row"><span>'+escapeHtml(r.machineName||r.subject||'Machine')+' · '+escapeHtml(r.signName||r.technician||'Unknown')+'</span><span>'+formatCheckMinutes(r.checkDurationMs)+'</span></div>').join('');
+ w.innerHTML='<div class="section-title" style="font-size:.9rem">Average by Driver / Operator</div>'+driverRows+'<div class="section-title" style="font-size:.9rem;margin-top:14px">Recent Timed Checks</div>'+recent;
+}
+function renderAssetCostHours(){
+ const w=document.getElementById('assetCostHoursChart');if(!w)return;const g={};
+ costEntries.filter(e=>(e.workSource||'internal')==='internal').forEach(e=>{const k=e.machineName||'Unknown';if(!g[k])g[k]={cost:0,hours:0};g[k].cost+=Number(e.totalCost)||0;g[k].hours+=Number(e.labourHours||e.authorisedHours)||0;});
+ const a=Object.entries(g).sort((x,y)=>y[1].cost-x[1].cost);if(!a.length){w.innerHTML='<div class="empty-state">No authorised job costs yet.</div>';return;}
+ const max=Math.max(...a.map(x=>x[1].cost),1);w.innerHTML=a.map(([k,v])=>'<div class="chart-bar-row"><div class="chart-bar-label">'+escapeHtml(k)+'</div><div class="chart-bar-track"><div class="chart-bar-fill" style="width:'+(v.cost/max*100)+'%"></div></div><div class="chart-bar-val">'+money(v.cost)+' · '+v.hours.toFixed(1)+'h</div></div>').join('');
+}
+function loadAll(){ computeStats(); renderResolutions(); toast('Refreshed'); }
+
+function getMonthRange(){
+  const val=document.getElementById('monthPicker').value || todayISO().slice(0,7);
+  const from = val+'-01';
+  const [y,m]=val.split('-').map(Number);
+  const lastDay = new Date(y, m, 0).getDate();
+  const to = val+'-'+String(lastDay).padStart(2,'0');
+  return {from,to,label:val};
+}
+
+function computeStats(){
+  const {from,to} = getMonthRange();
+
+  // Cost this month
+  const monthCosts = costEntries.filter(e=>e.date>=from && e.date<=to);
+  const totalCost = monthCosts.reduce((s,e)=>s+(e.totalCost||0),0);
+  const internalCost = monthCosts.filter(e=>(e.workSource||'internal')==='internal').reduce((s,e)=>s+(e.totalCost||0),0);
+  const externalCost = monthCosts.filter(e=>e.workSource==='external').reduce((s,e)=>s+(e.totalCost||0),0);
+  document.getElementById('statMonthCost').textContent = money(totalCost);
+  document.getElementById('statMonthCostSub').textContent = monthCosts.length+' entries logged';
+  document.getElementById('statInternalCost').textContent = money(internalCost);
+  document.getElementById('statInternalCostSub').textContent = monthCosts.filter(e=>(e.workSource||'internal')==='internal').length+' internal entries';
+  document.getElementById('statExternalCost').textContent = money(externalCost);
+  document.getElementById('statExternalCostSub').textContent = monthCosts.filter(e=>e.workSource==='external').length+' external entries';
+
+  // Cost by asset chart (internal vs external stacked)
+  const groups={};
+  monthCosts.forEach(e=>{ const k=e.machineName||'Unknown'; if(!groups[k]) groups[k]={internal:0,external:0}; groups[k][e.workSource==='external'?'external':'internal'] += (e.totalCost||0); });
+  const sorted=Object.entries(groups).map(([k,v])=>[k,v.internal+v.external,v]).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const maxVal=sorted.length?sorted[0][1]:1;
+  const chartWrap=document.getElementById('costChart');
+  if(!sorted.length){ chartWrap.innerHTML='<div class="empty-state">No cost entries logged this month.</div>'; }
+  else {
+    chartWrap.innerHTML = sorted.map(([label,total,v])=>`<div class="chart-bar-row">
+      <div class="chart-bar-label">${escapeHtml(label)}</div>
+      <div class="chart-bar-track"><div class="chart-bar-fill" style="width:${maxVal?(v.internal/maxVal*100):0}%;display:inline-block"></div><div class="chart-bar-fill" style="background:var(--amber);width:${maxVal?(v.external/maxVal*100):0}%;display:inline-block"></div></div>
+      <div class="chart-bar-val">${money(total)}</div>
+    </div>`).join('');
+  }
+
+  // Check completion rate: checks logged this month vs number of machines (rough efficiency proxy:
+  // how many machines got at least one check/service logged in the month)
+  const monthRecords = records.filter(r=>r.date>=from && r.date<=to);
+  const checkRecords = monthRecords.filter(r=>r.type==='check' || r.type==='service');
+  const machinesChecked = new Set(checkRecords.map(r=>r.machineId).filter(Boolean));
+  const checkRate = machines.length ? Math.round((machinesChecked.size/machines.length)*100) : 0;
+  document.getElementById('statCheckEfficiency').textContent = checkRate+'%';
+  document.getElementById('statCheckEfficiencySub').textContent = machinesChecked.size+' of '+machines.length+' machines checked';
+  document.getElementById('statChecksThisMonth').textContent = checkRecords.length;
+
+  // Defect resolution rate this month: resolved / (resolved + still open that were raised in range or before)
+  const raisedInRange = defects.filter(d=>d.dateRaised>=from && d.dateRaised<=to);
+  const openNow = defects.filter(d=>d.status==='open');
+  const totalConsidered = raisedInRange.length;
+  const resolutionRate = totalConsidered ? Math.round((raisedInRange.filter(d=>d.status==='resolved').length/totalConsidered)*100) : (defects.length?100:0);
+  document.getElementById('statResolutionRate').textContent = resolutionRate+'%';
+  document.getElementById('statResolutionRateSub').textContent = raisedInRange.filter(d=>d.status==='resolved').length+' of '+totalConsidered+' raised this month resolved';
+  document.getElementById('statOpenDefects').textContent = openNow.length;
+  document.getElementById('statOverdueDefects').textContent = openNow.filter(d=>daysBetween(d.dateRaised,todayISO())>7).length;
+
+  // Average resolution time (all resolved defects with both dates, all-time, for stability)
+  const resolvedWithDates = defects.filter(d=>d.status==='resolved' && d.dateRaised && d.resolvedDate);
+  if(resolvedWithDates.length){
+    const avgDays = resolvedWithDates.reduce((s,d)=>s+daysBetween(d.dateRaised,d.resolvedDate),0)/resolvedWithDates.length;
+    document.getElementById('statAvgResolution').textContent = avgDays.toFixed(1)+'d';
+    document.getElementById('statAvgResolutionSub').textContent = 'across '+resolvedWithDates.length+' resolved defects';
+  } else {
+    document.getElementById('statAvgResolution').textContent = '—';
+    document.getElementById('statAvgResolutionSub').textContent = 'no resolved defects yet';
+  }
+
+  document.getElementById('statOOSCount').textContent = machines.filter(m=>m.outOfService).length;
+}
+
+function populateOOSSelect(){
+  const sel=document.getElementById('oosMachineSelect');
+  const inService = machines.filter(m=>!m.outOfService);
+  sel.innerHTML='<option value="">-- Select machine to mark Out of Service --</option>' + inService.map(m=>`<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
+}
+
+async function markOutOfService(){
+  const machineId=document.getElementById('oosMachineSelect').value;
+  if(!machineId){ toast('Select a machine'); return; }
+  const reason=document.getElementById('oosReason').value.trim();
+  await db.collection('machines').doc(machineId).update({
+    outOfService: true,
+    outOfServiceReason: reason || null,
+    outOfServiceSince: todayISO()
+  });
+  document.getElementById('oosReason').value='';
+  toast('Machine marked Out of Service');
+}
+
+async function returnToService(machineId){
+  const m=machines.find(x=>x.id===machineId);if(!m)return;
+  const notes=prompt('Remediation notes are required before returning '+m.name+' to service.\n\nDescribe what was repaired, replaced, tested or verified:');
+  if(!notes||!notes.trim()){toast('Return to service cancelled — remediation notes are required');return;}
+  if(!confirm('Confirm this machine is safe to return to service?')) return;
+  await db.collection('machines').doc(machineId).update({
+    outOfService: false,
+    outOfServiceReason: null,
+    outOfServiceSince: null,
+    lastVORRemediation: notes.trim(),
+    lastVORClearedAt: firebase.firestore.Timestamp.now(),
+    lastVORClearedBy: 'ManagerDash'
+  });
+  await db.collection('vorHistory').add({
+    machineId,machineName:m.name,raisedRecordId:m.outOfServiceRecordId||null,reason:m.outOfServiceReason||'',raisedDate:m.outOfServiceSince||null,
+    remediationNotes:notes.trim(),clearedAt:firebase.firestore.Timestamp.now(),clearedDate:todayISO(),clearedBy:'ManagerDash'
+  });
+  toast('Machine returned to service');
+}
+
+function renderOOSList(){
+  const wrap=document.getElementById('oosList');
+  const oos = machines.filter(m=>m.outOfService);
+  if(!oos.length){ wrap.innerHTML='<div class="empty-state">No machines currently marked Out of Service.</div>'; return; }
+  wrap.innerHTML='';
+  oos.forEach(m=>{
+    const days = m.outOfServiceSince ? daysBetween(m.outOfServiceSince, todayISO()) : null;
+    const row=document.createElement('div');
+    row.className='machine-row oos';
+    row.innerHTML = `<div><div class="mname">${escapeHtml(m.name)} <span class="pill oos">OUT OF SERVICE</span></div>
+      <div class="mmeta">${m.outOfServiceReason?escapeHtml(m.outOfServiceReason):'No reason given'}${days!==null?(' · '+days+' day'+(days!==1?'s':'')+' out'):''}</div></div>
+      <button class="btn btn-secondary btn-sm" onclick="returnToService('${m.id}')">Return to Service</button>`;
+    wrap.appendChild(row);
+  });
+}
+
+function renderResolutions(){
+  const resolved = defects.filter(d=>d.status==='resolved' && d.dateRaised && d.resolvedDate).sort((a,b)=>(b.resolvedDate||'').localeCompare(a.resolvedDate||'')).slice(0,20);
+  document.getElementById('recentResCount').textContent = defects.filter(d=>d.status==='resolved').length;
+  const tbody=document.querySelector('#resTable tbody');
+  if(!resolved.length){ tbody.innerHTML='<tr><td colspan="6" class="empty-state">No resolved defects yet.</td></tr>'; return; }
+  tbody.innerHTML = resolved.map(d=>`<tr>
+    <td>${escapeHtml(d.defectId||'-')}</td>
+    <td>${escapeHtml(d.machineName||'-')}</td>
+    <td>${d.dateRaised}</td>
+    <td>${d.resolvedDate}</td>
+    <td>${daysBetween(d.dateRaised,d.resolvedDate)}d</td>
+    <td>${escapeHtml(d.resolvedBy||'-')}</td>
+  </tr>`).join('');
+}
+
+document.getElementById('monthPicker').addEventListener('change', computeStats);
+bootManagerDash();
+</script>
+</body>
+</html>
