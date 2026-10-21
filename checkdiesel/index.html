@@ -392,7 +392,7 @@ function drawMeterHistory(){
  const rows=all.slice(0,250);
  $('meterTable').innerHTML=rows.length?rows.map(m=>{
  const conflict=all.some(z=>z!==m&&z.kind===m.kind&&z.asset===m.asset&&z.date===m.date&&Number(z.reading)!==Number(m.reading));
- return '<tr><td>'+esc(m.date)+'</td><td>'+esc(m.source)+'</td><td>'+esc(m.display||m.asset)+'</td><td>'+fmt(m.reading,1)+'</td><td>'+esc(m.unit)+'</td><td>'+(conflict?'<span class="badge flag">Conflicting readings</span>':'<span class="badge verified">Saved</span>')+'</td></tr>';
+ return '<tr><td>'+esc(m.date)+(m.checkedAt?'<div class="smalltxt">'+esc(String(m.checkedAt).slice(11,16))+'</div>':'')+'</td><td>'+esc(m.source)+'</td><td>'+esc(m.display||m.asset)+'</td><td>'+fmt(m.reading,1)+'</td><td>'+esc(m.unit)+'</td><td>'+(conflict?'<span class="badge flag">Conflicting readings</span>':m.kind==='plant'&&!dailyCheckReading(m)?'<span class="badge unknown">Not a daily check</span>':'<span class="badge verified">Saved</span>')+'</td></tr>';
  }).join(''):'<tr><td colspan="6" class="empty">No mileage or hours history imported yet. Use the import options above.</td></tr>';
 }
 function historyMatrix(matrix,kind,source){
@@ -405,6 +405,7 @@ function historyMatrix(matrix,kind,source){
  const head=names[headerIndex],pick=arr=>head.findIndex(c=>match(c,arr)),iDate=pick(synonyms.date),iId=pick(synonyms.id),iMeter=pick(synonyms.meter),iUnit=pick(synonyms.unit),iNotes=pick(synonyms.notes);
  if([iDate,iId,iMeter].some(i=>i<0))throw Error('Required reading columns not found');
  const result=[];let invalid=0,ambiguous=0;
+ const iClock=head.findIndex(c=>['checktime','time','checkedat','completedat'].includes(c));
  const incomingRegs=kind==='road'?[...new Set(matrix.slice(headerIndex+1).map(r=>regKey(r[iId])).filter(isReg))]:[];
  const candidateRegs=[...new Set([...knownRegistrations(),...incomingRegs])];
  const resolveReg=raw=>{if(isReg(raw))return regKey(raw);const known=suggestedReg(raw);if(known)return known;const c=regKey(raw);if(/^[A-Z]{3}$/.test(c)){const matches=candidateRegs.filter(reg=>reg.endsWith(c));return matches.length===1?matches[0]:null}return null};
@@ -415,7 +416,8 @@ function historyMatrix(matrix,kind,source){
   const asset=kind==='road'?resolveReg(raw):(plantMachines.find(m=>m.id===raw)?.name||raw);
   if(kind==='road'&&!asset){ambiguous++;continue}
   const machine=kind==='plant'?plantMachines.find(m=>m.id===raw||codeKey(m.name)===raw||codeKey(m.serialNumber)===raw):null;
-  result.push({date,asset:kind==='road'?asset:machine?machine.id:raw,display:kind==='road'?asset:machine?machine.name:raw,machineId:machine?.id||'',reading:meter,unit,kind,source,notes:iNotes>=0?String(row[iNotes]??'').slice(0,250):''});
+  const rawClock=iClock>=0?String(row[iClock]??'').trim():'',clock=/^\d{1,2}:\d{2}/.test(rawClock)?rawClock.slice(0,5).padStart(5,'0'):'';
+  result.push({date,asset:kind==='road'?asset:machine?machine.id:raw,display:kind==='road'?asset:machine?machine.name:raw,machineId:machine?.id||'',reading:meter,unit,kind,checkType:kind==='plant'?'check':'',checkedAt:clock?date+'T'+clock+':00':'',source,notes:iNotes>=0?String(row[iNotes]??'').slice(0,250):''});
  }
  return {result,invalid,ambiguous};
 }
@@ -424,21 +426,30 @@ async function importHistoryFile(file,kind){
  if(file.size>20000000)throw Error('File too large (20MB maximum)');
  const matrix=/\.csv$/i.test(file.name)?parseCSV(await file.text()):/\.xlsx$/i.test(file.name)?await parseXLSX(file):null;
  if(!matrix)throw Error('Use XLSX or CSV');
- const parsed=historyMatrix(matrix,kind,'Imported: '+file.name);
+ const parsed=historyMatrix(matrix,kind,(kind==='plant'?'Imported daily check: ':'Imported: ')+file.name);
  if(!parsed.result.length)throw Error('No valid readings. '+parsed.ambiguous+' vehicle registrations could not be uniquely identified.');
  if(!confirm('Add '+parsed.result.length+' '+(kind==='road'?'mileage':'engine-hour')+' readings? '+parsed.ambiguous+' ambiguous registrations and '+parsed.invalid+' invalid lines will be skipped.'))return;
  const added=mergeMeterRows(parsed.result);draw();toast(added.added+' readings added · '+added.skipped+' duplicates skipped · '+parsed.ambiguous+' unmatched registrations');
 }
 function csvTemplate(kind){
- const rows=kind==='road'?[['Date','Registration','Odometer','Unit','Notes'],['20/10/2026','LT23BFU','123450','mi','Example only']]:[['Date','Machine ID','Hours Reading','Notes'],['20/10/2026','CASE210','8765.5','Example only']];
+ const rows=kind==='road'?[['Date','Registration','Odometer','Unit','Notes'],['20/10/2026','LT23BFU','123450','mi','Example only']]:[['Date','Machine ID','Hours Reading','Check Time','Notes'],['20/10/2026','CASE210','8765.5','07:30','Example daily check; before refuelling']];
  const quote=v=>'"'+String(v).replace(/"/g,'""')+'"';
  const data=rows.map(r=>r.map(quote).join(',')).join('\r\n');
  const blob=new Blob(['\ufeff'+data],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=kind==='road'?'CheckDiesel_Mileage_Template.csv':'CheckDiesel_CheckPlant_Hours_Template.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 function exportReadings(){
  const quote=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
- const lines=[['Date','Asset','Reading','Unit','Kind','Source','Machine ID','Notes'].map(quote).join(',')].concat(meters.map(m=>[m.date,m.display||m.asset,m.reading,m.unit,m.kind,m.source,m.machineId||'',m.notes||''].map(quote).join(',')));
+ const lines=[['Date','Asset','Reading','Unit','Kind','Source','Machine ID','Check Time','Notes'].map(quote).join(',')].concat(meters.map(m=>[m.date,m.display||m.asset,m.reading,m.unit,m.kind,m.source,m.machineId||'',m.checkedAt||'',m.notes||''].map(quote).join(',')));
  const blob=new Blob(['\ufeff'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='CheckDiesel_Meter_History.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function checkRecordDateTime(rec,date){
+ const t=rec.checkCompletedAt||rec.checkStartedAt||rec.createdAt;
+ if(!t)return '';
+ let parsed;
+ try{parsed=typeof t.toDate==='function'?t.toDate():Number.isFinite(t.seconds)?new Date(t.seconds*1000):new Date(t)}catch{return ''}
+ if(!(parsed instanceof Date)||!Number.isFinite(parsed.valueOf()))return '';
+ // A manually selected check date may differ from the server creation date.
+ return parsed.toISOString().slice(0,10)===date?parsed.toISOString():'';
 }
 function getCheckPlantDB(){
  return new Promise(async(resolve,reject)=>{
@@ -472,7 +483,7 @@ async function syncCheckPlant(){
    for(const d of recent.docs){
     const v=d.data(),date=cleanDate(v.date),hour=Number(v.hoursReading);
     if(!v.machineId||!date||v.hoursReading===null||v.hoursReading===undefined||v.hoursReading===''||!Number.isFinite(hour)||hour<=0)continue;
-    data.push({date,asset:v.machineId,display:names.get(v.machineId)||v.machineName||v.machineId,machineId:v.machineId,reading:hour,unit:'hours',kind:'plant',source:'CheckPlant '+(v.type||'record'),notes:''});
+    data.push({date,asset:v.machineId,display:names.get(v.machineId)||v.machineName||v.machineId,machineId:v.machineId,reading:hour,unit:'hours',kind:'plant',checkType:v.type==='check'?'check':v.type||'',checkedAt:v.type==='check'?checkRecordDateTime(v,date):'',checkId:d.id,source:'CheckPlant '+(v.type||'record'),notes:''});
    }
    const added=mergeMeterRows(data);
    status.textContent=plantMachines.length+' CheckPlant machines loaded · '+added.added+' new hours readings from '+recent.size+' latest check/service records. Use Sync hours per machine for full history.';
@@ -704,7 +715,7 @@ async function fetchMachineHours(id){
  for(const d of snap.docs){
   const rec=d.data(),date=cleanDate(rec.date),hour=Number(rec.hoursReading);
   if(!date||rec.hoursReading===null||rec.hoursReading===undefined||rec.hoursReading===''||!Number.isFinite(hour)||hour<=0)continue;
-  data.push({date,asset:id,display:machine.name,machineId:id,reading:hour,unit:'hours',kind:'plant',source:'CheckPlant '+(rec.type||'record'),notes:''});
+  data.push({date,asset:id,display:machine.name,machineId:id,reading:hour,unit:'hours',kind:'plant',checkType:rec.type==='check'?'check':rec.type||'',checkedAt:rec.type==='check'?checkRecordDateTime(rec,date):'',checkId:d.id,source:'CheckPlant '+(rec.type||'record'),notes:''});
  }
  const result=mergeMeterRows(data);
  draw();
