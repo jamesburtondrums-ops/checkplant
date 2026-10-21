@@ -180,6 +180,24 @@ function accountIdentity(account){
  const type=over.type||'road',key=type==='road'?(reg||'ACCOUNT:'+acc):'ACCOUNT:'+acc;
  return {key,type,name:type==='road'?(reg||over.name||'Vehicle account '+acc):(over.name||'Fuel account '+acc),account:acc,registration:type==='road'?(reg||''):'',verified:Boolean(reg||over.type),source:'dispenser account'};
 }
+function vehicleAccountChoices(){
+ const set=new Set();
+ for(const r of rows){const a=codeKey(r.driver);if(a&&a!=='PLANT2'&&accountMappings[a]?.type!=='plant'&&accountMappings[a]?.type!=='transfer'&&accountMappings[a]?.type!=='unmapped')set.add(a)}
+ for(const [a,m] of Object.entries(accountMappings)){if(m?.type==='road'&&codeKey(a)!=='PLANT2')set.add(codeKey(a))}
+ return [...set].sort();
+}
+function sourceAccount(r){return codeKey(r.driver)||'(blank)'}
+function reportingAccount(r){
+ const source=sourceAccount(r);
+ if(source!=='PLANT2')return source;
+ // SHEF and BOW denote movements, not direct end-use: never reallocate as vehicle refuels.
+ if(knownRule(r.code)?.type==='transfer')return source;
+ const override=transactionAllocations[rowKey(r)];
+ if(typeof override==='string')return override==='PLANT2'?'PLANT2':codeKey(override);
+ const code=codeKey(r.code),mapped=mappings[code]||mappings[plantOrTransferAlias(code)]||{};
+ const target=codeKey(mapped.fuelAccount);
+ return target&&target!=='PLANT2'?target:'PLANT2';
+}
 function rowIdentity(r){
  // DRIVER is the dispenser account in this export; REG. NUMBER may be a person or equipment label.
  const acc=codeKey(r.driver),raw=codeKey(r.code),override=mappings[raw]||mappings[plantOrTransferAlias(raw)]||null;
@@ -190,7 +208,10 @@ function rowIdentity(r){
   if(setting?.type==='plant'&&setting.checkPlantId)return {key:'CHECKPLANT:'+setting.checkPlantId,type:'plant',name:plantMachines.find(m=>m.id===setting.checkPlantId)?.name||setting.name||acc,verified:true,source:'linked CheckPlant dispenser account'};
   return accountIdentity(acc||'(blank)');
  }
- // Shared PLANT2 account: use the individual identifier to allocate the specific issue.
+ // Shared PLANT2 account: report fills under an explicitly selected vehicle dispenser account.
+ const reallocated=reportingAccount(r);
+ if(reallocated!=='PLANT2')return {...accountIdentity(reallocated),verified:true,source:'Originally PLANT2 fob · reallocated to '+reallocated};
+ // No explicit transfer: keep the normal per-machine/registration matching as before.
  const rule=knownRule(raw);
  if(override&&override.type==='plant'){
    const mId=override.checkPlantId;
@@ -241,8 +262,8 @@ function labelFor(code){
 }
 function rowType(r){return rowIdentity(r).type}
 function badge(code){const t=typeOf(code);return '<span class="badge '+(t==='road'?'road':t==='plant'?'plant':t==='transfer'?'transfer':'unknown')+'">'+({road:'Road vehicle',plant:'Plant machinery',transfer:'Bowser / transfer',unmapped:'Unclassified'}[t])+(verified(code)?' ✓':' ?')+'</span>'}
-function filters(){return {accountGroup:$('filterAccountGroup').value,q:$('filterText').value.trim().toUpperCase(),a:$('dateFrom').value,b:$('dateTo').value,type:$('filterClass').value,driver:$('filterDriver').value}}
-function visible(){const f=filters();return rows.filter(r=>(!f.accountGroup||(f.accountGroup==='plant2'?r.driver.toUpperCase()==='PLANT2':r.driver.toUpperCase()!=='PLANT2'))&&(!f.a||r.date>=f.a)&&(!f.b||r.date<=f.b)&&(!f.type||rowType(r)===f.type)&&(!f.driver||r.driver===f.driver)&&(!f.q||[r.code,rowIdentity(r).key,r.driver,rowIdentity(r).name,String(r.reading),String(r.unit)].join(' ').toUpperCase().includes(f.q)))}
+function filters(){return {accountGroup:$('filterAccountGroup').value,q:$('filterText').value.trim().toUpperCase(),a:$('dateFrom').value,b:$('dateTo').value,type:$('filterClass').value,driver:$('filterDriver').value,source:$('filterOrigin').value}}
+function visible(){const f=filters();return rows.filter(r=>(!f.accountGroup||(f.accountGroup==='plant2'?reportingAccount(r)==='PLANT2':reportingAccount(r)!=='PLANT2'))&&(!f.a||r.date>=f.a)&&(!f.b||r.date<=f.b)&&(!f.type||rowType(r)===f.type)&&(!f.driver||reportingAccount(r)===f.driver)&&(!f.source||sourceAccount(r)===f.source)&&(!f.q||[r.code,rowIdentity(r).key,sourceAccount(r),reportingAccount(r),rowIdentity(r).name,String(r.reading),String(r.unit)].join(' ').toUpperCase().includes(f.q)))}
 function group(data){const mp=new Map();for(const r of data){const info=rowIdentity(r),groupCode=info.key;let it=mp.get(groupCode);if(!it){it={code:groupCode,count:0,total:0,invalid:0,flags:0,events:[],sourceAccounts:new Set(),rawCodes:new Set()};mp.set(groupCode,it)}it.count++;it.total+=r.litres;it.events.push(r);it.sourceAccounts.add(codeKey(r.driver));it.rawCodes.add(codeKey(r.code));if(validRead(r.reading)===null)it.invalid++;if(r.issues?.length)it.flags++}return [...mp.values()].sort((a,b)=>b.total-a.total)}
 
 function saveMeterStore(){try{localStorage.setItem(K_METERS,JSON.stringify(meters));return true}catch(e){toast('Browser storage is full; meter data is only available this session');return false}}
