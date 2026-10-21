@@ -182,10 +182,18 @@ function rowIdentity(r){
  const acc=codeKey(r.driver),raw=codeKey(r.code),override=mappings[raw]||mappings[plantOrTransferAlias(raw)]||null;
  // Confirmed Sheffield and bowser movements are transfers even if issued on another account.
  if(acc!=='PLANT2'&&knownRule(raw)?.type==='transfer')return {key:plantOrTransferAlias(raw),type:'transfer',name:knownRule(raw).name,verified:true,source:'confirmed fuel movement'};
- if(acc!=='PLANT2')return accountIdentity(acc||'(blank)');
+ if(acc!=='PLANT2'){
+  const setting=accountMappings[acc];
+  if(setting?.type==='plant'&&setting.checkPlantId)return {key:'CHECKPLANT:'+setting.checkPlantId,type:'plant',name:plantMachines.find(m=>m.id===setting.checkPlantId)?.name||setting.name||acc,verified:true,source:'linked CheckPlant dispenser account'};
+  return accountIdentity(acc||'(blank)');
+ }
  // Shared PLANT2 account: use the individual identifier to allocate the specific issue.
  const rule=knownRule(raw);
- if(override&&override.type==='plant')return {key:isReg(raw)?'PLANT:'+regKey(raw):plantOrTransferAlias(raw),type:'plant',name:override.name||rule?.name||raw,verified:true,source:'manual PLANT2 allocation'};
+ if(override&&override.type==='plant'){
+   const mId=override.checkPlantId;
+   if(mId)return {key:'CHECKPLANT:'+mId,type:'plant',name:plantMachines.find(m=>m.id===mId)?.name||override.name||raw,verified:true,source:'linked CheckPlant machine'};
+   return {key:isReg(raw)?'PLANT:'+regKey(raw):plantOrTransferAlias(raw),type:'plant',name:override.name||rule?.name||raw,verified:true,source:'manual PLANT2 allocation'};
+ }
  if(override&&override.type==='transfer')return {key:isReg(raw)?'TRANSFER:'+regKey(raw):plantOrTransferAlias(raw),type:'transfer',name:override.name||rule?.name||raw,verified:true,source:'manual PLANT2 allocation'};
  if(override&&override.type==='unmapped')return {key:'UNRESOLVED:'+raw,type:'unmapped',name:raw,verified:false,source:'manual unresolved'};
  if(override&&override.type==='road'){
@@ -204,6 +212,7 @@ function typeOf(code){
  const c=codeKey(code);
  if(c.startsWith('ACCOUNT:'))return accountIdentity(c.slice(8)).type;
  if(c.startsWith('UNRESOLVED:'))return 'unmapped';
+ if(c.startsWith('CHECKPLANT:'))return 'plant';
  if(c.startsWith('PLANT:'))return 'plant';
  if(c.startsWith('TRANSFER:'))return 'transfer';
  if(c.startsWith('VEHICLE:'))return 'road';
@@ -213,7 +222,7 @@ function verified(code){
  const c=codeKey(code);
  if(c.startsWith('ACCOUNT:'))return accountIdentity(c.slice(8)).verified;
  if(c.startsWith('UNRESOLVED:'))return false;
- if(c.startsWith('PLANT:')||c.startsWith('TRANSFER:'))return true;
+ if(c.startsWith('CHECKPLANT:')||c.startsWith('PLANT:')||c.startsWith('TRANSFER:'))return true;
  if(c.startsWith('VEHICLE:'))return Boolean(mappings[c.slice(8)]?.type==='road');
  return Boolean(isReg(canonicalCode(c))||(mapped(c)?.type&&mapped(c)?.type!=='unmapped')||knownRule(c));
 }
@@ -221,6 +230,7 @@ function labelFor(code){
  const c=codeKey(code);
  if(c.startsWith('ACCOUNT:'))return accountIdentity(c.slice(8)).name;
  if(c.startsWith('UNRESOLVED:'))return 'Unallocated: '+c.slice(11);
+ if(c.startsWith('CHECKPLANT:'))return plantMachines.find(m=>codeKey(m.id)===c.slice(11))?.name||'CheckPlant machine '+c.slice(11);
  if(c.startsWith('PLANT:'))return mappings[c.slice(6)]?.name||'Plant asset '+c.slice(6);
  if(c.startsWith('TRANSFER:'))return mappings[c.slice(9)]?.name||'Fuel transfer '+c.slice(9);
  if(c.startsWith('VEHICLE:'))return mappings[c.slice(8)]?.name||'Vehicle: '+c.slice(8);
@@ -243,15 +253,18 @@ function mergeMeterRows(next){
  meters.sort((a,b)=>a.date.localeCompare(b.date));saveMeterStore();return {added,skipped,invalid}
 }
 function machineForCode(code){
- const canonical=canonicalCode(code),mappedId=mappings[codeKey(code)]?.checkPlantId||mappings[canonical]?.checkPlantId;
+ const original=codeKey(code);
+ if(original.startsWith('CHECKPLANT:'))return plantMachines.find(m=>codeKey(m.id)===original.slice(11))||null;
+ const accountCode=original.startsWith('ACCOUNT:')?original.slice(8):original;
+ const canonical=canonicalCode(code),mappedId=accountMappings[accountCode]?.checkPlantId||mappings[original]?.checkPlantId||mappings[canonical]?.checkPlantId;
  if(mappedId)return plantMachines.find(m=>m.id===mappedId)||null;
  const matches=plantMachines.filter(m=>[m.name,m.serialNumber,m.id].some(v=>codeKey(v)===codeKey(canonical)));
  return matches.length===1?matches[0]:null;
 }
 function readingHistory(code,kind,rawCodes=[]){
- const asset=canonicalCode(code),linked=kind==='plant'?(rawCodes.map(c=>machineForCode(c)).find(Boolean)||machineForCode(code)):null;
+ const asset=canonicalCode(code),linked=kind==='plant'?(machineForCode(code)||rawCodes.map(c=>machineForCode(c)).find(Boolean)):null,aliases=new Set(rawCodes.map(c=>canonicalCode(c)).concat([asset]));
  return meters.filter(m=>m.kind===kind&&(kind==='road'?canonicalCode(m.asset)===asset:
-   ((linked&&m.machineId===linked.id)||(!m.machineId&&canonicalCode(m.asset)===asset))))
+   ((linked&&m.machineId===linked.id)||(!m.machineId&&aliases.has(canonicalCode(m.asset))))))
  .sort((a,b)=>a.date.localeCompare(b.date)||a.reading-b.reading);
 }
 function meterHistoryRate(g){
@@ -366,7 +379,7 @@ async function syncCheckPlant(){
 function overallFlags(g){return g.invalid||g.flags?`${g.invalid} unreadable / ${g.flags} flagged`:'No obvious meter errors'}
 function dispenserEfficiency(g){if(!verified(g.code)||!['road','plant'].includes(typeOf(g.code)))return null;const events=g.events.slice().sort(stableSort);let last=null,lastDate='',covered=0,metres=0,count=0,invalid=0,litreBucket=0;for(const e of events){litreBucket+=e.litres;const meter=validRead(e.reading);if(meter===null){invalid++;continue}if(last===null){last=meter;lastDate=e.date;litreBucket=0;continue}const diff=meter-last,days=Math.max(1,Math.ceil((Date.parse(e.date)-Date.parse(lastDate))/86400000)),max=typeOf(g.code)==='plant'?24*days:1500*days;if(diff>0&&diff<=max){metres+=diff;covered+=litreBucket;count++;last=meter;lastDate=e.date;litreBucket=0}else{invalid++;if(diff>max){last=meter;lastDate=e.date;litreBucket=0}}}
 if(!count||!metres||!covered)return {count:0,invalid};const typ=typeOf(g.code);const unit=mappings[g.code]?.unit||'mi';let mpg=null,l100=null;if(typ==='road'){const miles=unit==='km'?metres/1.609344:metres;const km=unit==='km'?metres:metres*1.609344;mpg=miles*4.54609/covered;l100=covered*100/km}return {count,invalid,metres,unit,rate:covered/metres,mpg,l100,covered}}
-function efficiency(g){const historic=meterHistoryRate(g);return historic?.count?historic:dispenserEfficiency(g)}
+function efficiency(g){const historic=meterHistoryRate(g);if(historic?.count)return historic;if(codeKey(g.code).startsWith('CHECKPLANT:'))return {count:0,method:'Awaiting dated CheckPlant hours'};return dispenserEfficiency(g)}
 function filterSetup(){const old=$('filterDriver').value;const drivers=[...new Set(rows.map(x=>x.driver).filter(Boolean))].sort();$('filterDriver').innerHTML='<option value="">All accounts</option>'+drivers.map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join('');$('filterDriver').value=drivers.includes(old)?old:'';if(rows.length){$('dateFrom').value=$('dateFrom').value||rows[0].date;$('dateTo').value=$('dateTo').value||rows[rows.length-1].date}showStatus()}
 function showStatus(){const filtered=visible();$('filterCount').textContent='Showing '+fmt(filtered.length)+' of '+fmt(rows.length)+' records';$('dataDot').classList.toggle('warn',!rows.length);$('dataStatus').textContent=rows.length?'Data loaded · '+fmt(rows.length)+' transactions · '+fmt(group(rows).length)+' identifiers':'No records loaded · Import a dispenser export';$('navNeeds').textContent=fmt(group(rows).filter(needsReview).length)}
 function needsReview(g){return !verified(g.code)||g.events.some(r=>(r.issues||[]).some(i=>/Large dispense|Unknown identifier/.test(i)))||(typeOf(g.code)==='road'&&g.invalid>0)}
