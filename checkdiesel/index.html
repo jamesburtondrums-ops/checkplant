@@ -207,18 +207,22 @@ function drawMeterHistory(){
 }
 function historyMatrix(matrix,kind,source){
  const names=matrix.map(row=>row.map(v=>String(v??'').trim().toLowerCase().replace(/[^a-z0-9]+/g,'')));
- const synonyms=kind==='road'?{date:['date','readingdate','recorddate','checkdate'],id:['registration','reg','regnumber','vehiclereg','vehicle','vehicleid','registrationnumber'],meter:['odometer','mileage','miles','reading','meter','odometerreading'],unit:['unit','distanceunit','readingunit'],notes:['notes','note','comments']}
+ const synonyms=kind==='road'?{date:['date','readingdate','recorddate','checkdate'],id:['registration','reg','regnumber','vehiclereg','vehicleregistration','vehicle','vehicleid','registrationnumber','licenceplate','licenseplate'],meter:['odometer','mileage','miles','reading','meter','odometerreading','currentmileage','currentodometer'],unit:['unit','distanceunit','readingunit'],notes:['notes','note','comments']}
  :{date:['date','readingdate','recorddate','checkdate'],id:['machineid','machine','machinename','plantid','asset','assetname','equipment','equipmentid'],meter:['hoursreading','enginehours','hourmeter','hours','operatinghours','reading'],unit:['unit'],notes:['notes','note','comments']};
- const headerIndex=names.findIndex(c=>synonyms.date.some(k=>c.includes(k))&&synonyms.id.some(k=>c.includes(k))&&synonyms.meter.some(k=>c.includes(k)));
+ const match=(col,patterns)=>patterns.some(k=>col===k||(k.length>=5&&col.startsWith(k)));
+ const headerIndex=names.findIndex(c=>c.some(col=>match(col,synonyms.date))&&c.some(col=>match(col,synonyms.id))&&c.some(col=>match(col,synonyms.meter)));
  if(headerIndex<0)throw Error('Missing required Date, '+(kind==='road'?'Registration, Odometer':'Machine/ID, Hours Reading')+' columns');
- const head=names[headerIndex],pick=arr=>head.findIndex(c=>arr.some(k=>c===k)),iDate=pick(synonyms.date),iId=pick(synonyms.id),iMeter=pick(synonyms.meter),iUnit=pick(synonyms.unit),iNotes=pick(synonyms.notes);
+ const head=names[headerIndex],pick=arr=>head.findIndex(c=>match(c,arr)),iDate=pick(synonyms.date),iId=pick(synonyms.id),iMeter=pick(synonyms.meter),iUnit=pick(synonyms.unit),iNotes=pick(synonyms.notes);
  if([iDate,iId,iMeter].some(i=>i<0))throw Error('Required reading columns not found');
  const result=[];let invalid=0,ambiguous=0;
+ const incomingRegs=kind==='road'?[...new Set(matrix.slice(headerIndex+1).map(r=>regKey(r[iId])).filter(isReg))]:[];
+ const candidateRegs=[...new Set([...knownRegistrations(),...incomingRegs])];
+ const resolveReg=raw=>{if(isReg(raw))return regKey(raw);const known=suggestedReg(raw);if(known)return known;const c=regKey(raw);if(/^[A-Z]{3}$/.test(c)){const matches=candidateRegs.filter(reg=>reg.endsWith(c));return matches.length===1?matches[0]:null}return null};
  for(const row of matrix.slice(headerIndex+1)){
   const date=cleanDate(row[iDate]),raw=codeKey(row[iId]),meter=Number(String(row[iMeter]??'').replace(/,/g,'')),
   unitRaw=iUnit>=0?codeKey(row[iUnit]):'',unit=kind==='plant'?'hours':(/KM|KILOM/.test(unitRaw)?'km':'mi');
   if(!raw||!date||!Number.isFinite(meter)||meter<=0){invalid++;continue}
-  const asset=kind==='road'?(isReg(raw)?regKey(raw):suggestedReg(raw)):(plantMachines.find(m=>m.id===raw)?.name||raw);
+  const asset=kind==='road'?resolveReg(raw):(plantMachines.find(m=>m.id===raw)?.name||raw);
   if(kind==='road'&&!asset){ambiguous++;continue}
   const machine=kind==='plant'?plantMachines.find(m=>m.id===raw||codeKey(m.name)===raw||codeKey(m.serialNumber)===raw):null;
   result.push({date,asset:kind==='road'?asset:machine?machine.id:raw,display:kind==='road'?asset:machine?machine.name:raw,machineId:machine?.id||'',reading:meter,unit,kind,source,notes:iNotes>=0?String(row[iNotes]??'').slice(0,250):''});
