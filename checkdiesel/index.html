@@ -459,16 +459,47 @@ function drawTransfers(data){const gs=group(data).filter(g=>typeOf(g.code)==='tr
 function drawReview(data){const arr=group(data).filter(needsReview);$('reviewTable').innerHTML=arr.map(g=>'<tr><td><button class="linklike" data-asset="'+esc(g.code)+'">'+esc(g.code)+'</button></td><td>'+badge(g.code)+'</td><td><b>'+litres(g.total)+'</b></td><td>'+fmt(g.count)+'</td><td>'+(g.flags?'<span class="badge flag">'+g.flags+' flags</span>':'—')+'</td><td><button class="btn small light" data-map="'+esc(g.code)+'">Classify →</button></td></tr>').join('')||'<tr><td colspan="6" class="empty">No outstanding flags in this selection.</td></tr>'}
 function drawTx(data){
  const list=data.slice().reverse(),size=35,page=Math.min(pageTx,Math.max(1,Math.ceil(list.length/size)));pageTx=page;
+ const accounts=vehicleAccountChoices();
  $('transactionsTable').innerHTML=list.slice((page-1)*size,page*size).map(r=>{
-  const info=rowIdentity(r);
+  const info=rowIdentity(r),origin=sourceAccount(r),account=reportingAccount(r),isPlant2=origin==='PLANT2',
+  txnId=encodeURIComponent(rowKey(r)),isMovement=knownRule(r.code)?.type==='transfer',
+  hasOverride=Object.prototype.hasOwnProperty.call(transactionAllocations,rowKey(r));
+  const accountOptions='<option value="PLANT2"'+(account==='PLANT2'?' selected':'')+'>Keep on PLANT2</option>'+
+   accounts.map(acc=>'<option value="'+esc(acc)+'"'+(acc===account?' selected':'')+'>'+esc(acc)+'</option>').join('');
+  const controls=isPlant2&&!isMovement?
+   '<select data-txn-account="'+esc(txnId)+'" aria-label="Reporting account for '+esc(r.code)+'" style="max-width:125px">'+accountOptions+'</select>'+
+   '<button class="btn small light" data-apply-txn="'+esc(txnId)+'">Apply</button>'+
+   (hasOverride?'<button class="btn small light" data-clear-txn="'+esc(txnId)+'" title="Use this asset’s default mapping instead">Clear override</button>':''):
+   '—';
   return '<tr><td>'+esc(r.date)+'<div class="smalltxt">'+esc(r.time)+'</div></td>'+
-  '<td><b>'+esc(r.driver)+'</b></td>'+
+  '<td><b>'+esc(origin)+'</b></td>'+
+  '<td>'+esc(account)+(account!==origin?'<div class="smalltxt">Reallocated from PLANT2</div>':'')+'</td>'+
   '<td><button class="linklike" data-asset="'+esc(info.key)+'">'+esc(info.name)+'</button><div class="smalltxt">'+esc(info.key)+'</div></td>'+
   '<td>'+esc(r.code)+'</td><td>'+badge(info.key)+'</td><td>'+esc(String(r.reading))+'</td>'+
-  '<td><b>'+litres(r.litres)+'</b></td><td>'+(r.issues?.length?'<span class="badge flag" title="'+esc(r.issues.join('; '))+'">'+r.issues.length+' flag(s)</span>':'—')+'</td></tr>';
- }).join('')||'<tr><td colspan="8" class="empty">No matching transactions</td></tr>';
+  '<td><b>'+litres(r.litres)+'</b></td><td>'+controls+'</td>'+
+  '<td>'+(r.issues?.length?'<span class="badge flag" title="'+esc(r.issues.join('; '))+'">'+r.issues.length+' flag(s)</span>':'—')+'</td></tr>';
+ }).join('')||'<tr><td colspan="10" class="empty">No matching transactions</td></tr>';
  pager('transactionsPager',list,page,size);
 }
+function applyTransactionAccount(encoded,clear=false){
+ let key;
+ try{key=decodeURIComponent(encoded)}catch{return toast('Could not identify this fuel transaction')}
+ const r=rows.find(x=>rowKey(x)===key);
+ if(!r||sourceAccount(r)!=='PLANT2')return toast('Only fuel issued using PLANT2 can be reallocated here');
+ if(knownRule(r.code)?.type==='transfer')return toast('Bowser/transfer movements cannot be allocated as truck fuel');
+ if(clear)delete transactionAllocations[key];
+ else{
+  const select=document.querySelector('[data-txn-account="'+CSS.escape(encoded)+'"]'),target=codeKey(select?.value||'PLANT2');
+  if(target!=='PLANT2'&&!vehicleAccountChoices().includes(target))return toast('Choose an existing road vehicle account or create it in Asset Mapping');
+  if(target!=='PLANT2'&&accountMappings[target]?.type&&accountMappings[target]?.type!=='road')return toast('Target dispenser account must be a road vehicle');
+  if(target!==reportingAccount(r)&&!confirm('Assign '+litres(r.litres)+' on '+r.date+' ('+r.code+') from original PLANT2 fob to '+target+' for reporting?'))return;
+  // Explicit PLANT2 value suppresses a broader identifier mapping for this individual fuel issue.
+  transactionAllocations[key]=target;
+ }
+ try{localStorage.setItem(K_REALLOC,JSON.stringify(transactionAllocations))}catch{toast('Allocation applied this session but browser storage is full')}
+ filterSetup();draw();toast(clear?'Individual exception cleared; default asset mapping restored':'Individual PLANT2 refuel allocation saved');
+}
+
 function drawAccountMappings(){
  const regList=knownRegistrations(),accs=new Map();
  for(const r of rows){const acc=codeKey(r.driver)||'(blank)';if(acc==='PLANT2')continue;
@@ -711,6 +742,11 @@ function handleClicks(ev){let el=ev.target.closest('[data-view],[data-account-gr
  q=document.querySelector('[data-map-type="'+CSS.escape(plantCode)+'"]')}
  q?.focus();q?.scrollIntoView({block:'center',behavior:'smooth'})}if(el.dataset.save)saveMap(el.dataset.save);if(el.dataset.page){const d=Number(el.dataset.direction);if(el.dataset.page==='overviewPager')pageAssets=Math.max(1,pageAssets+d);else pageTx=Math.max(1,pageTx+d);draw()}}
 document.addEventListener('click',handleClicks);
+document.addEventListener('click',ev=>{
+ const b=ev.target.closest('[data-apply-txn],[data-clear-txn]');if(!b)return;
+ if(b.dataset.applyTxn)applyTransactionAccount(b.dataset.applyTxn,false);
+ else if(b.dataset.clearTxn)applyTransactionAccount(b.dataset.clearTxn,true);
+});
 $('machineRegisterSearch').addEventListener('input',drawMachineRegister);
 $('machineRegisterBranch').addEventListener('change',drawMachineRegister);
 $('machineRegisterLinkFilter').addEventListener('change',drawMachineRegister);
