@@ -425,7 +425,14 @@ function filterSetup(){
  showStatus()
 }
 
-function showStatus(){const filtered=visible();$('filterCount').textContent='Showing '+fmt(filtered.length)+' of '+fmt(rows.length)+' records';$('dataDot').classList.toggle('warn',!rows.length);$('dataStatus').textContent=rows.length?'Data loaded · '+fmt(rows.length)+' transactions · '+fmt(group(rows).length)+' identifiers':'No records loaded · Import a dispenser export';$('navNeeds').textContent=fmt(group(rows).filter(needsReview).length)}
+function showStatus(){
+ const filtered=visible(),moved=rows.filter(r=>sourceAccount(r)==='PLANT2'&&reportingAccount(r)!=='PLANT2');
+ $('filterCount').textContent='Showing '+fmt(filtered.length)+' of '+fmt(rows.length)+' records';
+ $('dataDot').classList.toggle('warn',!rows.length);
+ $('dataStatus').textContent=rows.length?'Data loaded · '+fmt(rows.length)+' original transactions · '+fmt(group(rows).length)+' allocated assets · '+fmt(moved.length)+' PLANT2 fills reassigned':'No records loaded · Import a dispenser export';
+ $('navNeeds').textContent=fmt(group(rows).filter(needsReview).length);
+}
+
 function needsReview(g){return !verified(g.code)||g.events.some(r=>(r.issues||[]).some(i=>/Large dispense|Unknown identifier/.test(i)))||(typeOf(g.code)==='road'&&g.invalid>0)}
 function classSummary(g){const e=efficiency(g);const typ=typeOf(g.code);if(!e?.count)return '<span class="smalltxt">Not enough verified data</span>';return typ==='road'?'<b>'+fmt(e.mpg,1)+' UK MPG</b> <span class="smalltxt">est.</span>':'<b>'+fmt(e.rate,2)+' L/h</b> <span class="smalltxt">est.</span>'}
 function assetRow(g){return '<tr><td><button class="linklike" data-asset="'+esc(g.code)+'">'+esc(labelFor(g.code))+'</button><div class="smalltxt">Source account(s): '+esc([...g.sourceAccounts].join(', '))+'</div><div class="aliases">'+(g.rawCodes.size>1?'Original REG. NUMBER notes: '+esc([...g.rawCodes].slice(0,9).join(', ')):'')+'</div></td><td>'+badge(g.code)+'</td><td>'+fmt(g.count)+'</td><td><b>'+litres(g.total)+'</b></td><td>'+(g.invalid?'<span class="badge flag">'+g.invalid+' invalid</span>':'<span class="badge verified">OK</span>')+'</td><td>'+classSummary(g)+'</td><td><button class="btn small light" data-asset="'+esc(g.code)+'">View →</button></td></tr>'}
@@ -697,7 +704,15 @@ function saveMap(code){
 }
 
 function closeDrawer(){$('assetModal').classList.remove('open');openCode=null}
-function csvLines(data){const hdr=['Date','Hour','Pump unit','Dispenser account','Original REG. NUMBER entry','Resolved asset ID','Allocated type','Confirmed','Display name','Odometer / hours','Litres','Quality flags'];const quote=v=>'"'+String(v??'').replace(/"/g,'""')+'"';return [hdr.map(quote).join(',')].concat(data.map(r=>[r.date,r.time,r.unit,r.driver,r.code,rowIdentity(r).key,rowType(r),rowIdentity(r).verified?'Yes':'No',rowIdentity(r).name,r.reading,r.litres,r.issues?.join('; ')||''].map(quote).join(','))).join('\r\n')}
+function csvLines(data){
+ const hdr=['Date','Hour','Pump unit','Original dispense fob','Reporting dispenser account','PLANT2 fuel reallocated?','Original REG. NUMBER entry','Resolved asset ID','Allocated type','Confirmed','Display name','Odometer / hours','Litres','Quality flags'],
+ quote=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+ return [hdr.map(quote).join(',')].concat(data.map(r=>{
+  const identity=rowIdentity(r),origin=sourceAccount(r),assigned=reportingAccount(r);
+  return [r.date,r.time,r.unit,origin,assigned,origin==='PLANT2'&&assigned!=='PLANT2'?'Yes':'No',r.code,identity.key,identity.type,identity.verified?'Yes':'No',identity.name,r.reading,r.litres,r.issues?.join('; ')||''].map(quote).join(',');
+ })).join('\r\n');
+}
+
 function download(data){const a=document.createElement('a'),b=new Blob(['\ufeff'+data],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(b);a.href=url;a.download='CheckDiesel_Fuel_Report.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 function parseCSV(src){const arr=[],line=[];let val='',q=false;for(let i=0;i<src.length;i++){let c=src[i];if(c==='"'){if(q&&src[i+1]==='"'){val+='"';i++}else q=!q}else if(c===','&&!q){line.push(val);val=''}else if((c==='\r'||c==='\n')&&!q){if(c==='\r'&&src[i+1]==='\n')i++;line.push(val);if(line.some(x=>x.trim()))arr.push(line.slice());line.length=0;val=''}else val+=c}line.push(val);if(line.some(x=>x.trim()))arr.push(line);return arr}
 async function parseXLSX(file){if(!window.JSZip)throw Error('Excel parser unavailable. Try CSV or reconnect to the internet.');const zip=await JSZip.loadAsync(await file.arrayBuffer()),names=Object.keys(zip.files),fileName=names.find(x=>/^xl\/worksheets\/[^/]+\.xml$/.test(x));if(!fileName)throw Error('No Excel worksheet found');const parse=s=>new DOMParser().parseFromString(s,'application/xml'),find=(node,name)=>[...node.getElementsByTagName('*')].filter(el=>el.localName===name),sh=[];if(zip.file('xl/sharedStrings.xml')){const doc=parse(await zip.file('xl/sharedStrings.xml').async('text'));for(const si of find(doc,'si'))sh.push(find(si,'t').map(t=>t.textContent).join(''))}const root=parse(await zip.file(fileName).async('text')),rows=[];for(const row of find(root,'row')){const a=[];for(const c of [...row.children].filter(x=>x.localName==='c')){const col=(c.getAttribute('r')||'').match(/^[A-Z]+/)?.[0]||'',idx=[...col].reduce((n,ch)=>n*26+ch.charCodeAt(0)-64,0)-1,v=[...c.children].find(x=>x.localName==='v')?.textContent||'',typ=c.getAttribute('t');a[idx]=typ==='s'?sh[Number(v)]||'':typ==='inlineStr'?find(c,'t').map(x=>x.textContent).join(''):v}if(a.some(x=>x!==undefined&&x!==''))rows.push(a)}return rows}
