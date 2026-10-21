@@ -25,6 +25,7 @@
 
 .meter-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.meter-box{border:1px solid #e3e9f0;padding:16px;border-radius:13px;background:#fafbfc}.meter-box h3{margin:0 0 8px;color:#1a2e46}.meter-box input[type=file]{max-width:100%;padding:10px 0}.meter-filter{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:15px 0}.meter-filter select{min-width:180px;border:1px solid #cdd7e0;border-radius:8px;padding:8px}.meter-filter .smalltxt{max-width:650px}.meter-note{color:#a2691c;font-size:11px}
 @media(max-width:800px){.meter-grid{grid-template-columns:1fr}}
+#machineRegisterPanel .tablebox{max-height:540px;overflow:auto}#machineRegisterPanel .datagrid select{max-width:245px}#machineRegisterPanel .smalltxt{line-height:1.55}
 </style></head><body>
 <div class="shell"><aside class="side" id="sidebar"><div class="brand"><div class="brandmark">⛽</div><div><b>CheckDiesel</b><small>BURTCO · Fuel Intelligence</small></div></div><div class="side-label">Analytics</div>
 <button class="navitem active" data-view="overview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="5" rx="1"/><rect x="13" y="10" width="8" height="11" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/></svg>Overview</button>
@@ -60,6 +61,17 @@
 <div class="preview-note"><b>Primary identity:</b> the dispenser account in the export's DRIVER column, e.g. BFU, VBX or FXX. Names entered in REG. NUMBER are secondary notes. Match each account to its full registration once and all its historical fuel appears together. <b>PLANT2 is a shared account, not one vehicle.</b></div>
 <div class="tablebox"><table class="datagrid"><thead><tr><th>Dispenser account</th><th>Issues / litres</th><th>Asset allocation</th><th>Registration (if known)</th><th>Friendly name</th><th></th></tr></thead><tbody id="accountMappingTable"></tbody></table></div>
 </section>
+<section class="panel" id="machineRegisterPanel"><div class="panelhead"><h2>CheckPlant machine register</h2><span id="cpRegisterCount">Connect live CheckPlant to load every machine</span></div>
+<div class="preview-note">Every CheckPlant machine can be linked to a <b>specific PLANT2 fuel identifier</b> or a dedicated plant dispenser account. The machine's permanent CheckPlant ID is used for the link, not a guessed match from its name. Linked fuel aliases are combined under the same machine without duplicating fuel.</div>
+<div class="archive-actions">
+<button class="btn small" type="button" id="refreshMachineRegister">Sync all CheckPlant machines</button>
+<input id="machineRegisterSearch" type="search" placeholder="Search machine, branch, serial or ID" aria-label="Search CheckPlant machine register" style="min-width:240px;flex:1">
+<select id="machineRegisterBranch" aria-label="Filter machine branch"><option value="">All branches</option></select>
+<select id="machineRegisterLinkFilter" aria-label="Filter machine link status"><option value="">All machines</option><option value="linked">Linked to diesel</option><option value="unlinked">Not linked yet</option></select>
+</div>
+<p id="machineRegisterStatus" class="smalltxt" role="status">Select Sync all CheckPlant machines to load the entire live register. No changes are made to CheckPlant.</p>
+<div class="tablebox"><table class="datagrid"><thead><tr><th>CheckPlant machine</th><th>Branch / serial</th><th>Current engine hours</th><th>Connected fuel identifiers</th><th>Connect to fuel</th><th>Action</th></tr></thead><tbody id="machineRegisterTable"><tr><td colspan="6" class="empty">No machine register loaded yet.</td></tr></tbody></table></div>
+</section>
 <section class="panel"><div class="panelhead"><h2>PLANT2 · allocate individual fuel issues</h2><span>Find road-vehicle fills within plant fuel</span></div><div class="preview-note">PLANT2 is the source account; its REG. NUMBER entry may identify a machine or road vehicle. Road registrations and unique matches to other dispenser accounts are allocated to fleet usage automatically. Remaining entries can be assigned here. The original source data never changes.</div><div class="meter-filter"><label for="mappingAccount">Show identifiers from</label><select id="mappingAccount"><option value="all">All PLANT2 entries</option><option value="road">Road vehicle entries</option><option value="plant">Plant machine entries</option><option value="transfer">Transfers / bowsers</option><option value="unmapped">Still unclassified</option></select><span class="smalltxt">PLANT2 is a pump account, not an asset type. You can assign a road vehicle to it. Non-PLANT2 transactions are grouped by dispenser account above, never by the driver's name.</span></div><div class="accountsplit" style="margin:12px 0">
 <div class="accountcard"><div class="smalltxt">PLANT2 allocated to machinery</div><div class="quantity" id="mapPlant2Machinery">—</div></div>
 <div class="accountcard"><div class="smalltxt">PLANT2 allocated to road vehicles</div><div class="quantity" id="mapPlant2Vehicles">—</div></div>
@@ -74,6 +86,7 @@
 <div class="archive-actions"><button class="btn small light" type="button" id="mileageTemplate">Download mileage template</button><button class="btn small" type="button" id="importMileageBtn">Import mileage history</button></div>
 <p id="mileageStatus" class="smalltxt" role="status">No mileage history imported yet.</p></div>
 <div class="meter-box"><h3>Plant · CheckPlant engine hours</h3>
+<p class="smalltxt"><a href="#" data-goto="mapping">View and link the complete CheckPlant machine register →</a></p>
 <p class="smalltxt">Read actual dated \`hoursReading\` values from CheckPlant's machine checks, then link the dispenser's asset code to the correct CheckPlant machine in Asset Mapping. This is read-only.</p>
 <div class="archive-actions"><button class="btn small" type="button" id="checkplantSync">Read CheckPlant hours</button><button class="btn small light" type="button" id="hoursTemplate">Download hours template</button></div>
 <label class="smalltxt" for="hoursFile">Or import a CheckPlant engine-hours export (XLSX or CSV)</label>
