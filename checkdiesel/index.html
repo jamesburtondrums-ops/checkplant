@@ -499,6 +499,7 @@ function applyTransactionAccount(encoded,clear=false){
   const select=document.querySelector('[data-txn-account="'+CSS.escape(encoded)+'"]'),target=codeKey(select?.value||'PLANT2');
   if(target!=='PLANT2'&&!vehicleAccountChoices().includes(target))return toast('Choose an existing road vehicle account or create it in Asset Mapping');
   if(target!=='PLANT2'&&accountMappings[target]?.type&&accountMappings[target]?.type!=='road')return toast('Target dispenser account must be a road vehicle');
+  if(target!=='PLANT2'&&rowType(r)!=='road'&&!confirm('This fuel issue is currently categorised as '+rowType(r)+'. Confirm it was a road-vehicle refuel before moving it to '+target+'?'))return;
   if(target!==reportingAccount(r)&&!confirm('Assign '+litres(r.litres)+' on '+r.date+' ('+r.code+') from original PLANT2 fob to '+target+' for reporting?'))return;
   // Explicit PLANT2 value suppresses a broader identifier mapping for this individual fuel issue.
   transactionAllocations[key]=target;
@@ -679,6 +680,7 @@ function saveMap(code){
  checkPlantId=get('data-map-cp')?.value||'',selected=codeKey(get('data-map-account')?.value||''),
  proposed=codeKey(get('data-map-newaccount')?.value||''),target=proposed||selected,oldTarget=codeKey(mappings[norm]?.fuelAccount||'');
  if(target){
+  if(knownRule(norm)?.type==='transfer')return toast('This code is a confirmed bowser/branch transfer; it cannot be moved into vehicle fuel');
   if(!/^[A-Z0-9][A-Z0-9_-]{1,19}$/.test(target)||target==='PLANT2')return toast('Enter a valid non-PLANT2 dispenser account code');
   if(type!=='road')return toast('Set allocation to Road vehicle before moving fuel to its dispenser account');
   if(accountMappings[target]?.type&&accountMappings[target].type!=='road')return toast('Target account must be a Road vehicle in Account Mapping');
