@@ -70,7 +70,7 @@
 <select id="machineRegisterLinkFilter" aria-label="Filter machine link status"><option value="">All machines</option><option value="linked">Linked to diesel</option><option value="unlinked">Not linked yet</option></select>
 </div>
 <p id="machineRegisterStatus" class="smalltxt" role="status">Select Sync all CheckPlant machines to load the entire live register. No changes are made to CheckPlant.</p>
-<div class="tablebox"><table class="datagrid"><thead><tr><th>CheckPlant machine</th><th>Branch / serial</th><th>Current engine hours</th><th>Connected fuel identifiers</th><th>Connect to fuel</th><th>Action</th></tr></thead><tbody id="machineRegisterTable"><tr><td colspan="6" class="empty">No machine register loaded yet.</td></tr></tbody></table></div>
+<div class="tablebox"><table class="datagrid"><thead><tr><th>CheckPlant machine</th><th>Branch / serial</th><th>Current engine hours</th><th>Connected fuel identifiers</th><th>Fuel / indicative L/h</th><th>Connect to fuel</th><th>Action</th></tr></thead><tbody id="machineRegisterTable"><tr><td colspan="7" class="empty">No machine register loaded yet.</td></tr></tbody></table></div>
 </section>
 <section class="panel"><div class="panelhead"><h2>PLANT2 · allocate individual fuel issues</h2><span>Find road-vehicle fills within plant fuel</span></div><div class="preview-note">PLANT2 is the source account; its REG. NUMBER entry may identify a machine or road vehicle. Road registrations and unique matches to other dispenser accounts are allocated to fleet usage automatically. Remaining entries can be assigned here. The original source data never changes.</div><div class="meter-filter"><label for="mappingAccount">Show identifiers from</label><select id="mappingAccount"><option value="all">All PLANT2 entries</option><option value="road">Road vehicle entries</option><option value="plant">Plant machine entries</option><option value="transfer">Transfers / bowsers</option><option value="unmapped">Still unclassified</option></select><span class="smalltxt">PLANT2 is a pump account, not an asset type. You can assign a road vehicle to it. Non-PLANT2 transactions are grouped by dispenser account above, never by the driver's name.</span></div><div class="accountsplit" style="margin:12px 0">
 <div class="accountcard"><div class="smalltxt">PLANT2 allocated to machinery</div><div class="quantity" id="mapPlant2Machinery">—</div></div>
@@ -355,25 +355,35 @@ function getCheckPlantDB(){
  });
 }
 async function syncCheckPlant(){
- const btn=$('checkplantSync'),status=$('checkplantStatus');btn.disabled=true;status.dataset.busy='1';status.textContent='Connecting to CheckPlant to read available machines and dated check records…';
+ const buttons=[$('checkplantSync'),$('refreshMachineRegister')],status=$('checkplantStatus'),regStatus=$('machineRegisterStatus');
+ buttons.forEach(b=>b.disabled=true);status.dataset.busy='1';
+ status.textContent='Loading all CheckPlant machines…';regStatus.textContent=status.textContent;
  try{
-  const db=await getCheckPlantDB();
-  const machines=await db.collection('machines').get();
-  plantMachines=machines.docs.map(d=>({id:d.id,name:String(d.data().name||d.id),serialNumber:String(d.data().serialNumber||''),branch:String(d.data().branch||'')}));
-  try{localStorage.setItem(K_PLANTS,JSON.stringify(plantMachines))}catch{}
-  // Dated records only. Do not infer historical dates from currentHours.
-  const records=await db.collection('records').orderBy('date','desc').limit(5000).get();
-  const data=[];for(const d of records.docs){
-   const rec=d.data(),date=cleanDate(rec.date),hour=Number(rec.hoursReading);
-   if(!rec.machineId||!date||rec.hoursReading===null||rec.hoursReading===''||!Number.isFinite(hour)||hour<=0)continue;
-   const machine=plantMachines.find(m=>m.id===rec.machineId);
-   data.push({date,asset:rec.machineId,display:machine?.name||rec.machineName||rec.machineId,machineId:rec.machineId,reading:hour,unit:'hours',kind:'plant',source:'CheckPlant dated check',notes:''});
-  }
-  const result=mergeMeterRows(data);
-  status.textContent='Read '+plantMachines.length+' machines and '+records.size+' recent checks (latest 5,000 maximum). '+result.added+' new dated hours readings. Earlier historical checks may require an export.';
-  draw();toast('CheckPlant hours imported. Assign machine links in Asset Mapping.');
- }catch(e){status.textContent='CheckPlant connection unavailable: '+e.message+'. Import a dated hours spreadsheet instead.';toast('Could not read CheckPlant; the original CheckPlant website was not changed.')}
- finally{delete status.dataset.busy;btn.disabled=false}
+  const db=await getCheckPlantDB(),machines=await db.collection('machines').get();
+  // No limit, includes inactive and currently unlinked assets.
+  plantMachines=machines.docs.map(d=>{
+   const v=d.data();return {id:d.id,name:String(v.name||d.id),serialNumber:String(v.serialNumber||''),
+   branch:String(v.branch||''),category:String(v.categoryKey||v.category||''),currentHours:Number(v.currentHours)||0};
+  }).sort((a,b)=>(a.branch||'').localeCompare(b.branch||'')||a.name.localeCompare(b.name));
+  try{localStorage.setItem(K_PLANTS,JSON.stringify(plantMachines))}catch{toast('Machine roster available only for this session')}
+  draw();
+  status.textContent='Loaded '+plantMachines.length+' machines. Reading recent dated hours…';
+  try{
+   const recent=await db.collection('records').orderBy('createdAt','desc').limit(5000).get(),data=[];
+   const names=new Map(plantMachines.map(m=>[m.id,m.name]));
+   for(const d of recent.docs){
+    const v=d.data(),date=cleanDate(v.date),hour=Number(v.hoursReading);
+    if(!v.machineId||!date||v.hoursReading===null||v.hoursReading===undefined||v.hoursReading===''||!Number.isFinite(hour)||hour<=0)continue;
+    data.push({date,asset:v.machineId,display:names.get(v.machineId)||v.machineName||v.machineId,machineId:v.machineId,reading:hour,unit:'hours',kind:'plant',source:'CheckPlant '+(v.type||'record'),notes:''});
+   }
+   const added=mergeMeterRows(data);
+   status.textContent=plantMachines.length+' CheckPlant machines loaded · '+added.added+' new hours readings from '+recent.size+' latest check/service records. Use Sync hours per machine for full history.';
+  }catch(err){status.textContent=plantMachines.length+' machines loaded. Dated history could not be fetched in bulk: '+err.message+'. Use Sync hours for a machine.'}
+  draw();regStatus.textContent=status.textContent;toast(plantMachines.length+' CheckPlant machines available');
+ }catch(err){
+  status.textContent='CheckPlant machine access failed: '+err.message+'. Permissions may need configuring.';
+  regStatus.textContent=status.textContent;toast('Could not connect to CheckPlant machines');
+ }finally{delete status.dataset.busy;buttons.forEach(b=>b.disabled=false)}
 }
 
 function overallFlags(g){return g.invalid||g.flags?`${g.invalid} unreadable / ${g.flags} flagged`:'No obvious meter errors'}
@@ -487,10 +497,10 @@ function drawMachineRegister(){
  (!filter||(filter==='linked'?linkedFuelSources(m.id).length>0:!linkedFuelSources(m.id).length)));
  const connected=plantMachines.filter(m=>linkedFuelSources(m.id).length>0).length;
  $('cpRegisterCount').textContent=plantMachines.length+' CheckPlant machines · '+connected+' connected';
- const opts=plantFuelCandidates();
+ const opts=plantFuelCandidates(),byMachine=new Map(group(rows).filter(g=>codeKey(g.code).startsWith('CHECKPLANT:')).map(g=>[codeKey(g.code).slice(11),g]));
  $('machineRegisterTable').innerHTML=list.length?list.map(m=>{
   const links=linkedFuelSources(m.id),hours=meters.filter(x=>x.kind==='plant'&&x.machineId===m.id).sort((a,b)=>b.date.localeCompare(a.date));
-  const last=hours[0];
+  const last=hours[0],fuelGroup=byMachine.get(codeKey(m.id)),calc=fuelGroup?efficiency(fuelGroup):null;
   const linked=links.length?links.map(a=>'<span class="badge plant">'+esc(a.source==='PLANT2'?'PLANT2 → '+a.code:'Account '+a.code)+'</span>').join(' '):'<span class="badge unknown">Not linked</span>';
   const options='<option value="">Choose fuel identifier…</option>'+opts.map(o=>'<option value="'+esc(o.key)+'">'+esc(o.label)+'</option>').join('');
   const current=Number(m.currentHours);
@@ -499,11 +509,12 @@ function drawMachineRegister(){
   '<td>'+(Number.isFinite(current)&&current>0?fmt(current,1)+' h':'Not recorded')+
    '<div class="smalltxt">'+hours.length+' dated readings'+(last?' · last '+esc(last.date):'')+'</div></td>'+
   '<td>'+linked+'</td>'+
+  '<td>'+(fuelGroup?litres(fuelGroup.total)+'<div class="smalltxt">'+(calc?.count?fmt(calc.rate,2)+' L/h (indicative)':'Insufficient dated hours')+'</div>':'No linked fuel')+'</td>'+
   '<td><select data-machine-fuel="'+esc(m.id)+'">'+options+'</select></td>'+
   '<td><button class="btn small" data-link-machine="'+esc(m.id)+'">Link</button> '+
   '<button class="btn small light" data-fetch-machine="'+esc(m.id)+'">Sync hours</button>'+
   (links.length?' <button class="btn small light" data-unlink-machine="'+esc(m.id)+'">Unlink</button>':'')+'</td></tr>';
- }).join(''):'<tr><td colspan="6" class="empty">'+(plantMachines.length?'No machines match this search.':'Select Sync all CheckPlant machines to load the register.')+'</td></tr>';
+ }).join(''):'<tr><td colspan="7" class="empty">'+(plantMachines.length?'No machines match this search.':'Select Sync all CheckPlant machines to load the register.')+'</td></tr>';
  $('machineRegisterStatus').textContent=plantMachines.length?plantMachines.length+' machines available · '+connected+' connected · '+meters.filter(m=>m.kind==='plant').length+' dated hour readings saved in this browser':'No CheckPlant machines loaded. Use Sync all CheckPlant machines.';
 }
 function connectMachine(id){
@@ -514,7 +525,9 @@ function connectMachine(id){
  const config=source==='PLANT2'?(mappings[code]||{}):(accountMappings[code]||{});
  const other=config.checkPlantId&&config.checkPlantId!==id?plantMachines.find(m=>m.id===config.checkPlantId)?.name||config.checkPlantId:null;
  if(other&&!confirm('This identifier is linked to '+other+'. Move it to '+machine.name+'?'))return;
- if(config.type&&config.type!=='plant'&&!confirm('Reclassify '+code+' from '+config.type+' to plant machine '+machine.name+'?'))return;
+ const sourceRow=rows.find(r=>source==='PLANT2'?(codeKey(r.driver)==='PLANT2'&&codeKey(r.code)===code):codeKey(r.driver)===code);
+ const existing=sourceRow?rowType(sourceRow):(config.type||'unmapped');
+ if(existing!=='plant'&&!confirm('This identifier is currently '+existing+'. Reclassify '+code+' as plant machine '+machine.name+'?'))return;
  if(source==='PLANT2'){
   mappings[code]={...config,type:'plant',name:config.name||machine.name,registration:'',checkPlantId:id,confirmedAt:new Date().toISOString()};
   try{localStorage.setItem(K_MAP,JSON.stringify(mappings))}catch{toast('Mapping saved for this session only')}
