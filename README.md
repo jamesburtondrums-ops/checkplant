@@ -1,18 +1,15 @@
-# CheckDiesel — GitHub Pages Preview
+# CheckDiesel — GitHub Pages
 
-A mobile-friendly, browser-based dashboard for analysing site diesel dispenser exports.
+**Website:** https://jamesburtondrums-ops.github.io/checkplant/checkdiesel
 
-This **static demonstration is not a shared production database**. Choose Import to load an XLSX or CSV exported from the pump system; usage data and alias overrides remain in your own browser's localStorage and are not included in this public Git repository or uploaded to the site operator. To remove locally imported entries, clear this website's browser storage.
+GitHub Pages serves `checkdiesel/index.html` at `/checkplant/checkdiesel/`, and GitHub may automatically redirect the slashless address to the trailing-slash form.
 
-### Supported features
-- PLANT2 / other dispenser account filters
-- Plant vs road-vehicle vs bowser/transfer splits
-- Asset history and consumption calculations where valid readings are present
-- Confirmed Grab, FLT, Inventhor, Tana Shark, Case 210, JCB 11/12, Tractor, Sheffield and bowser names
-- Grab 6 aliases: GRB6, 3RAB6, G6 and GRAB6
-- Transaction list, charts, quality checks, and responsive layout
+**Publishing source:** `gh-pages` branch, `/(root)`. Configure it in the repository's **Settings → Pages** if Pages is not already enabled.
 
-### Deployment
-GitHub Pages should serve from branch `gh-pages`, folder `/(root)`. If not automatically enabled, select that branch under repository Settings → Pages. The Pages URL should then be `https://jamesburtondrums-ops.github.io/checkplant/`.
+## Privacy
 
-Source development continues on branch `feature/checkdiesel-site-fuel` (PR #2). Firestore security and shared multi-user persistence are **not** implemented on this static GitHub Pages branch.
+This is a **client-side preview**, not a secure central fuel ledger. The repository contains no private diesel transaction records. When you import pump XLSX/CSV records, they remain in the current browser's local storage; classifications are saved there too. Other browsers and users will not see that data automatically. Clearing browser data removes those local records.
+
+Features include a PLANT2/other account split; plant/fleet/bowser allocation; confirmed equipment mappings including `GRB6` and `3RAB6` to Grab 6; asset consumption, fuel transfer and monthly history views; XLSX/CSV import.
+
+The wider CheckDiesel integration remains in PR #2 on branch `feature/checkdiesel-site-fuel`, pending audited server-side login and role-based access.
