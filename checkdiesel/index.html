@@ -88,7 +88,7 @@
 (function(){'use strict';
 const SEED_DATA=/*__SEED__*/null;
 const SEALED_HISTORY={"v":2,"kdf":"PBKDF2-SHA256","iterations":600000,"salt":"Ebhsn18tnQQ/5rRZ5kyIng==","iv":"zpIATvZT98DdhIv2","compressed":"gzip","data":"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","n":323};
-const K_DATA='cd_site_rows_v2',K_MAP='cd_site_map_v2',K_METERS='cd_meters_v1',K_PLANTS='cd_checkplant_machines_v1';const $=id=>document.getElementById(id),n=v=>Number(v)||0,fmt=(v,dp=0)=>n(v).toLocaleString('en-GB',{minimumFractionDigits:dp,maximumFractionDigits:dp}),litres=v=>fmt(v,2)+' L',esc=s=>String(s??'').replace(/[&<>"']/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
+const K_DATA='cd_site_rows_v2',K_MAP='cd_site_map_v2',K_METERS='cd_meters_v1',K_PLANTS='cd_checkplant_machines_v1',K_ACCOUNTS='cd_dispenser_accounts_v1';const $=id=>document.getElementById(id),n=v=>Number(v)||0,fmt=(v,dp=0)=>n(v).toLocaleString('en-GB',{minimumFractionDigits:dp,maximumFractionDigits:dp}),litres=v=>fmt(v,2)+' L',esc=s=>String(s??'').replace(/[&<>"']/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
 const validRead=x=>{const v=Number(x);return Number.isFinite(v)&&v>0&&![999999,888888,777777,666666,555555,444444,333333,222222,111111,123456].includes(v)?v:null};
 const regKey=x=>String(x??'').trim().toUpperCase().replace(/[\s-]+/g,'');
 // UK current AA00AAA and legacy prefix A000AAA formats; not broad, ambiguous vehicle guesses.
@@ -138,8 +138,9 @@ function knownRule(v){const c=canonicalCode(v);let m;
  return named[c]?{...named[c],source:'confirmed'}:null;
 }
 const infer=x=>{x=canonicalCode(x);if(knownRule(x))return knownRule(x).type;if(isReg(x))return 'road';if(/^(CASE|JCB|LOAD|SHOVEL|DIG|EXCAV|TROM|CRUSH|BALER|CAT|TRACTOR|SHRED|HITACHI|KOMATSU)/.test(x))return 'plant';if(/BOW|BULK|TANK|BOWSER|STORE/.test(x))return 'transfer';return 'unmapped'};
-let rows=[],mappings={},meters=[],plantMachines=[],active='overview',pageAssets=1,pageTx=1,openCode=null;let msgT=null;
+let rows=[],mappings={},accountMappings={},meters=[],plantMachines=[],active='overview',pageAssets=1,pageTx=1,openCode=null;let msgT=null;
 try{mappings=JSON.parse(localStorage.getItem(K_MAP)||'{}')}catch{};
+try{accountMappings=JSON.parse(localStorage.getItem(K_ACCOUNTS)||'{}')}catch{};
 try{meters=JSON.parse(localStorage.getItem(K_METERS)||'[]')}catch{};
 try{plantMachines=JSON.parse(localStorage.getItem(K_PLANTS)||'[]')}catch{};
 try{rows=JSON.parse(localStorage.getItem(K_DATA)||'[]')}catch{};
@@ -148,9 +149,59 @@ const stableSort=(a,b)=>a.date.localeCompare(b.date)||a.time.localeCompare(b.tim
 rows.sort(stableSort);
 function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');clearTimeout(msgT);msgT=setTimeout(()=>t.classList.remove('show'),3800)}
 function mapped(code){const raw=codeKey(code);return mappings[raw]||mappings[canonicalCode(raw)]||null}
-function typeOf(code){const c=canonicalCode(code);if(isReg(c))return 'road';return mapped(code)?.type||knownRule(c)?.type||infer(c)}
-function verified(code){return Boolean(isReg(canonicalCode(code))||mapped(code)?.type||knownRule(code))}
-function labelFor(code){const c=canonicalCode(code);if(isReg(c))return c;return mapped(code)?.name||knownRule(c)?.name||c}
+function accountIdentity(account){
+ const acc=codeKey(account),over=accountMappings[acc]||{},regs=knownRegistrations();
+ if(acc==='PLANT2')return {key:'PLANT2',type:'unmapped',name:'Shared PLANT2 account',verified:false};
+ let reg=isReg(over.registration)?regKey(over.registration):null;
+ if(!reg&&isReg(acc))reg=regKey(acc);
+ if(!reg&&/^[A-Z]{3}$/.test(acc)){const opts=regs.filter(r=>r.endsWith(acc));if(opts.length===1)reg=opts[0]}
+ if(!reg&&/^[A-Z]{2}[A-Z]{3}$/.test(acc)){const opts=regs.filter(r=>r.startsWith(acc.slice(0,2))&&r.endsWith(acc.slice(-3)));if(opts.length===1)reg=opts[0]}
+ const type=over.type||'road',key=type==='road'?(reg||'ACCOUNT:'+acc):'ACCOUNT:'+acc;
+ return {key,type,name:reg||over.name||'Fuel account '+acc,account:acc,registration:reg||'',verified:Boolean(reg||over.type),source:'dispenser account'};
+}
+function rowIdentity(r){
+ // DRIVER is the dispenser account in this export; REG. NUMBER may be a person or equipment label.
+ const acc=codeKey(r.driver),raw=codeKey(r.code),override=mappings[raw]||mappings[plantOrTransferAlias(raw)]||null;
+ if(acc!=='PLANT2')return accountIdentity(acc||'(blank)');
+ // Shared PLANT2 account: use the individual identifier to allocate the specific issue.
+ const rule=knownRule(raw);
+ if(override&&override.type==='plant')return {key:plantOrTransferAlias(raw),type:'plant',name:override.name||rule?.name||raw,verified:true,source:'manual PLANT2 allocation'};
+ if(override&&override.type==='transfer')return {key:plantOrTransferAlias(raw),type:'transfer',name:override.name||rule?.name||raw,verified:true,source:'manual PLANT2 allocation'};
+ if(override&&override.type==='unmapped')return {key:'UNRESOLVED:'+raw,type:'unmapped',name:raw,verified:false,source:'manual unresolved'};
+ if(override&&override.type==='road'){
+  const target=isReg(override.registration)?regKey(override.registration):suggestedReg(raw);
+  return {key:target||'VEHICLE:'+raw,type:'road',name:target||override.name||raw,verified:Boolean(target||override.confirmedAt),source:'manual PLANT2 vehicle'};
+ }
+ if(rule&&rule.type!=='road')return {key:plantOrTransferAlias(raw),type:rule.type,name:rule.name,verified:true,source:'plant/transfer rule'};
+ const full=suggestedReg(raw);
+ if(full)return {key:full,type:'road',name:full,verified:true,source:'registration cross-reference'};
+ if(raw&&raw!=='0'&&(accountMappings[raw]||rows.some(x=>codeKey(x.driver)===raw&&codeKey(x.driver)!=='PLANT2'))){
+  const match=accountIdentity(raw);if(match.type==='road')return {...match,source:'account cross-reference on PLANT2'};
+ }
+ return {key:'UNRESOLVED:'+raw,type:'unmapped',name:raw||'Unidentified issue',verified:false,source:'PLANT2 needs mapping'};
+}
+function typeOf(code){
+ const c=codeKey(code);
+ if(c.startsWith('ACCOUNT:'))return accountIdentity(c.slice(8)).type;
+ if(c.startsWith('UNRESOLVED:'))return 'unmapped';
+ if(c.startsWith('VEHICLE:'))return 'road';
+ return mapped(c)?.type|| (isReg(canonicalCode(c))?'road':knownRule(c)?.type||infer(c));
+}
+function verified(code){
+ const c=codeKey(code);
+ if(c.startsWith('ACCOUNT:'))return accountIdentity(c.slice(8)).verified;
+ if(c.startsWith('UNRESOLVED:'))return false;
+ if(c.startsWith('VEHICLE:'))return Boolean(mappings[c.slice(8)]?.type==='road');
+ return Boolean(isReg(canonicalCode(c))||(mapped(c)?.type&&mapped(c)?.type!=='unmapped')||knownRule(c));
+}
+function labelFor(code){
+ const c=codeKey(code);
+ if(c.startsWith('ACCOUNT:'))return accountIdentity(c.slice(8)).name;
+ if(c.startsWith('UNRESOLVED:'))return 'Unallocated: '+c.slice(11);
+ if(c.startsWith('VEHICLE:'))return mappings[c.slice(8)]?.name||'Vehicle: '+c.slice(8);
+ const canonical=canonicalCode(c);return isReg(canonical)?canonical:mapped(c)?.name||knownRule(canonical)?.name||canonical;
+}
+function rowType(r){return rowIdentity(r).type}
 function badge(code){const t=typeOf(code);return '<span class="badge '+(t==='road'?'road':t==='plant'?'plant':t==='transfer'?'transfer':'unknown')+'">'+({road:'Road vehicle',plant:'Plant machinery',transfer:'Bowser / transfer',unmapped:'Unclassified'}[t])+(verified(code)?' ✓':' ?')+'</span>'}
 function filters(){return {accountGroup:$('filterAccountGroup').value,q:$('filterText').value.trim().toUpperCase(),a:$('dateFrom').value,b:$('dateTo').value,type:$('filterClass').value,driver:$('filterDriver').value}}
 function visible(){const f=filters();return rows.filter(r=>(!f.accountGroup||(f.accountGroup==='plant2'?r.driver.toUpperCase()==='PLANT2':r.driver.toUpperCase()!=='PLANT2'))&&(!f.a||r.date>=f.a)&&(!f.b||r.date<=f.b)&&(!f.type||typeOf(r.code)===f.type)&&(!f.driver||r.driver===f.driver)&&(!f.q||[r.code,canonicalCode(r.code),r.driver,labelFor(r.code),String(r.reading),String(r.unit)].join(' ').toUpperCase().includes(f.q)))}
