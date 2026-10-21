@@ -151,9 +151,138 @@ function badge(code){const t=typeOf(code);return '<span class="badge '+(t==='roa
 function filters(){return {accountGroup:$('filterAccountGroup').value,q:$('filterText').value.trim().toUpperCase(),a:$('dateFrom').value,b:$('dateTo').value,type:$('filterClass').value,driver:$('filterDriver').value}}
 function visible(){const f=filters();return rows.filter(r=>(!f.accountGroup||(f.accountGroup==='plant2'?r.driver.toUpperCase()==='PLANT2':r.driver.toUpperCase()!=='PLANT2'))&&(!f.a||r.date>=f.a)&&(!f.b||r.date<=f.b)&&(!f.type||typeOf(r.code)===f.type)&&(!f.driver||r.driver===f.driver)&&(!f.q||[r.code,canonicalCode(r.code),r.driver,labelFor(r.code),String(r.reading),String(r.unit)].join(' ').toUpperCase().includes(f.q)))}
 function group(data){const mp=new Map();for(const r of data){const groupCode=canonicalCode(r.code);let it=mp.get(groupCode);if(!it){it={code:groupCode,count:0,total:0,invalid:0,flags:0,events:[]};mp.set(groupCode,it)}it.count++;it.total+=r.litres;it.events.push(r);if(validRead(r.reading)===null)it.invalid++;if(r.issues?.length)it.flags++}return [...mp.values()].sort((a,b)=>b.total-a.total)}
+
+function saveMeterStore(){try{localStorage.setItem(K_METERS,JSON.stringify(meters));return true}catch(e){toast('Browser storage is full; meter data is only available this session');return false}}
+function meterIdentity(m){return [m.kind,m.asset,m.date,m.reading,m.unit].join('|')}
+function mergeMeterRows(next){
+ const keys=new Set(meters.map(meterIdentity));let added=0,skipped=0,invalid=0;
+ for(const m of next){if(!m.asset||!m.date||!Number.isFinite(Number(m.reading))||Number(m.reading)<=0){invalid++;continue}
+  const k=meterIdentity(m);if(keys.has(k)){skipped++;continue}
+  meters.push(m);keys.add(k);added++;
+ }
+ meters.sort((a,b)=>a.date.localeCompare(b.date));saveMeterStore();return {added,skipped,invalid}
+}
+function machineForCode(code){
+ const canonical=canonicalCode(code),mappedId=mappings[codeKey(code)]?.checkPlantId||mappings[canonical]?.checkPlantId;
+ if(mappedId)return plantMachines.find(m=>m.id===mappedId)||null;
+ const matches=plantMachines.filter(m=>[m.name,m.serialNumber,m.id].some(v=>codeKey(v)===codeKey(canonical)));
+ return matches.length===1?matches[0]:null;
+}
+function readingHistory(code,kind){
+ const asset=canonicalCode(code),linked=kind==='plant'?machineForCode(code):null;
+ return meters.filter(m=>m.kind===kind&&(kind==='road'?canonicalCode(m.asset)===asset:
+   ((linked&&m.machineId===linked.id)||(!m.machineId&&canonicalCode(m.asset)===asset))))
+ .sort((a,b)=>a.date.localeCompare(b.date)||a.reading-b.reading);
+}
+function meterHistoryRate(g){
+ const kind=typeOf(g.code);if(!['road','plant'].includes(kind))return null;
+ const all=readingHistory(g.code,kind);if(all.length<2)return null;
+ const fills=g.events.slice().sort(stableSort);if(!fills.length)return null;
+ let consumed=0,distance=0,pairs=0,bad=0;
+ for(let i=1;i<all.length;i++){
+  const a=all[i-1],b=all[i],t1=Date.parse(a.date),t2=Date.parse(b.date),days=Math.max(1,Math.ceil((t2-t1)/86400000));
+  if(t2<=t1){bad++;continue}
+  let start=Number(a.reading),end=Number(b.reading);
+  if(kind==='road'){if(a.unit!==b.unit){if(a.unit==='km')start/=1.609344;if(b.unit==='km')end/=1.609344}else if(a.unit==='km'){start/=1.609344;end/=1.609344}}
+  const span=end-start;
+  if(span<=0||span>(kind==='plant'?24*days:1200*days)){bad++;continue}
+  const used=fills.filter(f=>f.date>a.date&&f.date<=b.date).reduce((sum,r)=>sum+Number(r.litres||0),0);
+  if(used<=0)continue;
+  distance+=span;consumed+=used;pairs++;
+ }
+ if(!pairs||distance<=0||consumed<=0)return {count:0,invalid:bad,method:'history'};
+ if(kind==='road'){const km=distance*1.609344;return {count:pairs,invalid:bad,metres:distance,unit:'mi',rate:consumed/distance,mpg:distance*4.54609/consumed,l100:consumed*100/km,covered:consumed,method:'mileage'}}
+ return {count:pairs,invalid:bad,metres:distance,unit:'hours',rate:consumed/distance,covered:consumed,method:'CheckPlant hours'}
+}
+function drawMeterHistory(){
+ const all=meters.slice().sort((a,b)=>b.date.localeCompare(a.date)),road=all.filter(m=>m.kind==='road'),plant=all.filter(m=>m.kind==='plant');
+ $('mileageStatus').textContent=road.length+' dated vehicle readings in this browser';
+ if(!$('checkplantStatus').dataset.busy)$('checkplantStatus').textContent=plant.length+' dated engine-hour readings · '+plantMachines.length+' CheckPlant machines on file';
+ const rows=all.slice(0,250);
+ $('meterTable').innerHTML=rows.length?rows.map(m=>{
+ const conflict=all.some(z=>z!==m&&z.kind===m.kind&&z.asset===m.asset&&z.date===m.date&&Number(z.reading)!==Number(m.reading));
+ return '<tr><td>'+esc(m.date)+'</td><td>'+esc(m.source)+'</td><td>'+esc(m.display||m.asset)+'</td><td>'+fmt(m.reading,1)+'</td><td>'+esc(m.unit)+'</td><td>'+(conflict?'<span class="badge flag">Conflicting readings</span>':'<span class="badge verified">Saved</span>')+'</td></tr>';
+ }).join(''):'<tr><td colspan="6" class="empty">No mileage or hours history imported yet. Use the import options above.</td></tr>';
+}
+function historyMatrix(matrix,kind,source){
+ const names=matrix.map(row=>row.map(v=>String(v??'').trim().toLowerCase().replace(/[^a-z0-9]+/g,'')));
+ const synonyms=kind==='road'?{date:['date','readingdate','recorddate','checkdate'],id:['registration','reg','regnumber','vehiclereg','vehicle','vehicleid','registrationnumber'],meter:['odometer','mileage','miles','reading','meter','odometerreading'],unit:['unit','distanceunit','readingunit'],notes:['notes','note','comments']}
+ :{date:['date','readingdate','recorddate','checkdate'],id:['machineid','machine','machinename','plantid','asset','assetname','equipment','equipmentid'],meter:['hoursreading','enginehours','hourmeter','hours','operatinghours','reading'],unit:['unit'],notes:['notes','note','comments']};
+ const headerIndex=names.findIndex(c=>synonyms.date.some(k=>c.includes(k))&&synonyms.id.some(k=>c.includes(k))&&synonyms.meter.some(k=>c.includes(k)));
+ if(headerIndex<0)throw Error('Missing required Date, '+(kind==='road'?'Registration, Odometer':'Machine/ID, Hours Reading')+' columns');
+ const head=names[headerIndex],pick=arr=>head.findIndex(c=>arr.some(k=>c===k)),iDate=pick(synonyms.date),iId=pick(synonyms.id),iMeter=pick(synonyms.meter),iUnit=pick(synonyms.unit),iNotes=pick(synonyms.notes);
+ if([iDate,iId,iMeter].some(i=>i<0))throw Error('Required reading columns not found');
+ const result=[];let invalid=0,ambiguous=0;
+ for(const row of matrix.slice(headerIndex+1)){
+  const date=cleanDate(row[iDate]),raw=codeKey(row[iId]),meter=Number(String(row[iMeter]??'').replace(/,/g,'')),
+  unitRaw=iUnit>=0?codeKey(row[iUnit]):'',unit=kind==='plant'?'hours':(/KM|KILOM/.test(unitRaw)?'km':'mi');
+  if(!raw||!date||!Number.isFinite(meter)||meter<=0){invalid++;continue}
+  const asset=kind==='road'?(isReg(raw)?regKey(raw):suggestedReg(raw)):(plantMachines.find(m=>m.id===raw)?.name||raw);
+  if(kind==='road'&&!asset){ambiguous++;continue}
+  const machine=kind==='plant'?plantMachines.find(m=>m.id===raw||codeKey(m.name)===raw||codeKey(m.serialNumber)===raw):null;
+  result.push({date,asset:kind==='road'?asset:machine?machine.id:raw,display:kind==='road'?asset:machine?machine.name:raw,machineId:machine?.id||'',reading:meter,unit,kind,source,notes:iNotes>=0?String(row[iNotes]??'').slice(0,250):''});
+ }
+ return {result,invalid,ambiguous};
+}
+async function importHistoryFile(file,kind){
+ if(!file)throw Error('Select a mileage or hours XLSX/CSV file');
+ if(file.size>20000000)throw Error('File too large (20MB maximum)');
+ const matrix=/\.csv$/i.test(file.name)?parseCSV(await file.text()):/\.xlsx$/i.test(file.name)?await parseXLSX(file):null;
+ if(!matrix)throw Error('Use XLSX or CSV');
+ const parsed=historyMatrix(matrix,kind,'Imported: '+file.name);
+ if(!parsed.result.length)throw Error('No valid readings. '+parsed.ambiguous+' vehicle registrations could not be uniquely identified.');
+ if(!confirm('Add '+parsed.result.length+' '+(kind==='road'?'mileage':'engine-hour')+' readings? '+parsed.ambiguous+' ambiguous registrations and '+parsed.invalid+' invalid lines will be skipped.'))return;
+ const added=mergeMeterRows(parsed.result);draw();toast(added.added+' readings added · '+added.skipped+' duplicates skipped · '+parsed.ambiguous+' unmatched registrations');
+}
+function csvTemplate(kind){
+ const rows=kind==='road'?[['Date','Registration','Odometer','Unit','Notes'],['20/10/2026','LT23BFU','123450','mi','Example only']]:[['Date','Machine ID','Hours Reading','Notes'],['20/10/2026','CASE210','8765.5','Example only']];
+ const quote=v=>'"'+String(v).replace(/"/g,'""')+'"';
+ const data=rows.map(r=>r.map(quote).join(',')).join('\r\n');
+ const blob=new Blob(['\ufeff'+data],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=kind==='road'?'CheckDiesel_Mileage_Template.csv':'CheckDiesel_CheckPlant_Hours_Template.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function exportReadings(){
+ const quote=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+ const lines=[['Date','Asset','Reading','Unit','Kind','Source','Machine ID','Notes'].map(quote).join(',')].concat(meters.map(m=>[m.date,m.display||m.asset,m.reading,m.unit,m.kind,m.source,m.machineId||'',m.notes||''].map(quote).join(',')));
+ const blob=new Blob(['\ufeff'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='CheckDiesel_Meter_History.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function getCheckPlantDB(){
+ return new Promise(async(resolve,reject)=>{
+  try{
+   const getScript=url=>new Promise((yes,no)=>{const s=document.createElement('script');s.src=url;s.onload=yes;s.onerror=()=>no(Error('Could not load CheckPlant connection library'));document.head.append(s)});
+   if(!window.firebase)await getScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js');
+   if(!firebase.firestore)await getScript('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js');
+   const config={apiKey:'AIzaSyD60Z04IRIvv-EaSyPzoA33fEQ3yT6wsQQ',authDomain:'checkplant-kcm.firebaseapp.com',projectId:'checkplant-kcm',storageBucket:'checkplant-kcm.firebasestorage.app',messagingSenderId:'492245064396',appId:'1:492245064396:web:c79e64b32b9856766bc069'};
+   const app=firebase.apps.find(a=>a.name==='checkdiesel-readonly')||firebase.initializeApp(config,'checkdiesel-readonly');
+   resolve(app.firestore());
+  }catch(e){reject(e)}
+ });
+}
+async function syncCheckPlant(){
+ const btn=$('checkplantSync'),status=$('checkplantStatus');btn.disabled=true;status.dataset.busy='1';status.textContent='Connecting to CheckPlant to read available machines and dated check records…';
+ try{
+  const db=await getCheckPlantDB();
+  const machines=await db.collection('machines').get();
+  plantMachines=machines.docs.map(d=>({id:d.id,name:String(d.data().name||d.id),serialNumber:String(d.data().serialNumber||''),branch:String(d.data().branch||'')}));
+  try{localStorage.setItem(K_PLANTS,JSON.stringify(plantMachines))}catch{}
+  // Dated records only. Do not infer historical dates from currentHours.
+  const records=await db.collection('records').orderBy('date','desc').limit(5000).get();
+  const data=[];for(const d of records.docs){
+   const rec=d.data(),date=cleanDate(rec.date),hour=Number(rec.hoursReading);
+   if(!rec.machineId||!date||rec.hoursReading===null||rec.hoursReading===''||!Number.isFinite(hour)||hour<=0)continue;
+   const machine=plantMachines.find(m=>m.id===rec.machineId);
+   data.push({date,asset:rec.machineId,display:machine?.name||rec.machineName||rec.machineId,machineId:rec.machineId,reading:hour,unit:'hours',kind:'plant',source:'CheckPlant dated check',notes:''});
+  }
+  const result=mergeMeterRows(data);
+  status.textContent='Read '+plantMachines.length+' machines and '+records.size+' recent checks (latest 5,000 maximum). '+result.added+' new dated hours readings. Earlier historical checks may require an export.';
+  draw();toast('CheckPlant hours imported. Assign machine links in Asset Mapping.');
+ }catch(e){status.textContent='CheckPlant connection unavailable: '+e.message+'. Import a dated hours spreadsheet instead.';toast('Could not read CheckPlant; the original CheckPlant website was not changed.')}
+ finally{delete status.dataset.busy;btn.disabled=false}
+}
+
 function overallFlags(g){return g.invalid||g.flags?`${g.invalid} unreadable / ${g.flags} flagged`:'No obvious meter errors'}
-function efficiency(g){if(!verified(g.code)||!['road','plant'].includes(typeOf(g.code)))return null;const events=g.events.slice().sort(stableSort);let last=null,lastDate='',covered=0,metres=0,count=0,invalid=0,litreBucket=0;for(const e of events){litreBucket+=e.litres;const meter=validRead(e.reading);if(meter===null){invalid++;continue}if(last===null){last=meter;lastDate=e.date;litreBucket=0;continue}const diff=meter-last,days=Math.max(1,Math.ceil((Date.parse(e.date)-Date.parse(lastDate))/86400000)),max=typeOf(g.code)==='plant'?24*days:1500*days;if(diff>0&&diff<=max){metres+=diff;covered+=litreBucket;count++;last=meter;lastDate=e.date;litreBucket=0}else{invalid++;if(diff>max){last=meter;lastDate=e.date;litreBucket=0}}}
+function dispenserEfficiency(g){if(!verified(g.code)||!['road','plant'].includes(typeOf(g.code)))return null;const events=g.events.slice().sort(stableSort);let last=null,lastDate='',covered=0,metres=0,count=0,invalid=0,litreBucket=0;for(const e of events){litreBucket+=e.litres;const meter=validRead(e.reading);if(meter===null){invalid++;continue}if(last===null){last=meter;lastDate=e.date;litreBucket=0;continue}const diff=meter-last,days=Math.max(1,Math.ceil((Date.parse(e.date)-Date.parse(lastDate))/86400000)),max=typeOf(g.code)==='plant'?24*days:1500*days;if(diff>0&&diff<=max){metres+=diff;covered+=litreBucket;count++;last=meter;lastDate=e.date;litreBucket=0}else{invalid++;if(diff>max){last=meter;lastDate=e.date;litreBucket=0}}}
 if(!count||!metres||!covered)return {count:0,invalid};const typ=typeOf(g.code);const unit=mappings[g.code]?.unit||'mi';let mpg=null,l100=null;if(typ==='road'){const miles=unit==='km'?metres/1.609344:metres;const km=unit==='km'?metres:metres*1.609344;mpg=miles*4.54609/covered;l100=covered*100/km}return {count,invalid,metres,unit,rate:covered/metres,mpg,l100,covered}}
+function efficiency(g){const historic=meterHistoryRate(g);return historic?.count?historic:dispenserEfficiency(g)}
 function filterSetup(){const old=$('filterDriver').value;const drivers=[...new Set(rows.map(x=>x.driver).filter(Boolean))].sort();$('filterDriver').innerHTML='<option value="">All accounts</option>'+drivers.map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join('');$('filterDriver').value=drivers.includes(old)?old:'';if(rows.length){$('dateFrom').value=$('dateFrom').value||rows[0].date;$('dateTo').value=$('dateTo').value||rows[rows.length-1].date}showStatus()}
 function showStatus(){const filtered=visible();$('filterCount').textContent='Showing '+fmt(filtered.length)+' of '+fmt(rows.length)+' records';$('dataDot').classList.toggle('warn',!rows.length);$('dataStatus').textContent=rows.length?'Data loaded · '+fmt(rows.length)+' transactions · '+fmt(group(rows).length)+' identifiers':'No records loaded · Import a dispenser export';$('navNeeds').textContent=fmt(group(rows).filter(needsReview).length)}
 function needsReview(g){return !verified(g.code)||g.events.some(r=>(r.issues||[]).some(i=>/Large dispense|Unknown identifier/.test(i)))||(typeOf(g.code)==='road'&&g.invalid>0)}
@@ -185,7 +314,7 @@ function drawMappings(){
   return '<tr data-code="'+esc(code)+'"><td><button class="linklike" data-asset="'+esc(alias)+'">'+esc(code)+'</button>'+(alias!==code?'<div class="smalltxt">Groups under '+esc(alias)+'</div>':'')+'</td><td>'+esc(({road:'Possible road',plant:'Possible plant',transfer:'Possible bowser',unmapped:'Not known'})[infer(code)])+'</td><td>'+litres(g.total)+'</td><td><select class="row-select" data-map-type="'+esc(code)+'"><option value="unmapped" '+(t==='unmapped'?'selected':'')+'>Unclassified</option><option value="road" '+(t==='road'?'selected':'')+'>Road vehicle</option><option value="plant" '+(t==='plant'?'selected':'')+'>Plant machinery</option><option value="transfer" '+(t==='transfer'?'selected':'')+'>Bowser / transfer</option></select></td><td><input class="row-name" data-map-name="'+esc(code)+'" value="'+esc(map.name||rule?.name||'')+'" placeholder="Optional asset name"></td><td><select data-map-reg="'+esc(code)+'"'+locked+'>'+regOptions+'</select></td><td><button class="btn small light" data-save="'+esc(code)+'">Save</button></td></tr>';
  }).join('')||'<tr><td colspan="7" class="empty">Unlock the October records or import your fuel export to begin.</td></tr>';
 }
-function draw(){const data=visible();showStatus();drawOverview(data);drawTypes(data);drawAccounts(data);drawTransfers(data);drawReview(data);drawTx(data);drawMappings()}
+function draw(){const data=visible();showStatus();drawOverview(data);drawTypes(data);drawAccounts(data);drawTransfers(data);drawReview(data);drawTx(data);drawMappings();drawMeterHistory()}
 function navigate(view){active=view;document.querySelectorAll('[data-view]').forEach(x=>x.classList.toggle('active',x.dataset.view===view));document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id==='view-'+view));let name={overview:'Fuel overview',fleet:'Road vehicle efficiency',plant:'Plant machinery efficiency',accounts:'Dispenser accounts',transfers:'Transfers & bowsers',unmapped:'Needs review',transactions:'All fuel dispenses',mapping:'Asset mapping',meterhistory:'Mileage & engine hours',import:'Import dispenser data'};$('pageTitle').textContent=name[view]||name.overview;$('pageSubtitle').textContent={overview:'Your entire site fuel usage at a glance',fleet:'Consumption, MPG and vehicle performance',plant:'Engine-hour efficiency and machine-level usage',accounts:'Compare PLANT2 with the fleet and other fuel accounts',transfers:'Sheffield branch and Shires/emergency fuel movements',unmapped:'Investigate unclassified assets and suspect meter readings',transactions:'Search the complete dispenser audit trail',mapping:'Manually separate PLANT2 machinery and road vehicles, with CheckPlant links',meterhistory:'Import road mileage and read dated CheckPlant engine hours',import:'Bring dispenser exports straight into your dashboard'}[view];$('sidebar').classList.remove('open');window.scrollTo(0,0)}
 function drawer(code){openCode=code;const g=group(rows.filter(r=>canonicalCode(r.code)===canonicalCode(code)))[0];if(!g)return;const vis=group(visible().filter(r=>canonicalCode(r.code)===canonicalCode(code)))[0]||g;const e=efficiency(g);$('drawerTitle').textContent=labelFor(code);$('drawerSub').textContent=(isReg(canonicalCode(code))?'Vehicle registration':'Dispenser asset')+' · '+canonicalCode(code)+(knownRule(code)?.destination?' · '+knownRule(code).destination:'')+' · Source identifiers: '+[...new Set(g.events.map(r=>codeKey(r.code)))].join(', ');$('drawerBadge').innerHTML=badge(code);const ev=g.events.slice().reverse();$('drawerInner').innerHTML='<div class="drawer-cards"><div class="microcard"><span>Litres issued (all time)</span><strong>'+litres(g.total)+'</strong></div><div class="microcard"><span>Total dispenses</span><strong>'+fmt(g.count)+'</strong></div><div class="microcard"><span>Invalid meter readings</span><strong>'+fmt(g.invalid)+'</strong></div><div class="microcard"><span>Indicative efficiency</span><strong>'+(e?.count?(typeOf(code)==='road'?fmt(e.mpg,1)+' MPG':fmt(e.rate,2)+' L/h'):'Not available')+'</strong></div></div><div class="tip">'+(verified(code)?'Asset category confirmed in this browser.':'Type not confirmed. Confirm this asset in Asset Mapping to unlock indicative efficiency.')+' Meter readings are not enough to prove actual fuel consumption without complete fill records.</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn small" data-map="'+esc(code)+'">Edit classification</button><span style="color:#8592a1;font-size:12px;align-self:center">'+fmt(vis.count)+' dispenses in current filters</span></div><h3>Recent refuelling transactions</h3><div class="tablebox"><table class="datagrid"><thead><tr><th>Date</th><th>Litres</th><th>Meter</th><th>Account</th><th>Quality</th></tr></thead><tbody>'+ev.slice(0,60).map(r=>'<tr><td>'+r.date+'<div class="smalltxt">'+esc(r.time)+'</div></td><td>'+litres(r.litres)+'</td><td>'+esc(r.reading)+'</td><td>'+esc(r.driver)+'</td><td>'+(r.issues?.length?'<span class="badge flag">'+r.issues.length+' flag(s)</span>':'—')+'</td></tr>').join('')+'</tbody></table></div>'; $('assetModal').classList.add('open')}
 function saveMap(code){
