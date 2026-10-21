@@ -54,7 +54,7 @@ const validRead=x=>{const v=Number(x);return Number.isFinite(v)&&v>0&&![999999,8
 const isReg=x=>/^[A-Z]{2}\d{2}\s?[A-Z]{3}$/.test(String(x).trim().toUpperCase());
 const codeKey=x=>String(x??'').trim().toUpperCase().replace(/\s+/g,' ');
 // User-confirmed aliases; keep the source value on each transaction intact.
-function canonicalCode(v){const c=codeKey(v);let m;if((m=c.match(/^G\s*(\d+)$/))||(m=c.match(/^GRAB\s*(\d+)$/)))return 'GRAB'+Number(m[1]);if(m=c.match(/^FT\s*(\d+)$/))return 'FLT'+Number(m[1]);if(c==='TRACT')return 'TRACTOR';return c}
+function canonicalCode(v){const c=codeKey(v);let m;if(c==='GRB6'||c==='3RAB6')return 'GRAB6';if((m=c.match(/^G\s*(\d+)$/))||(m=c.match(/^GRAB\s*(\d+)$/)))return 'GRAB'+Number(m[1]);if(m=c.match(/^FT\s*(\d+)$/))return 'FLT'+Number(m[1]);if(c==='TRACT')return 'TRACTOR';return c}
 function knownRule(v){const c=canonicalCode(v);let m;
  if(m=c.match(/^GRAB(\d+)$/))return {type:'plant',name:'Grab '+Number(m[1]),kind:'Grab',source:'confirmed'};
  if(m=c.match(/^FLT(\d+)$/))return {type:'plant',name:'FLT '+Number(m[1]),kind:'Forklift truck',source:'confirmed'};
