@@ -267,14 +267,20 @@ function visible(){const f=filters();return rows.filter(r=>(!f.accountGroup||(f.
 function group(data){const mp=new Map();for(const r of data){const info=rowIdentity(r),groupCode=info.key;let it=mp.get(groupCode);if(!it){it={code:groupCode,count:0,total:0,invalid:0,flags:0,events:[],sourceAccounts:new Set(),rawCodes:new Set()};mp.set(groupCode,it)}it.count++;it.total+=r.litres;it.events.push(r);it.sourceAccounts.add(codeKey(r.driver));it.rawCodes.add(codeKey(r.code));if(validRead(r.reading)===null)it.invalid++;if(r.issues?.length)it.flags++}return [...mp.values()].sort((a,b)=>b.total-a.total)}
 
 function saveMeterStore(){try{localStorage.setItem(K_METERS,JSON.stringify(meters));return true}catch(e){toast('Browser storage is full; meter data is only available this session');return false}}
-function meterIdentity(m){return [m.kind,m.asset,m.date,m.reading,m.unit].join('|')}
+function meterIdentity(m){return [m.kind,m.machineId||m.asset,m.date,m.reading,m.unit].join('|')}
 function mergeMeterRows(next){
- const keys=new Set(meters.map(meterIdentity));let added=0,skipped=0,invalid=0;
+ const index=new Map(meters.map(m=>[meterIdentity(m),m]));let added=0,skipped=0,invalid=0,upgraded=0;
  for(const m of next){if(!m.asset||!m.date||!Number.isFinite(Number(m.reading))||Number(m.reading)<=0){invalid++;continue}
-  const k=meterIdentity(m);if(keys.has(k)){skipped++;continue}
-  meters.push(m);keys.add(k);added++;
+  const k=meterIdentity(m),existing=index.get(k);if(existing){
+   skipped++;
+   if(m.checkType==='check'&&(existing.checkType!=='check'||(!existing.checkedAt&&m.checkedAt))){
+    existing.checkType='check';existing.source=m.source;existing.checkedAt=m.checkedAt||existing.checkedAt||'';existing.checkId=m.checkId||existing.checkId||'';upgraded++;
+   }
+   continue
+  }
+  meters.push(m);index.set(k,m);added++;
  }
- meters.sort((a,b)=>a.date.localeCompare(b.date));saveMeterStore();return {added,skipped,invalid}
+ meters.sort((a,b)=>a.date.localeCompare(b.date));saveMeterStore();return {added,skipped,invalid,upgraded}
 }
 function machineForCode(code){
  const original=codeKey(code);
@@ -291,8 +297,75 @@ function readingHistory(code,kind,rawCodes=[]){
    ((linked&&m.machineId===linked.id)||(!m.machineId&&aliases.has(canonicalCode(m.asset))))))
  .sort((a,b)=>a.date.localeCompare(b.date)||a.reading-b.reading);
 }
+function dailyCheckReading(m){
+ // CheckPlant inspections/services do not substitute for the daily check.
+ const source=String(m.source||'').toLowerCase(),kind=String(m.checkType||'').toLowerCase();
+ return m.kind==='plant'&&(kind==='check'||(!kind&&(/checkplant check|imported daily check|^imported:/.test(source))));
+}
+function latestCheckAtFill(history,fill){
+ const day=fill.date,fillAt=Date.parse(day+'T'+(fill.time||'00:00')+':00'),
+ candidates=history.filter(m=>{
+  if(!dailyCheckReading(m)||m.date>day)return false;
+  const age=Math.round((Date.parse(day+'T00:00:00')-Date.parse(m.date+'T00:00:00'))/86400000);
+  if(age<0||age>2)return false;
+  // When check completion time is recorded, do not use a check done after fuelling.
+  if(m.checkedAt&&m.date===day){
+   const t=Date.parse(m.checkedAt);if(Number.isFinite(t)&&t>fillAt)return false;
+  }
+  return true;
+ });
+ if(!candidates.length)return null;
+ const mostRecent=candidates.reduce((latest,m)=>m.date>latest?m.date:latest,'');
+ const sameDay=candidates.filter(m=>m.date===mostRecent);
+ // Prefer the most recent timestamped check before the fill; undated checks
+ // with conflicting engine hours cannot establish a trustworthy snapshot.
+ const dated=sameDay.filter(m=>m.checkedAt&&Number.isFinite(Date.parse(m.checkedAt)))
+ .sort((a,b)=>Date.parse(b.checkedAt)-Date.parse(a.checkedAt));
+ if(dated.length){
+  const newest=Date.parse(dated[0].checkedAt);
+  const tied=dated.filter(m=>Date.parse(m.checkedAt)===newest);
+  if(new Set(tied.map(m=>Number(m.reading))).size>1)return null;
+  return {...dated[0],approximate:false};
+ }
+ if(new Set(sameDay.map(m=>Number(m.reading))).size!==1)return null;
+ return {...sameDay[0],approximate:true};
+}
+function plantFillIntervals(g){
+ if(typeOf(g.code)!=='plant'||!g.events?.some(r=>sourceAccount(r)==='PLANT2'))return null;
+ const machine=machineForCode(g.code)||g.events.map(r=>machineForCode(r.code)).find(Boolean);
+ const method='CheckPlant daily check → next refuel';
+ if(!machine)return {count:0,invalid:0,method,reason:'Link this PLANT2 asset to its CheckPlant machine to measure daily-check hours at refuels',intervals:[],checksMatched:0};
+ const history=readingHistory(g.code,'plant',g.events.map(r=>r.code)).filter(dailyCheckReading);
+ const fills=g.events.slice().sort(stableSort);
+ const measured=fills.map(fill=>({fill,check:latestCheckAtFill(history,fill)}));
+ let used=0,hours=0,count=0,invalid=0,estimated=0;const intervals=[];
+ for(let i=1;i<measured.length;i++){
+  const first=measured[i-1],last=measured[i],f=last.fill,start=first.check,end=last.check;
+  const result={date:f.date,time:f.time,previous:first.fill.date,litres:Number(f.litres)||0,
+   startHours:start?Number(start.reading):null,endHours:end?Number(end.reading):null,
+   hours:null,rate:null,checkDate:start?.date||'',nextCheckDate:end?.date||'',quality:'',approximate:Boolean(start?.approximate||end?.approximate)};
+  if(!start||!end){result.quality='Missing or ambiguous daily check';invalid++}
+  else{
+   const diff=Number(end.reading)-Number(start.reading),
+    daySpan=Math.max(1,Math.ceil((Date.parse(last.fill.date)-Date.parse(first.fill.date))/86400000)),
+    max=24*(daySpan+1);
+   if(diff<=0){result.quality='Non-increasing machine hours';invalid++}
+   else if(diff>max){result.quality='Implausible increase in hours';invalid++}
+   else if(result.litres<=0){result.quality='Invalid fuel quantity';invalid++}
+   else{
+    result.hours=diff;result.rate=result.litres/diff;result.quality=result.approximate?'Daily-check date only · indicative':'Timed daily check · indicative';
+    used+=result.litres;hours+=diff;count++;if(result.approximate)estimated++;
+   }
+  }
+  intervals.push(result);
+ }
+ return {count,invalid,method,intervals,checksMatched:measured.filter(x=>x.check).length,estimated,
+  machineId:machine.id,metres:hours,unit:'hours',rate:count?used/hours:null,covered:used,
+  reason:count?'':fills.length<2?'At least two refuels are needed':history.length?'No consecutive refuels have valid increasing CheckPlant daily-check hours':'No dated daily-check hours have been loaded for this machine'};
+}
 function meterHistoryRate(g){
  const kind=typeOf(g.code);if(!['road','plant'].includes(kind))return null;
+ if(kind==='plant'&&g.events.some(r=>sourceAccount(r)==='PLANT2'))return plantFillIntervals(g);
  const all=readingHistory(g.code,kind,g.events.map(r=>r.code));if(all.length<2)return null;
  const fills=g.events.slice().sort(stableSort);if(!fills.length)return null;
  let consumed=0,distance=0,pairs=0,bad=0;
@@ -309,8 +382,9 @@ function meterHistoryRate(g){
  }
  if(!pairs||distance<=0||consumed<=0)return {count:0,invalid:bad,method:'history'};
  if(kind==='road'){const km=distance*1.609344;return {count:pairs,invalid:bad,metres:distance,unit:'mi',rate:consumed/distance,mpg:distance*4.54609/consumed,l100:consumed*100/km,covered:consumed,method:'mileage'}}
- return {count:pairs,invalid:bad,metres:distance,unit:'hours',rate:consumed/distance,covered:consumed,method:'CheckPlant hours'}
+ return {count:pairs,invalid:bad,metres:distance,unit:'hours',rate:consumed/distance,covered:consumed,method:'meter history'}
 }
+
 function drawMeterHistory(){
  const all=meters.slice().sort((a,b)=>b.date.localeCompare(a.date)),road=all.filter(m=>m.kind==='road'),plant=all.filter(m=>m.kind==='plant');
  $('mileageStatus').textContent=road.length+' dated vehicle readings in this browser';
@@ -413,7 +487,7 @@ async function syncCheckPlant(){
 function overallFlags(g){return g.invalid||g.flags?`${g.invalid} unreadable / ${g.flags} flagged`:'No obvious meter errors'}
 function dispenserEfficiency(g){if(!verified(g.code)||!['road','plant'].includes(typeOf(g.code)))return null;const events=g.events.slice().sort(stableSort);let last=null,lastDate='',covered=0,metres=0,count=0,invalid=0,litreBucket=0;for(const e of events){litreBucket+=e.litres;const meter=validRead(e.reading);if(meter===null){invalid++;continue}if(last===null){last=meter;lastDate=e.date;litreBucket=0;continue}const diff=meter-last,days=Math.max(1,Math.ceil((Date.parse(e.date)-Date.parse(lastDate))/86400000)),max=typeOf(g.code)==='plant'?24*days:1500*days;if(diff>0&&diff<=max){metres+=diff;covered+=litreBucket;count++;last=meter;lastDate=e.date;litreBucket=0}else{invalid++;if(diff>max){last=meter;lastDate=e.date;litreBucket=0}}}
 if(!count||!metres||!covered)return {count:0,invalid};const typ=typeOf(g.code);const unit=mappings[g.code]?.unit||'mi';let mpg=null,l100=null;if(typ==='road'){const miles=unit==='km'?metres/1.609344:metres;const km=unit==='km'?metres:metres*1.609344;mpg=miles*4.54609/covered;l100=covered*100/km}return {count,invalid,metres,unit,rate:covered/metres,mpg,l100,covered}}
-function efficiency(g){const historic=meterHistoryRate(g);if(historic?.count)return historic;if(codeKey(g.code).startsWith('CHECKPLANT:'))return {count:0,method:'Awaiting dated CheckPlant hours'};return dispenserEfficiency(g)}
+function efficiency(g){const historic=meterHistoryRate(g);if(historic?.count||historic?.intervals)return historic;if(codeKey(g.code).startsWith('CHECKPLANT:'))return {count:0,method:'Awaiting dated CheckPlant daily checks'};return dispenserEfficiency(g)}
 function filterSetup(){
  const old=$('filterDriver').value,origin=$('filterOrigin').value,
  accounts=[...new Set(rows.map(reportingAccount))].sort(),sources=[...new Set(rows.map(sourceAccount))].sort();
