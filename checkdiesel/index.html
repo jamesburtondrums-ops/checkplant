@@ -601,8 +601,8 @@ async function fetchMachineHours(id){
 
 function drawMappings(){
  drawAccountMappings();drawMachineRegister();
- const regs=knownRegistrations(),filter=$('mappingAccount').value||'all',groups=new Map(),
- plant2Rows=rows.filter(r=>codeKey(r.driver)==='PLANT2'),
+ const regs=knownRegistrations(),accounts=vehicleAccountChoices(),filter=$('mappingAccount').value||'all',groups=new Map(),
+ plant2Rows=rows.filter(r=>sourceAccount(r)==='PLANT2'),
  countType=t=>plant2Rows.filter(r=>rowType(r)===t).reduce((sum,r)=>sum+Number(r.litres||0),0);
  $('mapPlant2Machinery').textContent=litres(countType('plant'));
  $('mapPlant2Vehicles').textContent=litres(countType('road'));
@@ -611,36 +611,60 @@ function drawMappings(){
   const code=codeKey(row.code),item=groups.get(code)||{code,count:0,total:0,example:row};
   item.count++;item.total+=Number(row.litres||0);groups.set(code,item);
  }
- const gs=[...groups.values()].filter(g=>filter==='all'||rowType(g.example)===filter)
- .sort((a,b)=>b.total-a.total);
+ const gs=[...groups.values()].filter(g=>filter==='all'||rowType(g.example)===filter).sort((a,b)=>b.total-a.total);
  $('mappingTable').innerHTML=gs.map(g=>{
   const code=g.code,info=rowIdentity(g.example),alias=info.key,setting=mappings[code]||{},rule=knownRule(code),
-  t=info.type,matchedReg=t==='road'?(isReg(alias)?alias:(setting.registration||suggestedReg(code)||'')):'';
+  t=setting.type||info.type,matchedReg=t==='road'?(isReg(alias)?alias:(setting.registration||suggestedReg(code)||'')):'',
+  selected=codeKey(setting.fuelAccount)||'',individual=plant2Rows.filter(r=>codeKey(r.code)===code&&Object.prototype.hasOwnProperty.call(transactionAllocations,rowKey(r))).length;
   const regOpts='<option value="">No registration link</option>'+regs.map(reg=>'<option value="'+esc(reg)+'" '+(reg===matchedReg?'selected':'')+'>'+esc(reg)+'</option>').join(''),
+  accountOpts='<option value="">Keep fuel on PLANT2</option>'+accounts.map(a=>'<option value="'+esc(a)+'"'+(a===selected?' selected':'')+'>'+esc(a)+' · '+esc(accountIdentity(a).name)+'</option>').join('')+
+   (selected&&!accounts.includes(selected)?'<option value="'+esc(selected)+'" selected>'+esc(selected)+' (saved)</option>':''),
   plantId=setting.checkPlantId||machineForCode(code)?.id||'',
   plantOpts='<option value="">No CheckPlant machine link</option>'+plantMachines.map(m=>'<option value="'+esc(m.id)+'" '+(m.id===plantId?'selected':'')+'>'+esc(m.name)+' · '+esc(m.branch||'')+'</option>').join('')+(plantId&&!plantMachines.some(m=>m.id===plantId)?'<option value="'+esc(plantId)+'" selected>'+esc(plantId)+' (saved)</option>':'');
   return '<tr data-code="'+esc(code)+'"><td><button class="linklike" data-asset="'+esc(alias)+'">'+esc(code)+'</button>'+(alias!==code?'<div class="smalltxt">Allocated as '+esc(info.name)+'</div>':'')+'</td>'+
    '<td><span class="badge plant">PLANT2</span><div class="smalltxt">'+fmt(g.count)+' issues</div></td><td>'+litres(g.total)+'</td>'+
    '<td><select data-map-type="'+esc(code)+'"><option value="unmapped" '+(t==='unmapped'?'selected':'')+'>Unclassified</option><option value="road" '+(t==='road'?'selected':'')+'>Road vehicle</option><option value="plant" '+(t==='plant'?'selected':'')+'>Plant machinery</option><option value="transfer" '+(t==='transfer'?'selected':'')+'>Bowser / transfer</option></select></td>'+
    '<td><input data-map-name="'+esc(code)+'" value="'+esc(setting.name||rule?.name||'')+'" placeholder="Optional name"></td><td><select data-map-reg="'+esc(code)+'">'+regOpts+'</select></td>'+
+   '<td><select data-map-account="'+esc(code)+'">'+accountOpts+'</select><input data-map-newaccount="'+esc(code)+'" placeholder="Or create account code" maxlength="20" style="min-width:148px;margin-top:5px">'+(individual?'<div class="smalltxt">'+individual+' individual exceptions retained</div>':'')+'</td>'+
    '<td><select data-map-cp="'+esc(code)+'">'+plantOpts+'</select></td>'+
    '<td><button class="btn small light" data-save="'+esc(code)+'">Save</button></td></tr>';
- }).join('')||'<tr><td colspan="8" class="empty">No PLANT2 entries match this filter.</td></tr>';
+ }).join('')||'<tr><td colspan="9" class="empty">No PLANT2 entries match this filter.</td></tr>';
 }
+
 function draw(){const data=visible();showStatus();drawOverview(data);drawTypes(data);drawAccounts(data);drawTransfers(data);drawReview(data);drawTx(data);drawMappings();drawMeterHistory()}
 function navigate(view){active=view;if((view==='machines'||view==='meterhistory'||view==='mapping')&&!machineSyncAttempted){machineSyncAttempted=true;syncCheckPlant()}document.querySelectorAll('[data-view]').forEach(x=>x.classList.toggle('active',x.dataset.view===view));document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id==='view-'+view));let name={overview:'Fuel overview',fleet:'Road vehicle efficiency',plant:'Plant machinery efficiency',accounts:'Dispenser accounts',transfers:'Transfers & bowsers',unmapped:'Needs review',transactions:'All fuel dispenses',mapping:'Asset mapping',machines:'CheckPlant machines',meterhistory:'Mileage & engine hours',import:'Import dispenser data'};$('pageTitle').textContent=name[view]||name.overview;$('pageSubtitle').textContent={overview:'Your entire site fuel usage at a glance',fleet:'Consumption, MPG and vehicle performance',plant:'Engine-hour efficiency and machine-level usage',accounts:'Compare PLANT2 with the fleet and other fuel accounts',transfers:'Sheffield branch and Shires/emergency fuel movements',unmapped:'Investigate unclassified assets and suspect meter readings',transactions:'Search the complete dispenser audit trail',mapping:'Manually separate PLANT2 machinery and road vehicles, with CheckPlant links',machines:'All CheckPlant machines, fuel links and engine-hour efficiency',meterhistory:'Import road mileage and read dated CheckPlant engine hours',import:'Bring dispenser exports straight into your dashboard'}[view];$('sidebar').classList.remove('open');window.scrollTo(0,0)}
 function drawer(code){openCode=code;const g=group(rows.filter(r=>rowIdentity(r).key===code))[0];if(!g)return;const vis=group(visible().filter(r=>rowIdentity(r).key===code))[0]||g;const e=efficiency(g);$('drawerTitle').textContent=labelFor(code);$('drawerSub').textContent=(isReg(canonicalCode(code))?'Vehicle registration':'Dispenser asset')+' · '+canonicalCode(code)+(knownRule(code)?.destination?' · '+knownRule(code).destination:'')+' · Source accounts: '+[...new Set(g.events.map(r=>codeKey(r.driver)))].join(', ')+' · Original REG. NUMBER entries: '+[...new Set(g.events.map(r=>codeKey(r.code)))].join(', ')+(e?.method?' · Efficiency source: '+e.method:'');$('drawerBadge').innerHTML=badge(code);const ev=g.events.slice().reverse();$('drawerInner').innerHTML='<div class="drawer-cards"><div class="microcard"><span>Litres issued (all time)</span><strong>'+litres(g.total)+'</strong></div><div class="microcard"><span>Total dispenses</span><strong>'+fmt(g.count)+'</strong></div><div class="microcard"><span>Invalid meter readings</span><strong>'+fmt(g.invalid)+'</strong></div><div class="microcard"><span>Indicative efficiency</span><strong>'+(e?.count?(typeOf(code)==='road'?fmt(e.mpg,1)+' MPG':fmt(e.rate,2)+' L/h'):'Not available')+'</strong></div></div><div class="tip">'+(verified(code)?'Asset category confirmed in this browser.':'Type not confirmed. Confirm this asset in Asset Mapping to unlock indicative efficiency.')+' Meter readings are not enough to prove actual fuel consumption without complete fill records.</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn small" data-map="'+esc(code)+'">Edit classification</button><span style="color:#8592a1;font-size:12px;align-self:center">'+fmt(vis.count)+' dispenses in current filters</span></div><h3>Recent refuelling transactions</h3><div class="tablebox"><table class="datagrid"><thead><tr><th>Date</th><th>Litres</th><th>Meter</th><th>Account</th><th>Quality</th></tr></thead><tbody>'+ev.slice(0,60).map(r=>'<tr><td>'+r.date+'<div class="smalltxt">'+esc(r.time)+'</div></td><td>'+litres(r.litres)+'</td><td>'+esc(r.reading)+'</td><td>'+esc(r.driver)+'</td><td>'+(r.issues?.length?'<span class="badge flag">'+r.issues.length+' flag(s)</span>':'—')+'</td></tr>').join('')+'</tbody></table></div>'; $('assetModal').classList.add('open')}
 function saveMap(code){
- const norm=codeKey(code),type=document.querySelector('[data-map-type="'+CSS.escape(norm)+'"]').value,
- name=document.querySelector('[data-map-name="'+CSS.escape(norm)+'"]').value.trim(),registration=type==='road'?(document.querySelector('[data-map-reg="'+CSS.escape(norm)+'"]')?.value||''):'',checkPlantId=document.querySelector('[data-map-cp="'+CSS.escape(norm)+'"]')?.value||'';
- if(isReg(norm)&&registration&&regKey(registration)!==regKey(norm)){toast('A full vehicle registration cannot be reassigned to another registration');return}
- if(registration&&type!=='road'){toast('Choose Road vehicle before linking a registration');return}
- if(checkPlantId&&type!=='plant'){toast('Choose Plant machinery to link a CheckPlant machine');return}
- mappings[norm]={type:registration?'road':type,name,registration:isReg(norm)?regKey(norm):(registration||''),unit:mappings[norm]?.unit||'mi',checkPlantId:type==='plant'?checkPlantId:'',confirmedAt:new Date().toISOString()};
- try{localStorage.setItem(K_MAP,JSON.stringify(mappings))}catch{};
- toast(registration?norm+' merged into '+registration:norm+' mapping saved');draw();
- if(openCode===norm&&$('assetModal').classList.contains('open'))drawer(norm)
+ const norm=codeKey(code),get=k=>document.querySelector('['+k+'="'+CSS.escape(norm)+'"]'),
+ type=get('data-map-type')?.value||'unmapped',name=get('data-map-name')?.value.trim()||'',
+ registration=type==='road'?(get('data-map-reg')?.value||''):'',
+ checkPlantId=get('data-map-cp')?.value||'',selected=codeKey(get('data-map-account')?.value||''),
+ proposed=codeKey(get('data-map-newaccount')?.value||''),target=proposed||selected,oldTarget=codeKey(mappings[norm]?.fuelAccount||'');
+ if(target){
+  if(!/^[A-Z0-9][A-Z0-9_-]{1,19}$/.test(target)||target==='PLANT2')return toast('Enter a valid non-PLANT2 dispenser account code');
+  if(type!=='road')return toast('Set allocation to Road vehicle before moving fuel to its dispenser account');
+  if(accountMappings[target]?.type&&accountMappings[target].type!=='road')return toast('Target account must be a Road vehicle in Account Mapping');
+  if(!vehicleAccountChoices().includes(target)&&!proposed)return toast('Choose a known account or enter a new account code');
+  if(target!==oldTarget){
+   const affected=rows.filter(r=>sourceAccount(r)==='PLANT2'&&codeKey(r.code)===norm&&!Object.prototype.hasOwnProperty.call(transactionAllocations,rowKey(r)));
+   if(!confirm('Reallocate '+affected.length+' PLANT2 refuels ('+litres(affected.reduce((t,r)=>t+r.litres,0))+') labelled '+norm+' to dispenser account '+target+'? Their original PLANT2 fob remains unchanged.'))return;
+  }
+ }
+ if(isReg(norm)&&registration&&regKey(registration)!==regKey(norm))return toast('A full registration cannot be reassigned to a different registration');
+ if(checkPlantId&&type!=='plant')return toast('Choose Plant machinery before linking a CheckPlant machine');
+ if(proposed&&!vehicleAccountChoices().includes(target)){
+  accountMappings[target]={type:'road',name:'Vehicle account '+target,registration:isReg(registration)?regKey(registration):(isReg(norm)?regKey(norm):''),confirmedAt:new Date().toISOString()};
+  try{localStorage.setItem(K_ACCOUNTS,JSON.stringify(accountMappings))}catch{}
+ }
+ mappings[norm]={type,name,registration:type==='road'?(isReg(norm)?regKey(norm):registration):'',
+  unit:mappings[norm]?.unit||'mi',checkPlantId:type==='plant'?checkPlantId:'',
+  fuelAccount:type==='road'?target:'',confirmedAt:new Date().toISOString()};
+ try{localStorage.setItem(K_MAP,JSON.stringify(mappings))}catch{toast('Saved for this session, but browser storage is full')}
+ filterSetup();draw();
+ toast(target?'PLANT2 '+norm+' reallocated to '+target+' for reporting':'PLANT2 '+norm+' mapping saved');
+ if(openCode===norm&&$('assetModal').classList.contains('open'))drawer(norm);
 }
+
 function closeDrawer(){$('assetModal').classList.remove('open');openCode=null}
 function csvLines(data){const hdr=['Date','Hour','Pump unit','Dispenser account','Original REG. NUMBER entry','Resolved asset ID','Allocated type','Confirmed','Display name','Odometer / hours','Litres','Quality flags'];const quote=v=>'"'+String(v??'').replace(/"/g,'""')+'"';return [hdr.map(quote).join(',')].concat(data.map(r=>[r.date,r.time,r.unit,r.driver,r.code,rowIdentity(r).key,rowType(r),rowIdentity(r).verified?'Yes':'No',rowIdentity(r).name,r.reading,r.litres,r.issues?.join('; ')||''].map(quote).join(','))).join('\r\n')}
 function download(data){const a=document.createElement('a'),b=new Blob(['\ufeff'+data],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(b);a.href=url;a.download='CheckDiesel_Fuel_Report.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
