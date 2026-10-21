@@ -455,8 +455,102 @@ function saveAccount(account){
  try{localStorage.setItem(K_ACCOUNTS,JSON.stringify(accountMappings))}catch{toast('Saved for this session, but browser storage is full')}
  toast('Account '+acc+(registration?' → '+registration:'')+' mapping saved');draw();
 }
+
+function linkedFuelSources(machineId){
+ const items=[];
+ for(const [code,v] of Object.entries(mappings)){if(v?.type==='plant'&&v.checkPlantId===machineId)items.push({source:'PLANT2',code})}
+ for(const [account,v] of Object.entries(accountMappings)){if(v?.type==='plant'&&v.checkPlantId===machineId)items.push({source:'ACCOUNT',code:account})}
+ return items.sort((a,b)=>a.source.localeCompare(b.source)||a.code.localeCompare(b.code));
+}
+function plantFuelCandidates(){
+ const candidates=[];
+ const seen=new Set();
+ for(const r of rows){
+  const account=codeKey(r.driver),code=codeKey(r.code);
+  if(account==='PLANT2'){
+    if(!code||code==='0'||knownRule(code)?.type==='transfer')continue;
+    const key='PLANT2|'+code;if(!seen.has(key)){candidates.push({key,label:'PLANT2 → '+code,code,source:'PLANT2'});seen.add(key)}
+  }else{
+    if(!account||knownRule(code)?.type==='transfer')continue;
+    const key='ACCOUNT|'+account;if(!seen.has(key)){candidates.push({key,label:'Account '+account+' · '+(accountIdentity(account).name||''),code:account,source:'ACCOUNT'});seen.add(key)}
+  }
+ }
+ return candidates.sort((a,b)=>a.label.localeCompare(b.label));
+}
+function drawMachineRegister(){
+ const search=codeKey($('machineRegisterSearch').value),branch=$('machineRegisterBranch').value,
+ filter=$('machineRegisterLinkFilter').value,branches=[...new Set(plantMachines.map(m=>m.branch).filter(Boolean))].sort();
+ const prior=$('machineRegisterBranch').value;
+ $('machineRegisterBranch').innerHTML='<option value="">All branches</option>'+branches.map(v=>'<option value="'+esc(v)+'"'+(v===prior?' selected':'')+'>'+esc(v)+'</option>').join('');
+ const list=plantMachines.slice().sort((a,b)=>(a.branch||'').localeCompare(b.branch||'')||(a.name||'').localeCompare(b.name||''))
+ .filter(m=>(!search||[m.name,m.branch,m.serialNumber,m.id].some(v=>codeKey(v).includes(search)))&&(!branch||m.branch===branch)&&
+ (!filter||(filter==='linked'?linkedFuelSources(m.id).length>0:!linkedFuelSources(m.id).length)));
+ const connected=plantMachines.filter(m=>linkedFuelSources(m.id).length>0).length;
+ $('cpRegisterCount').textContent=plantMachines.length+' CheckPlant machines · '+connected+' connected';
+ const opts=plantFuelCandidates();
+ $('machineRegisterTable').innerHTML=list.length?list.map(m=>{
+  const links=linkedFuelSources(m.id),hours=meters.filter(x=>x.kind==='plant'&&x.machineId===m.id).sort((a,b)=>b.date.localeCompare(a.date));
+  const last=hours[0];
+  const linked=links.length?links.map(a=>'<span class="badge plant">'+esc(a.source==='PLANT2'?'PLANT2 → '+a.code:'Account '+a.code)+'</span>').join(' '):'<span class="badge unknown">Not linked</span>';
+  const options='<option value="">Choose fuel identifier…</option>'+opts.map(o=>'<option value="'+esc(o.key)+'">'+esc(o.label)+'</option>').join('');
+  const current=Number(m.currentHours);
+  return '<tr><td><b>'+esc(m.name)+'</b><div class="smalltxt">CheckPlant ID '+esc(m.id)+'</div></td>'+
+  '<td>'+esc(m.branch||'—')+'<div class="smalltxt">S/N '+esc(m.serialNumber||'—')+'</div></td>'+
+  '<td>'+(Number.isFinite(current)&&current>0?fmt(current,1)+' h':'Not recorded')+
+   '<div class="smalltxt">'+hours.length+' dated readings'+(last?' · last '+esc(last.date):'')+'</div></td>'+
+  '<td>'+linked+'</td>'+
+  '<td><select data-machine-fuel="'+esc(m.id)+'">'+options+'</select></td>'+
+  '<td><button class="btn small" data-link-machine="'+esc(m.id)+'">Link</button> '+
+  '<button class="btn small light" data-fetch-machine="'+esc(m.id)+'">Sync hours</button>'+
+  (links.length?' <button class="btn small light" data-unlink-machine="'+esc(m.id)+'">Unlink</button>':'')+'</td></tr>';
+ }).join(''):'<tr><td colspan="6" class="empty">'+(plantMachines.length?'No machines match this search.':'Select Sync all CheckPlant machines to load the register.')+'</td></tr>';
+ $('machineRegisterStatus').textContent=plantMachines.length?plantMachines.length+' machines available · '+connected+' connected · '+meters.filter(m=>m.kind==='plant').length+' dated hour readings saved in this browser':'No CheckPlant machines loaded. Use Sync all CheckPlant machines.';
+}
+function connectMachine(id){
+ const machine=plantMachines.find(m=>m.id===id),choice=document.querySelector('[data-machine-fuel="'+CSS.escape(id)+'"]')?.value;
+ if(!machine||!choice){toast('Select a fuel identifier to connect first.');return}
+ const i=choice.indexOf('|'),source=choice.slice(0,i),code=choice.slice(i+1);
+ if(!code||!['PLANT2','ACCOUNT'].includes(source))return;
+ const config=source==='PLANT2'?(mappings[code]||{}):(accountMappings[code]||{});
+ const other=config.checkPlantId&&config.checkPlantId!==id?plantMachines.find(m=>m.id===config.checkPlantId)?.name||config.checkPlantId:null;
+ if(other&&!confirm('This identifier is linked to '+other+'. Move it to '+machine.name+'?'))return;
+ if(config.type&&config.type!=='plant'&&!confirm('Reclassify '+code+' from '+config.type+' to plant machine '+machine.name+'?'))return;
+ if(source==='PLANT2'){
+  mappings[code]={...config,type:'plant',name:config.name||machine.name,registration:'',checkPlantId:id,confirmedAt:new Date().toISOString()};
+  try{localStorage.setItem(K_MAP,JSON.stringify(mappings))}catch{toast('Mapping saved for this session only')}
+ }else{
+  accountMappings[code]={...config,type:'plant',name:config.name||machine.name,registration:'',checkPlantId:id,confirmedAt:new Date().toISOString()};
+  try{localStorage.setItem(K_ACCOUNTS,JSON.stringify(accountMappings))}catch{toast('Mapping saved for this session only')}
+ }
+ draw();toast('Linked '+code+' to '+machine.name+' (CheckPlant ID preserved)');
+ fetchMachineHours(id).catch(e=>toast('Linked successfully; CheckPlant hours access unavailable: '+e.message));
+}
+function unlinkMachine(id){
+ const links=linkedFuelSources(id),machine=plantMachines.find(m=>m.id===id);
+ if(!links.length||!confirm('Unlink '+links.length+' fuel identifier(s) from '+(machine?.name||id)+'? Fuel records and imported hours will be retained.'))return;
+ for(const item of links){if(item.source==='PLANT2')delete mappings[item.code].checkPlantId;else delete accountMappings[item.code].checkPlantId}
+ try{localStorage.setItem(K_MAP,JSON.stringify(mappings));localStorage.setItem(K_ACCOUNTS,JSON.stringify(accountMappings))}catch{}
+ draw();toast('Fuel links removed; historical data retained.');
+}
+async function fetchMachineHours(id){
+ const machine=plantMachines.find(m=>m.id===id);if(!machine)throw Error('Machine no longer exists in the register');
+ const status=$('machineRegisterStatus');status.textContent='Reading all dated CheckPlant records for '+machine.name+'…';
+ const db=await getCheckPlantDB();
+ const snap=await db.collection('records').where('machineId','==',id).get();
+ const data=[];
+ for(const d of snap.docs){
+  const rec=d.data(),date=cleanDate(rec.date),hour=Number(rec.hoursReading);
+  if(!date||rec.hoursReading===null||rec.hoursReading===undefined||rec.hoursReading===''||!Number.isFinite(hour)||hour<=0)continue;
+  data.push({date,asset:id,display:machine.name,machineId:id,reading:hour,unit:'hours',kind:'plant',source:'CheckPlant '+(rec.type||'record'),notes:''});
+ }
+ const result=mergeMeterRows(data);
+ draw();
+ status.textContent=machine.name+': checked '+snap.size+' CheckPlant records, '+data.length+' valid dated hour readings, '+result.added+' new · '+result.skipped+' already saved.';
+ return result;
+}
+
 function drawMappings(){
- drawAccountMappings();
+ drawAccountMappings();drawMachineRegister();
  const regs=knownRegistrations(),filter=$('mappingAccount').value||'all',groups=new Map(),
  plant2Rows=rows.filter(r=>codeKey(r.driver)==='PLANT2'),
  countType=t=>plant2Rows.filter(r=>rowType(r)===t).reduce((sum,r)=>sum+Number(r.litres||0),0);
@@ -543,6 +637,17 @@ function handleClicks(ev){let el=ev.target.closest('[data-view],[data-account-gr
  q=document.querySelector('[data-map-type="'+CSS.escape(plantCode)+'"]')}
  q?.focus();q?.scrollIntoView({block:'center',behavior:'smooth'})}if(el.dataset.save)saveMap(el.dataset.save);if(el.dataset.page){const d=Number(el.dataset.direction);if(el.dataset.page==='overviewPager')pageAssets=Math.max(1,pageAssets+d);else pageTx=Math.max(1,pageTx+d);draw()}}
 document.addEventListener('click',handleClicks);
+$('machineRegisterSearch').addEventListener('input',drawMachineRegister);
+$('machineRegisterBranch').addEventListener('change',drawMachineRegister);
+$('machineRegisterLinkFilter').addEventListener('change',drawMachineRegister);
+$('refreshMachineRegister').addEventListener('click',syncCheckPlant);
+document.addEventListener('click',ev=>{
+ const b=ev.target.closest('[data-link-machine],[data-unlink-machine],[data-fetch-machine]');
+ if(!b)return;
+ if(b.dataset.linkMachine)connectMachine(b.dataset.linkMachine);
+ if(b.dataset.unlinkMachine)unlinkMachine(b.dataset.unlinkMachine);
+ if(b.dataset.fetchMachine)fetchMachineHours(b.dataset.fetchMachine).catch(e=>toast('Could not read hours: '+e.message));
+});
 document.addEventListener('click',ev=>{const b=ev.target.closest('[data-save-account]');if(b)saveAccount(b.dataset.saveAccount)});
 $('mappingAccount').addEventListener('change',drawMappings);
 $('mileageTemplate').addEventListener('click',()=>csvTemplate('road'));
