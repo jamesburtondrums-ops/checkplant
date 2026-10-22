@@ -42,12 +42,12 @@
 <div class="sidefoot"><strong>CHECKPLANT ECOSYSTEM</strong><div class="helperlinks"><a href="https://github.com/jamesburtondrums-ops/checkplant" target="_blank" rel="noopener">CheckPlant code ↗</a></div><div style="margin-top:9px">Dispenser data stays in this browser. This preview does not upload it to a public database.</div></div></aside>
 <div class="content"><header class="top"><div style="display:flex;align-items:center;gap:11px"><button class="btn light mobilemenu" id="menuBtn" aria-label="Open menu">☰</button><div><h1 id="pageTitle">Fuel overview</h1><div class="caption" id="pageSubtitle">Your entire site fuel usage at a glance</div></div></div><div class="topright"><button class="btn light smallhide" id="exportBtn">↓ Export CSV</button><button class="btn" id="importTopBtn">＋ Import data</button></div></header>
 <main class="page">
-<div class="filters"><div class="field"><label>Account group</label><select id="filterAccountGroup"><option value="">All dispenser accounts</option><option value="plant2">PLANT2 only</option><option value="other">Other accounts (not PLANT2)</option></select></div><div class="field"><label>Find an asset / registration</label><input id="filterText" type="search" placeholder="Search original fob, reporting account, registration or label..."></div><div class="field"><label>From date</label><input id="dateFrom" type="date"></div><div class="field"><label>To date</label><input id="dateTo" type="date"></div><div class="field"><label>Asset class</label><select id="filterClass"><option value="">All types</option><option value="road">Road vehicles</option><option value="plant">Plant machinery</option><option value="transfer">Bowsers / transfers</option><option value="unmapped">Unclassified</option></select></div><div class="field"><label>Reporting dispense account</label><select id="filterDriver"><option value="">All accounts</option></select></div><div class="field"><label>Original dispensing fob</label><select id="filterOrigin"><option value="">All original fobs</option></select></div><button class="filter-reset" id="resetBtn">Reset</button></div>
+<div class="filters"><div class="field"><label>Account group</label><select id="filterAccountGroup"><option value="">All dispenser accounts</option><option value="plant2">PLANT2 plant / unresolved</option><option value="other">Road vehicles &amp; other accounts</option></select></div><div class="field"><label>Find an asset / registration</label><input id="filterText" type="search" placeholder="Search original fob, reporting account, registration or label..."></div><div class="field"><label>From date</label><input id="dateFrom" type="date"></div><div class="field"><label>To date</label><input id="dateTo" type="date"></div><div class="field"><label>Asset class</label><select id="filterClass"><option value="">All types</option><option value="road">Road vehicles</option><option value="plant">Plant machinery</option><option value="transfer">Bowsers / transfers</option><option value="unmapped">Unclassified</option></select></div><div class="field"><label>Reporting dispense account</label><select id="filterDriver"><option value="">All accounts</option></select></div><div class="field"><label>Original dispensing fob</label><select id="filterOrigin"><option value="">All original fobs</option></select></div><button class="filter-reset" id="resetBtn">Reset</button></div>
 <div class="toolbar-note"><span class="dot" id="dataDot"></span><span id="dataStatus">No fuel records loaded</span> <span>•</span><span id="filterCount">Showing 0 records</span></div>
 <div class="view active" id="view-overview">
 <div class="accountsplit" id="accountSplit">
-<button class="accountcard" data-account-group="plant2"><span class="mini">PLANT2 reporting balance</span><strong class="quantity" id="accountPlant2">—</strong><span class="aside" id="accountPlant2Num">Unreallocated PLANT2 issues</span></button>
-<button class="accountcard" data-account-group="other"><span class="mini">Other dispenser accounts</span><strong class="quantity" id="accountOther">—</strong><span class="aside" id="accountOtherNum">Not linked to PLANT2</span></button>
+<button class="accountcard" data-account-group="plant2"><span class="mini">PLANT2 plant / unresolved balance</span><strong class="quantity" id="accountPlant2">—</strong><span class="aside" id="accountPlant2Num">Unreallocated PLANT2 issues</span></button>
+<button class="accountcard" data-account-group="other"><span class="mini">Road vehicles &amp; other accounts</span><strong class="quantity" id="accountOther">—</strong><span class="aside" id="accountOtherNum">Includes road fuel via PLANT2</span></button>
 <button class="accountcard" data-view="transfers"><span class="mini">Known transfers / bowser fuel</span><strong class="quantity" id="accountTransfers">—</strong><span class="aside">SHEF → Sheffield · BOW → Shires / emergency</span></button>
 </div><div class="kpis"><div class="kpi"><div class="kpi-head">Total diesel issued<span class="ico">↗</span></div><div class="num" id="kLitres">—</div><div class="foot">All filtered dispenser records</div></div><div class="kpi"><div class="kpi-head">Dispense transactions<span class="ico">≡</span></div><div class="num" id="kTrans">—</div><div class="foot" id="kAvg">Average dispense: —</div></div><div class="kpi"><div class="kpi-head">Identifiers<span class="ico">▦</span></div><div class="num" id="kAssets">—</div><div class="foot">Distinct codes in filtered records</div></div><div class="kpi"><div class="kpi-head">Unconfirmed fuel<span class="ico">!</span></div><div class="num" id="kUnmapped">—</div><div class="foot">Assets not yet matched to confirmed names</div></div></div>
 <div class="rows2"><section class="panel"><div class="panelhead"><h2>Diesel usage over time</h2><span>Litres issued per day</span></div><div id="dailyChart" class="trend"></div><div id="dailyLabels" class="trend-labels"></div></section><section class="panel"><div class="panelhead"><h2>Highest fuel usage</h2><span>Top 7 dispenser IDs</span></div><div id="topBars" class="rowbars"></div></section></div>
@@ -196,16 +196,27 @@ function vehicleAccountChoices(){
  return [...set].sort();
 }
 function sourceAccount(r){return codeKey(r.driver)||'(blank)'}
+function roadLinkFromPlant2(r){
+ // Source dispenser fob always stays PLANT2. Only confirmed, unique matching identifies road fuel.
+ const raw=codeKey(r.code),override=mappings[raw]||mappings[plantOrTransferAlias(raw)]||{},rule=knownRule(raw);
+ if(rule?.type==='transfer'||(override.type&&override.type!=='road')||(!override.type&&rule?.type==='plant'))return null;
+ const reg=isReg(override.registration)?regKey(override.registration):suggestedReg(raw);
+ const accounts=[...new Set(rows.map(x=>codeKey(x.driver)).filter(x=>x&&x!=='PLANT2'))].filter(acc=>accountIdentity(acc).type==='road');
+ const exact=accounts.filter(acc=>acc===raw),matchingReg=reg?accounts.filter(acc=>accountIdentity(acc).registration===reg):[];
+ const account=exact.length===1?exact[0]:matchingReg.length===1?matchingReg[0]:null;
+ if(override.type!=='road'&&!reg&&!account)return null;
+ const key=reg||'VEHICLE:'+raw;
+ return {account:account||'ROAD:'+key,key,name:reg||override.name||'Vehicle '+raw,verified:Boolean(reg||override.type==='road'||account)};
+}
 function reportingAccount(r){
  const source=sourceAccount(r);
  if(source!=='PLANT2')return source;
- // SHEF and BOW denote movements, not direct end-use: never reallocate as vehicle refuels.
  if(knownRule(r.code)?.type==='transfer')return source;
- const override=transactionAllocations[rowKey(r)];
- if(typeof override==='string')return override==='PLANT2'?'PLANT2':codeKey(override);
- const code=codeKey(r.code),mapped=mappings[code]||mappings[plantOrTransferAlias(code)]||{};
- const target=codeKey(mapped.fuelAccount);
- return target&&target!=='PLANT2'?target:'PLANT2';
+ const explicit=transactionAllocations[rowKey(r)];
+ if(typeof explicit==='string'&&codeKey(explicit)!=='PLANT2')return codeKey(explicit);
+ const raw=codeKey(r.code),mapped=mappings[raw]||mappings[plantOrTransferAlias(raw)]||{},target=codeKey(mapped.fuelAccount);
+ if(typeof explicit!=='string'&&mapped.type==='road'&&target&&target!=='PLANT2')return target;
+ return roadLinkFromPlant2(r)?.account||'PLANT2';
 }
 function rowIdentity(r){
  // DRIVER is the dispenser account in this export; REG. NUMBER may be a person or equipment label.
@@ -219,6 +230,11 @@ function rowIdentity(r){
  }
  // Shared PLANT2 account: report fills under an explicitly selected vehicle dispenser account.
  const reallocated=reportingAccount(r);
+ if(reallocated.startsWith('ROAD:')){
+  const road=roadLinkFromPlant2(r);
+  return {key:road?.key||'VEHICLE:'+raw,type:'road',name:road?.name||raw,
+   verified:Boolean(road?.verified),source:'Original PLANT2 fob · road vehicle awaiting dedicated account'};
+ }
  if(reallocated!=='PLANT2')return {...accountIdentity(reallocated),verified:true,source:'Originally PLANT2 fob · reallocated to '+reallocated};
  // No explicit transfer: keep the normal per-machine/registration matching as before.
  const rule=knownRule(raw);
@@ -244,6 +260,7 @@ function rowIdentity(r){
 function typeOf(code){
  const c=codeKey(code);
  if(c.startsWith('ACCOUNT:'))return accountIdentity(c.slice(8)).type;
+ if(c.startsWith('ROAD:'))return 'road';
  if(c.startsWith('UNRESOLVED:'))return 'unmapped';
  if(c.startsWith('CHECKPLANT:'))return 'plant';
  if(c.startsWith('PLANT:'))return 'plant';
@@ -254,6 +271,7 @@ function typeOf(code){
 function verified(code){
  const c=codeKey(code);
  if(c.startsWith('ACCOUNT:'))return accountIdentity(c.slice(8)).verified;
+ if(c.startsWith('ROAD:'))return true;
  if(c.startsWith('UNRESOLVED:'))return false;
  if(c.startsWith('CHECKPLANT:')||c.startsWith('PLANT:')||c.startsWith('TRANSFER:'))return true;
  if(c.startsWith('VEHICLE:'))return Boolean(mappings[c.slice(8)]?.type==='road');
@@ -262,6 +280,7 @@ function verified(code){
 function labelFor(code){
  const c=codeKey(code);
  if(c.startsWith('ACCOUNT:'))return accountIdentity(c.slice(8)).name;
+ if(c.startsWith('ROAD:'))return 'Road vehicle · '+c.slice(5);
  if(c.startsWith('UNRESOLVED:'))return 'Unallocated: '+c.slice(11);
  if(c.startsWith('CHECKPLANT:'))return plantMachines.find(m=>codeKey(m.id)===c.slice(11))?.name||'CheckPlant machine '+c.slice(11);
  if(c.startsWith('PLANT:'))return mappings[c.slice(6)]?.name||'Plant asset '+c.slice(6);
@@ -533,7 +552,7 @@ function assetRow(g){return '<tr><td><button class="linklike" data-asset="'+esc(
 function pager(id,groups,page,pageSize){const total=Math.max(1,Math.ceil(groups.length/pageSize));$(id).innerHTML='<span>'+fmt(groups.length)+' results · Page '+page+' of '+total+'</span><div><button class="btn small light" data-page="'+id+'" data-direction="-1" '+(page<=1?'disabled':'')+'>Previous</button> <button class="btn small light" data-page="'+id+'" data-direction="1" '+(page>=total?'disabled':'')+'>Next</button></div>'}
 function drawOverview(data){const gs=group(data),daily=new Map();
  const savedGroup=$('filterAccountGroup').value;$('filterAccountGroup').value='';const base=visible();$('filterAccountGroup').value=savedGroup;
- const p2=base.filter(r=>reportingAccount(r)==='PLANT2'),others=base.filter(r=>reportingAccount(r)!=='PLANT2'),trans=base.filter(r=>rowType(r)==='transfer'),moved=base.filter(r=>sourceAccount(r)==='PLANT2'&&reportingAccount(r)!=='PLANT2');
+ const p2=base.filter(r=>reportingAccount(r)==='PLANT2'),others=base.filter(r=>reportingAccount(r)!=='PLANT2'),trans=base.filter(r=>rowType(r)==='transfer'),moved=base.filter(r=>sourceAccount(r)==='PLANT2'&&rowType(r)==='road');
  $('accountPlant2').textContent=litres(p2.reduce((t,r)=>t+r.litres,0));$('accountPlant2Num').textContent=fmt(p2.length)+' issues remain · '+litres(moved.reduce((t,r)=>t+r.litres,0))+' reallocated';
  $('accountOther').textContent=litres(others.reduce((t,r)=>t+r.litres,0));$('accountOtherNum').textContent=fmt(others.length)+' issues · other accounts';
  $('accountTransfers').textContent=litres(trans.reduce((t,r)=>t+r.litres,0));
@@ -570,7 +589,7 @@ function drawAccounts(data){
  }
  const gs=[...grouped.values()].sort((a,b)=>b.litres-a.litres);
  $('accountsTable').innerHTML=gs.map(x=>{
-  const linked=x.account==='PLANT2'?'Shared PLANT2 account (unreallocated)':accountIdentity(x.account).name;
+  const linked=x.account==='PLANT2'?'Plant / unresolved PLANT2 issues':x.account.startsWith('ROAD:')?'Road vehicle originally fuelled via PLANT2 (link dedicated account in Asset Mapping)':accountIdentity(x.account).name;
   return '<tr><td><b>'+esc(x.account)+'</b></td><td>'+esc(linked)+'</td><td>'+fmt(x.issues)+'</td><td><b>'+litres(x.litres)+'</b></td>'+
   '<td>'+litres(x.types.plant)+'</td><td>'+litres(x.types.road)+'</td><td>'+litres(x.types.transfer)+'</td><td>'+litres(x.types.unmapped)+'</td>'+
   '<td>'+litres(x.originPlant2)+'</td><td><button class="btn small light" data-source-account="'+esc(x.account)+'">Filter →</button></td></tr>';
