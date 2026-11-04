@@ -1125,22 +1125,64 @@ function closeDrawer(){$('assetModal').classList.remove('open');openCode=null}
 
 // PDF exports read the current local data snapshot. The date range matches the
 // sitewide diesel reconciliation; text/account/class filters do not omit fuel.
-function pdfReportSnapshot(){
+const PDF_MONTH_NAMES=['January','February','March','April','May','June','July','August','September','October','November','December'];
+let pdfReportKind='report',pdfLastSelection=null;
+function pdfMonthLabel(month){
+ const [year,m]=String(month).split('-').map(Number);
+ return PDF_MONTH_NAMES[m-1]&&year>=2000&&year<=2200?PDF_MONTH_NAMES[m-1]+' '+year:String(month);
+}
+function pdfAvailableMonths(){
+ return [...new Set(rows.map(r=>String(r.date||'').slice(0,7)).filter(m=>/^\d{4}-(0[1-9]|1[0-2])$/.test(m)))].sort();
+}
+function pdfSelectedMonths(){
+ return [...document.querySelectorAll('#pdfMonthChoices input[data-pdf-month]:checked')].map(el=>el.value).sort();
+}
+function updatePdfMonthSummary(){
+ const selection=pdfSelectedMonths(),selected=new Set(selection);
+ const included=rows.filter(r=>selected.has(String(r.date).slice(0,7)));
+ const cents=included.reduce((sum,r)=>sum+Math.round(Number(r.litres||0)*100),0);
+ $('pdfMonthSummary').innerHTML=selection.length?
+   '<strong>'+selection.length+' month'+(selection.length===1?'':'s')+' selected</strong> · '+fmt(included.length)+' diesel dispenses · '+litres(cents/100)+
+   '<div class="smalltxt">'+selection.map(pdfMonthLabel).map(esc).join(' · ')+'</div>':
+   '<strong>No months selected.</strong> Choose at least one month before generating a PDF.';
+ $('pdfOptionsDownload').disabled=!selection.length;
+ $('pdfOptionsPrint').disabled=!selection.length;
+}
+function openPdfMonthPicker(kind){
+ if(!rows.length){toast('Import diesel records before exporting a PDF');return}
+ pdfReportKind=kind==='unassigned'?'unassigned':'report';
+ $('pdfOptionsTitle').textContent=pdfReportKind==='unassigned'?'Unassigned dispenses · select months':'Fuel management report · select months';
+ const available=pdfAvailableMonths();
+ const last=pdfLastSelection?.filter(m=>available.includes(m));
+ const selected=new Set(last?.length?last:available);
+ $('pdfMonthChoices').innerHTML=available.map(month=>
+   '<label class="pdf-month-item"><input type="checkbox" data-pdf-month value="'+esc(month)+'"'+(selected.has(month)?' checked':'')+'>'+
+   '<span>'+esc(pdfMonthLabel(month))+'</span></label>'
+ ).join('');
+ $('pdfOptionsModal').classList.add('open');
+ $('pdfOptionsModal').setAttribute('aria-hidden','false');
+ updatePdfMonthSummary();
+ $('pdfOptionsClose').focus();
+}
+function closePdfMonthPicker(){
+ $('pdfOptionsModal').classList.remove('open');
+ $('pdfOptionsModal').setAttribute('aria-hidden','true');
+}
+function pdfReportSnapshot(selectedMonths){
  ensureDerived();
- const period=reconciliationRows();
- if(!period.length)throw Error('There are no fuel issues in the selected date range.');
+ const available=new Set(pdfAvailableMonths());
+ const months=[...new Set((selectedMonths||[]).filter(m=>available.has(m)))].sort();
+ if(!months.length)throw Error('Select at least one month to include in the report.');
+ const chosen=new Set(months),period=rows.filter(r=>chosen.has(String(r.date||'').slice(0,7)));
+ if(!period.length)throw Error('There are no fuel issues in the selected month(s).');
  const totals=reconcileDiesel(period),buckets={plant:[],road:[],transfer:[]};
  for(const r of period){
-  const kind=rowType(r);
-  const category=kind==='transfer'?'transfer':reportingAccount(r)==='PLANT2'?'plant':'road';
+  const kind=rowType(r),category=kind==='transfer'?'transfer':reportingAccount(r)==='PLANT2'?'plant':'road';
   buckets[category].push(r);
  }
- const roadGroups=group(buckets.road);
- const vehicles=roadGroups.filter(g=>typeOf(g.code)==='road');
- const otherRoadGroups=roadGroups.filter(g=>typeOf(g.code)!=='road');
- const allGroups=group(period);
- const groupByAsset=new Map(allGroups.map(g=>[g.code,g]));
- const unassigned=[];
+ const roadGroups=group(buckets.road),vehicles=roadGroups.filter(g=>typeOf(g.code)==='road'),
+ otherRoadGroups=roadGroups.filter(g=>typeOf(g.code)!=='road');
+ const allGroups=group(period),groupByAsset=new Map(allGroups.map(g=>[g.code,g])),unassigned=[];
  for(const r of period){
   const identity=rowIdentity(r),g=groupByAsset.get(identity.key),reason=[];
   if(identity.type==='unmapped')reason.push('Asset not classified');
@@ -1150,13 +1192,17 @@ function pdfReportSnapshot(){
   unassigned.push({r,identity,reason:reason.join('; ')});
  }
  unassigned.sort((a,b)=>b.r.date.localeCompare(a.r.date)||b.r.time.localeCompare(a.r.time));
- const dates=period.map(r=>r.date).sort(),from=$('dateFrom').value||dates[0],to=$('dateTo').value||dates[dates.length-1];
+ const first=months[0],last=months[months.length-1];
+ const from=first+'-01',lastYear=Number(last.slice(0,4)),lastMonth=Number(last.slice(5));
+ const to=last+'-'+String(new Date(Date.UTC(lastYear,lastMonth,0)).getUTCDate()).padStart(2,'0');
+ const periodLabel=months.length<=3?months.map(pdfMonthLabel).join(' + '):
+  pdfMonthLabel(first)+' - '+pdfMonthLabel(last)+' ('+months.length+' months selected)';
  const actual=period.reduce((t,r)=>t+Math.round(r.litres*100),0);
  if(actual!==totals.totalCents||totals.totalCents!==totals.plant.cents+totals.road.cents+totals.transfer.cents)
   throw Error('Fuel reconciliation failed. PDF export stopped to prevent an inaccurate report.');
  return {period,totals,buckets,vehicles,otherRoadGroups,unassigned,
   plantGroups:group(buckets.plant),transferGroups:group(buckets.transfer),
-  from,to,assetCount:allGroups.length};
+  from,to,monthKeys:months,periodLabel,assetCount:allGroups.length};
 }
 function pdfDisplayDate(s){
  const v=String(s||'').slice(0,10);return /^\d{4}-\d{2}-\d{2}$/.test(v)?v.slice(8)+'/'+v.slice(5,7)+'/'+v.slice(0,4):v;
@@ -1256,7 +1302,7 @@ function createPdfLayout(doc,reportLabel,period){
  return {drawTop,stat,note,addTable,section,footer,left,right,width,pageH,navy,teal,muted,pale};
 }
 function buildFuelReportPdf(doc,data){
- const d=doc,period=pdfDisplayDate(data.from)+' - '+pdfDisplayDate(data.to);
+ const d=doc,period=data.periodLabel;
  const p=createPdfLayout(d,'Fuel report',period),T=data.totals,sumLitres=c=>litres(c/100);
  const totalVehicles=data.vehicles.length;
  p.drawTop('FUEL MANAGEMENT REPORT','Diesel issued | '+period+' | Generated '+new Date().toLocaleDateString('en-GB'));
@@ -1279,7 +1325,7 @@ function buildFuelReportPdf(doc,data){
  ];
  d.setFont('helvetica','normal');d.setFontSize(9);d.setTextColor(...p.muted);
  bullets.forEach((x,i)=>d.text(pdfSafe((i+1)+'. '+x),p.left+2,146+i*8));
- p.note('Period totals ignore the on-screen search and class filters. Transfers are included once in diesel issued, not treated as additional road or plant consumption.',182);
+ p.note('Selected months: '+data.monthKeys.map(pdfMonthLabel).join(', ')+'. Totals exclude other months and ignore on-screen search/class filters. Transfers count once.',182);
  const roadDepartmentRows=[];
  const known=data.vehicles;
  const summaryCats=ROAD_DEPARTMENTS.concat(['']);
@@ -1323,7 +1369,7 @@ function buildFuelReportPdf(doc,data){
  p.footer();
 }
 function buildUnassignedReportPdf(doc,data){
- const period=pdfDisplayDate(data.from)+' - '+pdfDisplayDate(data.to),p=createPdfLayout(doc,'Unassigned dispenses',period);
+ const period=data.periodLabel,p=createPdfLayout(doc,'Unassigned dispenses',period);
  let y=p.drawTop('UNASSIGNED DIESEL DISPENSES','Review register | '+period+' | Original dispenser timestamps');
  const volumeCents=data.unassigned.reduce((sum,e)=>sum+Math.round(Number(e.r.litres||0)*100),0);
  const assets=new Set(data.unassigned.map(e=>e.identity.key));
@@ -1346,25 +1392,48 @@ function buildUnassignedReportPdf(doc,data){
  p.addTable(columns,records,y,'Unassigned diesel dispenses','No unassigned dispenses in the selected period. All identities and road departments are assigned.');
  p.footer();
 }
-function downloadFuelPdf(kind){
- const button=$(kind==='unassigned'?'pdfUnassignedBtn':'pdfReportBtn');
+function downloadFuelPdf(kind,selectedMonths,action='download'){
+ const button=$(action==='print'?'pdfOptionsPrint':'pdfOptionsDownload');
  if(!rows.length){toast('Import diesel records before exporting a PDF');return}
  if(!window.jspdf||!window.jspdf.jsPDF){toast('PDF generator did not load. Check internet access and refresh CheckDiesel.');return}
  if(button.disabled)return;
+ if(!selectedMonths?.length){toast('Select at least one month');return}
+ // Open the preview tab directly in the button click handler, before asynchronous
+ // PDF generation, so popup blockers do not prevent printing.
+ const preview=action==='print'?window.open('','_blank'):null;
+ if(preview){try{preview.document.title='CheckDiesel PDF - preparing';preview.document.body.textContent='Preparing your CheckDiesel report...';}catch{}}
  const originalLabel=button.textContent;
- button.disabled=true;button.textContent='Preparing PDF...';
- // Give the browser a chance to repaint before generating lengthy reports.
+ $('pdfOptionsPrint').disabled=true;$('pdfOptionsDownload').disabled=true;
+ button.textContent='Preparing...';
  setTimeout(()=>{
   try{
-   const data=pdfReportSnapshot();
+   const data=pdfReportSnapshot(selectedMonths);
    const doc=new window.jspdf.jsPDF({orientation:'landscape',unit:'mm',format:'a4',compress:true});
    if(kind==='unassigned')buildUnassignedReportPdf(doc,data);else buildFuelReportPdf(doc,data);
-   const from=data.from.replace(/-/g,''),to=data.to.replace(/-/g,'');
-   const filename='CheckDiesel_'+(kind==='unassigned'?'Unassigned_Dispenses':'Fuel_Management_Report')+'_'+from+'_'+to+'.pdf';
-   doc.save(filename);
-   toast((kind==='unassigned'?'Unassigned dispenses':'Fuel management report')+' PDF generated');
-  }catch(err){toast('PDF export failed: '+(err?.message||String(err)));console.error('CheckDiesel PDF error',err)}
-  finally{button.disabled=false;button.textContent=originalLabel}
+   const code=data.monthKeys.length<=6?data.monthKeys.join('_'):
+    data.monthKeys[0]+'_'+data.monthKeys.at(-1)+'_'+data.monthKeys.length+'months';
+   const filename='CheckDiesel_'+(kind==='unassigned'?'Unassigned_Dispenses':'Fuel_Management_Report')+'_'+code+'.pdf';
+   if(action==='print'&&preview){
+    const blob=doc.output('blob'),url=URL.createObjectURL(blob);
+    preview.location.replace(url);
+    setTimeout(()=>URL.revokeObjectURL(url),300000);
+    toast('PDF opened in a new tab. Use your browser Print command.');
+   }else{
+    if(action==='print')toast('Pop-up blocked; downloading PDF instead. Open it and choose Print.');
+    doc.save(filename);
+    if(action!=='print')toast((kind==='unassigned'?'Unassigned dispenses':'Fuel management report')+' PDF downloaded');
+   }
+   pdfLastSelection=data.monthKeys.slice();
+   closePdfMonthPicker();
+  }catch(err){
+   if(preview)try{preview.close()}catch{}
+   toast('PDF export failed: '+(err?.message||String(err)));
+   console.error('CheckDiesel PDF error',err);
+  }finally{
+   button.textContent=originalLabel;
+   $('pdfOptionsPrint').disabled=false;$('pdfOptionsDownload').disabled=false;
+   updatePdfMonthSummary();
+  }
  },20);
 }
 
