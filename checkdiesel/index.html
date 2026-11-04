@@ -446,15 +446,23 @@ function meterHistoryRate(g){
 }
 
 function drawMeterHistory(){
- const all=meters.slice().sort((a,b)=>b.date.localeCompare(a.date)),road=all.filter(m=>m.kind==='road'),plant=all.filter(m=>m.kind==='plant');
- $('mileageStatus').textContent=road.length+' dated vehicle readings in this browser';
- if(!$('checkplantStatus').dataset.busy)$('checkplantStatus').textContent=plant.length+' dated engine-hour readings · '+plantMachines.length+' CheckPlant machines on file';
- const rows=all.slice(0,250);
- $('meterTable').innerHTML=rows.length?rows.map(m=>{
- const conflict=all.some(z=>z!==m&&z.kind===m.kind&&z.asset===m.asset&&z.date===m.date&&Number(z.reading)!==Number(m.reading));
- return '<tr><td>'+esc(m.date)+(m.checkedAt?'<div class="smalltxt">'+esc(String(m.checkedAt).slice(11,16))+'</div>':'')+'</td><td>'+esc(m.source)+'</td><td>'+esc(m.display||m.asset)+'</td><td>'+fmt(m.reading,1)+'</td><td>'+esc(m.unit)+'</td><td>'+(conflict?'<span class="badge flag">Conflicting readings</span>':m.kind==='plant'&&!dailyCheckReading(m)?'<span class="badge unknown">Not a daily check</span>':'<span class="badge verified">Saved</span>')+'</td></tr>';
+ const all=meters.slice().sort((a,b)=>b.date.localeCompare(a.date));
+ const counts={road:0,plant:0},differentReadings=new Map();
+ for(const m of all){
+  if(m.kind==='road'||m.kind==='plant')counts[m.kind]++;
+  const key=[m.kind,m.asset,m.date].join('|');
+  let group=differentReadings.get(key);if(!group){group=new Set();differentReadings.set(key,group)}
+  group.add(Number(m.reading));
+ }
+ $('mileageStatus').textContent=counts.road+' dated vehicle readings in this browser';
+ if(!$('checkplantStatus').dataset.busy)$('checkplantStatus').textContent=counts.plant+' dated engine-hour readings · '+plantMachines.length+' CheckPlant machines on file';
+ const recent=all.slice(0,250);
+ $('meterTable').innerHTML=recent.length?recent.map(m=>{
+  const conflict=differentReadings.get([m.kind,m.asset,m.date].join('|')).size>1;
+  return '<tr><td>'+esc(m.date)+(m.checkedAt?'<div class="smalltxt">'+esc(String(m.checkedAt).slice(11,16))+'</div>':'')+'</td><td>'+esc(m.source)+'</td><td>'+esc(m.display||m.asset)+'</td><td>'+fmt(m.reading,1)+'</td><td>'+esc(m.unit)+'</td><td>'+(conflict?'<span class="badge flag">Conflicting readings</span>':m.kind==='plant'&&!dailyCheckReading(m)?'<span class="badge unknown">Not a daily check</span>':'<span class="badge verified">Saved</span>')+'</td></tr>';
  }).join(''):'<tr><td colspan="6" class="empty">No mileage or hours history imported yet. Use the import options above.</td></tr>';
 }
+
 function historyMatrix(matrix,kind,source){
  const names=matrix.map(row=>row.map(v=>String(v??'').trim().toLowerCase().replace(/[^a-z0-9]+/g,'')));
  const synonyms=kind==='road'?{date:['date','readingdate','recorddate','checkdate'],id:['registration','reg','regnumber','vehiclereg','vehicleregistration','vehicle','vehicleid','registrationnumber','licenceplate','licenseplate'],meter:['odometer','mileage','miles','reading','meter','odometerreading','currentmileage','currentodometer'],unit:['unit','distanceunit','readingunit'],notes:['notes','note','comments']}
@@ -772,9 +780,16 @@ function drawMachineRegister(){
  (!filter||(filter==='linked'?linkedFuelSources(m.id).length>0:!linkedFuelSources(m.id).length)));
  const connected=plantMachines.filter(m=>linkedFuelSources(m.id).length>0).length;
  $('cpRegisterCount').textContent=plantMachines.length+' CheckPlant machines · '+connected+' connected';
+ const hoursByMachine=new Map();
+ for(const reading of meters){
+  if(reading.kind!=='plant'||!reading.machineId||!dailyCheckReading(reading))continue;
+  if(!hoursByMachine.has(reading.machineId))hoursByMachine.set(reading.machineId,[]);
+  hoursByMachine.get(reading.machineId).push(reading);
+ }
+ for(const history of hoursByMachine.values())history.sort((a,b)=>b.date.localeCompare(a.date));
  const opts=plantFuelCandidates(),byMachine=new Map(group(rows).filter(g=>codeKey(g.code).startsWith('CHECKPLANT:')).map(g=>[codeKey(g.code).slice(11),g]));
  $('machineRegisterTable').innerHTML=list.length?list.map(m=>{
-  const links=linkedFuelSources(m.id),hours=meters.filter(x=>x.kind==='plant'&&x.machineId===m.id&&dailyCheckReading(x)).sort((a,b)=>b.date.localeCompare(a.date));
+  const links=linkedFuelSources(m.id),hours=hoursByMachine.get(m.id)||[];
   const last=hours[0],fuelGroup=byMachine.get(codeKey(m.id)),calc=fuelGroup?efficiency(fuelGroup):null;
   const linked=links.length?links.map(a=>'<span class="badge plant">'+esc(a.source==='PLANT2'?'PLANT2 → '+a.code:'Account '+a.code)+'</span>').join(' '):'<span class="badge unknown">Not linked</span>';
   const options='<option value="">Choose fuel identifier…</option>'+opts.map(o=>'<option value="'+esc(o.key)+'">'+esc(o.label)+'</option>').join('');
@@ -790,7 +805,7 @@ function drawMachineRegister(){
   '<button class="btn small light" data-fetch-machine="'+esc(m.id)+'">Sync hours</button>'+
   (links.length?' <button class="btn small light" data-unlink-machine="'+esc(m.id)+'">Unlink</button>':'')+'</td></tr>';
  }).join(''):'<tr><td colspan="7" class="empty">'+(plantMachines.length?'No machines match this search.':'Select Sync all CheckPlant machines to load the register.')+'</td></tr>';
- $('machineRegisterStatus').textContent=plantMachines.length?plantMachines.length+' machines available · '+connected+' connected · '+meters.filter(m=>m.kind==='plant').length+' dated hour readings saved in this browser':'No CheckPlant machines loaded. Use Sync all CheckPlant machines.';
+ $('machineRegisterStatus').textContent=plantMachines.length?plantMachines.length+' machines available · '+connected+' connected · '+[...meters].filter(m=>m.kind==='plant').length+' dated hour readings saved in this browser':'No CheckPlant machines loaded. Use Sync all CheckPlant machines.';
 }
 function connectMachine(id){
  const machine=plantMachines.find(m=>m.id===id),choice=document.querySelector('[data-machine-fuel="'+CSS.escape(id)+'"]')?.value;
@@ -849,11 +864,17 @@ function drawMappings(){
   const code=codeKey(row.code),item=groups.get(code)||{code,count:0,total:0,example:row};
   item.count++;item.total+=Number(row.litres||0);groups.set(code,item);
  }
+ const exceptions=new Map();
+ for(const r of plant2Rows){
+  if(Object.prototype.hasOwnProperty.call(transactionAllocations,rowKey(r))){
+   const code=codeKey(r.code);exceptions.set(code,(exceptions.get(code)||0)+1);
+  }
+ }
  const gs=[...groups.values()].filter(g=>filter==='all'||rowType(g.example)===filter).sort((a,b)=>b.total-a.total);
  $('mappingTable').innerHTML=gs.map(g=>{
   const code=g.code,info=rowIdentity(g.example),alias=info.key,setting=mappings[code]||{},rule=knownRule(code),
   t=setting.type||info.type,matchedReg=t==='road'?(isReg(alias)?alias:(setting.registration||suggestedReg(code)||'')):'',
-  selected=codeKey(setting.fuelAccount)||'',individual=plant2Rows.filter(r=>codeKey(r.code)===code&&Object.prototype.hasOwnProperty.call(transactionAllocations,rowKey(r))).length;
+  selected=codeKey(setting.fuelAccount)||'',individual=exceptions.get(code)||0;
   const regOpts='<option value="">No registration link</option>'+regs.map(reg=>'<option value="'+esc(reg)+'" '+(reg===matchedReg?'selected':'')+'>'+esc(reg)+'</option>').join(''),
   accountOpts='<option value="">Keep fuel on PLANT2</option>'+accounts.map(a=>'<option value="'+esc(a)+'"'+(a===selected?' selected':'')+'>'+esc(a)+' · '+esc(accountIdentity(a).name)+'</option>').join('')+
    (selected&&!accounts.includes(selected)?'<option value="'+esc(selected)+'" selected>'+esc(selected)+' (saved)</option>':''),
