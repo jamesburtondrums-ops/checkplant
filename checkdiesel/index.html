@@ -172,6 +172,11 @@
 <p class="paneinfo">Select exactly which months to include. You can combine non-consecutive months; the report will only use transactions from your selection, regardless of the dashboard filters.</p>
 <div class="pdf-month-toolbar"><button class="btn small light" type="button" id="pdfMonthsAll">Select all months</button><button class="btn small light" type="button" id="pdfMonthsClear">Clear selection</button></div>
 <div class="pdf-month-grid" id="pdfMonthChoices" role="group" aria-label="Available fuel reporting months"></div>
+<fieldset id="pdfCategoryOptions" hidden style="border:0;padding:0;margin:16px 0"><legend style="font-weight:800;margin-bottom:8px">CFO report sections</legend><div class="pdf-month-grid">
+<label class="pdf-month-item"><input type="checkbox" data-pdf-category value="plant" checked>Plant</label>
+<label class="pdf-month-item"><input type="checkbox" data-pdf-category value="road" checked>Road</label>
+<label class="pdf-month-item"><input type="checkbox" data-pdf-category value="transfer" checked>Transfers</label>
+</div><p class="smalltxt">Choose one or more sections. Report totals include only your choices.</p></fieldset>
 <div class="pdf-month-summary" id="pdfMonthSummary" aria-live="polite">Select at least one month.</div>
 <div class="pdf-month-actions"><button class="btn light" id="pdfOptionsCancel" type="button">Cancel</button><button class="btn light" id="pdfOptionsDownload" type="button">↓ Download PDF</button><button class="btn" id="pdfOptionsPrint" type="button">Print / Preview PDF</button></div>
 <p class="smalltxt pdf-month-tip">Print / Preview opens the PDF in a new browser tab so you can print it on paper. Your diesel information remains in this browser.</p>
@@ -1139,6 +1144,9 @@ function pdfAvailableMonths(){
 function pdfSelectedMonths(){
  return [...document.querySelectorAll('#pdfMonthChoices input[data-pdf-month]:checked')].map(el=>el.value).sort();
 }
+function pdfSelectedCategories(){
+ return [...document.querySelectorAll('#pdfCategoryOptions input[data-pdf-category]:checked')].map(el=>el.value);
+}
 function updatePdfMonthSummary(){
  const selection=pdfSelectedMonths(),selected=new Set(selection);
  const included=rows.filter(r=>selected.has(String(r.date).slice(0,7)));
@@ -1147,14 +1155,17 @@ function updatePdfMonthSummary(){
    '<strong>'+selection.length+' month'+(selection.length===1?'':'s')+' selected</strong> · '+fmt(included.length)+' diesel dispenses · '+litres(cents/100)+
    '<div class="smalltxt">'+selection.map(pdfMonthLabel).map(esc).join(' · ')+'</div>':
    '<strong>No months selected.</strong> Choose at least one month before generating a PDF.';
- $('pdfOptionsDownload').disabled=!selection.length;
- $('pdfOptionsPrint').disabled=!selection.length;
+ const noCategories=pdfReportKind==='emma'&&!pdfSelectedCategories().length;
+ if(noCategories)$('pdfMonthSummary').innerHTML+='<div>Choose at least one CFO report section.</div>';
+ $('pdfOptionsDownload').disabled=!selection.length||noCategories;
+ $('pdfOptionsPrint').disabled=!selection.length||noCategories;
 }
 function openPdfMonthPicker(kind){
  if(!rows.length){toast('Import diesel records before exporting a PDF');return}
  pdfReportKind=kind==='unassigned'?'unassigned':kind==='emma'?'emma':'report';
  $('pdfOptionsTitle').textContent=pdfReportKind==='unassigned'?'Unassigned dispenses · select months':
   pdfReportKind==='emma'?"Emma's PDF Report · select months":'Fuel management report · select months';
+ $('pdfCategoryOptions').hidden=pdfReportKind!=='emma';
  const available=pdfAvailableMonths();
  const last=pdfLastSelection?.filter(m=>available.includes(m));
  const selected=new Set(last?.length?last:available);
@@ -1403,39 +1414,46 @@ function emmaReportSections(data){
   throw Error("Emma's report failed road-fuel reconciliation; PDF export stopped");
  return {sections,otherCents,otherDispenses:data.otherRoadGroups.reduce((sum,g)=>sum+g.count,0),groupedRoad};
 }
-function buildEmmasReportPdf(doc,data){
+function buildEmmasReportPdf(doc,data,categories=['plant','road','transfer']){
+ const selected=new Set(categories);
+ if(!selected.size)throw Error('Choose at least one CFO report section.');
+ const totals={...data.totals};
+ for(const key of ['plant','road','transfer'])if(!selected.has(key))totals[key]={cents:0,count:0};
+ totals.totalCents=['plant','road','transfer'].reduce((n,k)=>n+totals[k].cents,0);
+ totals.count=['plant','road','transfer'].reduce((n,k)=>n+totals[k].count,0);
+ data={...data,totals,vehicles:selected.has('road')?data.vehicles:[],otherRoadGroups:selected.has('road')?data.otherRoadGroups:[]};
  const d=doc,period=data.periodLabel,p=createPdfLayout(d,"Emma's PDF Report",period),T=data.totals,
  sumLitres=c=>litres(c/100),report=emmaReportSections(data);
  p.drawTop("EMMA'S FUEL REPORT",'CFO / Operational diesel management | '+period+
   ' | Generated '+new Date().toLocaleDateString('en-GB'));
  d.setFont('helvetica','normal');d.setFontSize(10);d.setTextColor(...p.muted);
- d.text('SITE FUEL RECONCILIATION',p.left,58);
- p.stat(p.left,64,84,'Plant / unresolved',sumLitres(T.plant.cents));
- p.stat(p.left+91,64,84,'Road / other accounts',sumLitres(T.road.cents));
- p.stat(p.left+182,64,85,'Bowser / transfers',sumLitres(T.transfer.cents));
+ d.text('SELECTED SECTIONS: '+['plant','road','transfer'].filter(k=>selected.has(k)).map(k=>({plant:'Plant',road:'Road',transfer:'Transfers'})[k]).join(' / '),p.left,58);
+ if(selected.has('plant'))p.stat(p.left,64,84,'Plant / unresolved',sumLitres(T.plant.cents));
+ if(selected.has('road'))p.stat(p.left+91,64,84,'Road / other accounts',sumLitres(T.road.cents));
+ if(selected.has('transfer'))p.stat(p.left+182,64,85,'Bowser / transfers',sumLitres(T.transfer.cents));
  d.setFillColor(...p.navy);d.roundedRect(p.left,96,p.width,29,3,3,'F');
  d.setFont('helvetica','normal');d.setTextColor(204,230,224);d.setFontSize(10);
- d.text('TOTAL DIESEL ISSUED',p.left+8,105);
+ d.text('TOTAL DIESEL ISSUED / SELECTED SECTIONS',p.left+8,105);
  d.setFont('helvetica','bold');d.setTextColor(255,255,255);d.setFontSize(23);
  d.text(sumLitres(T.totalCents),p.left+8,118);
  d.setFont('helvetica','normal');d.setFontSize(9);d.setTextColor(204,230,224);
  d.text(fmt(T.count)+' original dispenses',p.right-8,116,{align:'right'});
  d.setFont('helvetica','bold');d.setFontSize(11);d.setTextColor(...p.navy);
- d.text('CFO REPORTING GROUPS',p.left,138);
+ d.text(selected.has('road')?'CFO REPORTING GROUPS':'REPORT SCOPE',p.left,138);
  d.setFont('helvetica','normal');d.setFontSize(9);d.setTextColor(...p.muted);
- d.text("Skips = Skip Lorries + Grab Wagon + Ro Ro's",p.left+3,148);
- d.text('Trade Waste = FELs + Bin Lorries',p.left+3,157);
- d.text('Artics, Tippers, Company Vans, Road Sweepers and unassigned vehicles remain separate.',p.left+3,166);
+ if(selected.has('road'))d.text("Skips = Skip Lorries + Grab Wagon + Ro Ro's",p.left+3,148);
+ if(selected.has('road'))d.text('Trade Waste = FELs + Bin Lorries',p.left+3,157);
+ d.text(selected.has('road')?'Artics, Tippers, Company Vans, Road Sweepers and unassigned vehicles remain separate.':'Only your selected sections are included. Other fuel categories are excluded from this PDF.',p.left+3,166);
  p.note("These are PDF-only reporting groupings. No CheckDiesel vehicle department, mapping or dispenser allocation is changed.",178);
- const summaryRows=report.sections.map(sec=>[
+ const summaryRows=(selected.has('road')?report.sections:[]).map(sec=>[
   sec.name,sec.departments.filter(Boolean).join(' + ')||'Not yet categorised',
   fmt(sec.groups.length),fmt(sec.dispenses),sumLitres(sec.cents)]);
  if(data.otherRoadGroups.length)summaryRows.push([
   'Other non-road accounts','Other dispenser allocations',
   fmt(data.otherRoadGroups.length),fmt(report.otherDispenses),sumLitres(report.otherCents)]);
- summaryRows.push(['Plant Machinery','Plant / unresolved',fmt(data.plantGroups.length),
+ if(selected.has('plant'))summaryRows.push(['Plant Machinery','Plant / unresolved',fmt(data.plantGroups.length),
   fmt(T.plant.count),sumLitres(T.plant.cents)]);
- summaryRows.push(['Transfers & Bowsers','Fuel movements',fmt(data.transferGroups.length),
+ if(selected.has('transfer'))summaryRows.push(['Transfers & Bowsers','Fuel movements',fmt(data.transferGroups.length),
   fmt(T.transfer.count),sumLitres(T.transfer.cents)]);
  p.section('CFO | Fuel allocation summary','Emma reporting categories | '+period,
   [['Total diesel',sumLitres(T.totalCents)],['Road / other',sumLitres(T.road.cents)],['Reporting months',fmt(data.monthKeys.length)]],
@@ -1443,9 +1461,9 @@ function buildEmmasReportPdf(doc,data){
    {title:'Assets',width:24,align:'right'},{title:'Dispenses',width:29,align:'right'},
    {title:'Fuel issued',width:53,align:'right'}],
   summaryRows,
-  'Road / other, Plant / unresolved and Transfers sum to total diesel issued. Transfers are counted once, not as additional consumption.');
+  'Only selected sections are included in this report and its total. Transfers are counted once.');
  // Separate page for each CFO group: Skips, Trade Waste, and all remaining original departments.
- for(const section of report.sections){
+ for(const section of selected.has('road')?report.sections:[]){
   const rows=section.groups.map(g=>[
    deptForGroup(g)||'Unassigned',labelFor(g.code),[...g.sourceAccounts].join(', '),
    fmt(g.count),litres(g.total)]);
@@ -1471,7 +1489,7 @@ function buildEmmasReportPdf(doc,data){
    'These issues are retained separately so the CFO report reconciles with all diesel issued.');
  }
  const plantGroups=data.plantGroups.slice().sort((a,b)=>b.total-a.total);
- p.section('Plant Machinery','Plant and unresolved fuel issues | '+period,
+ if(selected.has('plant'))p.section('Plant Machinery','Plant and unresolved fuel issues | '+period,
   [['Diesel issued',sumLitres(T.plant.cents)],['Machine / asset IDs',fmt(plantGroups.length)],
    ['Dispenses',fmt(T.plant.count)]],
   [{title:'Machine / identifier',width:78,bold:true},{title:'Source fob(s)',width:60},
@@ -1482,7 +1500,7 @@ function buildEmmasReportPdf(doc,data){
    fmt(g.count),litres(g.total)]),
   'Unclassified PLANT2 issues remain visible and are included in the site diesel total.');
  const transferGroups=data.transferGroups.slice().sort((a,b)=>b.total-a.total);
- p.section('Transfers & Bowsers','Sheffield, bowsers and confirmed movements | '+period,
+ if(selected.has('transfer'))p.section('Transfers & Bowsers','Sheffield, bowsers and confirmed movements | '+period,
   [['Diesel issued',sumLitres(T.transfer.cents)],['Transfer purposes',fmt(transferGroups.length)],
    ['Dispenses',fmt(T.transfer.count)]],
   [{title:'Transfer purpose',width:85,bold:true},{title:'Source fob(s)',width:65},
@@ -1524,6 +1542,8 @@ function downloadFuelPdf(kind,selectedMonths,action='download'){
  if(!window.jspdf||!window.jspdf.jsPDF){toast('PDF generator did not load. Check internet access and refresh CheckDiesel.');return}
  if(button.disabled)return;
  if(!selectedMonths?.length){toast('Select at least one month');return}
+ const categories=kind==='emma'?pdfSelectedCategories():null;
+ if(categories&&!categories.length){toast('Choose at least one CFO report section');return}
  // Open the preview tab directly in the button click handler, before asynchronous
  // PDF generation, so popup blockers do not prevent printing.
  const preview=action==='print'?window.open('','_blank'):null;
@@ -1536,11 +1556,11 @@ function downloadFuelPdf(kind,selectedMonths,action='download'){
    const data=pdfReportSnapshot(selectedMonths);
    const doc=new window.jspdf.jsPDF({orientation:'landscape',unit:'mm',format:'a4',compress:true});
    if(kind==='unassigned')buildUnassignedReportPdf(doc,data);
-   else if(kind==='emma')buildEmmasReportPdf(doc,data);
+   else if(kind==='emma')buildEmmasReportPdf(doc,data,categories);
    else buildFuelReportPdf(doc,data);
    const code=data.monthKeys.length<=6?data.monthKeys.join('_'):
     data.monthKeys[0]+'_'+data.monthKeys.at(-1)+'_'+data.monthKeys.length+'months';
-   const filename='CheckDiesel_'+(kind==='unassigned'?'Unassigned_Dispenses':kind==='emma'?'Emmas_PDF_Report':'Fuel_Management_Report')+'_'+code+'.pdf';
+   const filename='CheckDiesel_'+(kind==='unassigned'?'Unassigned_Dispenses':kind==='emma'?'Emmas_PDF_Report':'Fuel_Management_Report')+'_'+code+(kind==='emma'?'_'+categories.join('_'):'')+'.pdf';
    if(action==='print'&&preview){
     const blob=doc.output('blob'),url=URL.createObjectURL(blob);
     preview.location.replace(url);
@@ -1673,6 +1693,7 @@ $('pdfReportBtn').addEventListener('click',()=>openPdfMonthPicker('report'));
 $('pdfEmmaBtn').addEventListener('click',()=>openPdfMonthPicker('emma'));
 $('pdfUnassignedBtn').addEventListener('click',()=>openPdfMonthPicker('unassigned'));
 $('pdfMonthChoices').addEventListener('change',updatePdfMonthSummary);
+$('pdfCategoryOptions').addEventListener('change',updatePdfMonthSummary);
 $('pdfMonthsAll').addEventListener('click',()=>{for(const e of $('pdfMonthChoices').querySelectorAll('input[data-pdf-month]'))e.checked=true;updatePdfMonthSummary()});
 $('pdfMonthsClear').addEventListener('click',()=>{for(const e of $('pdfMonthChoices').querySelectorAll('input[data-pdf-month]'))e.checked=false;updatePdfMonthSummary()});
 $('pdfOptionsDownload').addEventListener('click',()=>downloadFuelPdf(pdfReportKind,pdfSelectedMonths(),'download'));
