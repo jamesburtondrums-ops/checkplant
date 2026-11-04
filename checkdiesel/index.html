@@ -1371,6 +1371,129 @@ function buildFuelReportPdf(doc,data){
   'Transfers count once in the total diesel issued. They are a movement of fuel and should not be added again as end-use consumption.');
  p.footer();
 }
+
+// Emma's management-report categories are projections only: no edits to
+// ROAD_DEPARTMENTS, accountMappings, mappings, or vehicleDepartments.
+const EMMA_PDF_SECTIONS=[
+ {name:'Skips',departments:['Skip Lorries','Grab Wagon',"Ro Ro's"]},
+ {name:'Trade Waste',departments:['FELs','Bin Lorries']},
+ ...ROAD_DEPARTMENTS.filter(d=>!['Skip Lorries','Grab Wagon',"Ro Ro's",'FELs','Bin Lorries'].includes(d))
+  .map(d=>({name:d,departments:[d]})),
+ {name:'Unassigned Road Vehicles',departments:['']}
+];
+function emmaReportSections(data){
+ const sections=EMMA_PDF_SECTIONS.map(x=>({...x,groups:[],cents:0,dispenses:0}));
+ const byOriginalDept=new Map();
+ for(const section of sections)for(const dept of section.departments){
+  if(byOriginalDept.has(dept))throw Error("Emma's report contains an overlapping department: "+dept);
+  byOriginalDept.set(dept,section);
+ }
+ if(byOriginalDept.size!==ROAD_DEPARTMENTS.length+1)
+  throw Error("Emma's report must cover every road department exactly once");
+ const centsOf=g=>g.events.reduce((sum,r)=>sum+Math.round(Number(r.litres||0)*100),0);
+ for(const g of data.vehicles){
+  const original=deptForGroup(g),section=byOriginalDept.get(original);
+  if(!section)throw Error("Unrecognised department in Emma's report: "+original);
+  section.groups.push(g);section.cents+=centsOf(g);section.dispenses+=g.count;
+ }
+ for(const sec of sections)sec.groups.sort((a,b)=>b.total-a.total);
+ const otherCents=data.otherRoadGroups.reduce((sum,g)=>sum+centsOf(g),0);
+ const groupedRoad=sections.reduce((sum,sec)=>sum+sec.cents,0)+otherCents;
+ if(groupedRoad!==data.totals.road.cents)
+  throw Error("Emma's report failed road-fuel reconciliation; PDF export stopped");
+ return {sections,otherCents,otherDispenses:data.otherRoadGroups.reduce((sum,g)=>sum+g.count,0),groupedRoad};
+}
+function buildEmmasReportPdf(doc,data){
+ const d=doc,period=data.periodLabel,p=createPdfLayout(d,"Emma's PDF Report",period),T=data.totals,
+ sumLitres=c=>litres(c/100),report=emmaReportSections(data);
+ p.drawTop("EMMA'S FUEL REPORT",'CFO / Operational diesel management | '+period+
+  ' | Generated '+new Date().toLocaleDateString('en-GB'));
+ d.setFont('helvetica','normal');d.setFontSize(10);d.setTextColor(...p.muted);
+ d.text('SITE FUEL RECONCILIATION',p.left,58);
+ p.stat(p.left,64,84,'Plant / unresolved',sumLitres(T.plant.cents));
+ p.stat(p.left+91,64,84,'Road / other accounts',sumLitres(T.road.cents));
+ p.stat(p.left+182,64,85,'Bowser / transfers',sumLitres(T.transfer.cents));
+ d.setFillColor(...p.navy);d.roundedRect(p.left,96,p.width,29,3,3,'F');
+ d.setFont('helvetica','normal');d.setTextColor(204,230,224);d.setFontSize(10);
+ d.text('TOTAL DIESEL ISSUED',p.left+8,105);
+ d.setFont('helvetica','bold');d.setTextColor(255,255,255);d.setFontSize(23);
+ d.text(sumLitres(T.totalCents),p.left+8,118);
+ d.setFont('helvetica','normal');d.setFontSize(9);d.setTextColor(204,230,224);
+ d.text(fmt(T.count)+' original dispenses',p.right-8,116,{align:'right'});
+ d.setFont('helvetica','bold');d.setFontSize(11);d.setTextColor(...p.navy);
+ d.text('CFO REPORTING GROUPS',p.left,138);
+ d.setFont('helvetica','normal');d.setFontSize(9);d.setTextColor(...p.muted);
+ d.text("Skips = Skip Lorries + Grab Wagon + Ro Ro's",p.left+3,148);
+ d.text('Trade Waste = FELs + Bin Lorries',p.left+3,157);
+ d.text('Artics, Tippers, Company Vans, Road Sweepers and unassigned vehicles remain separate.',p.left+3,166);
+ p.note("These are PDF-only reporting groupings. No CheckDiesel vehicle department, mapping or dispenser allocation is changed.",178);
+ const summaryRows=report.sections.map(sec=>[
+  sec.name,sec.departments.filter(Boolean).join(' + ')||'Not yet categorised',
+  fmt(sec.groups.length),fmt(sec.dispenses),sumLitres(sec.cents)]);
+ if(data.otherRoadGroups.length)summaryRows.push([
+  'Other non-road accounts','Other dispenser allocations',
+  fmt(data.otherRoadGroups.length),fmt(report.otherDispenses),sumLitres(report.otherCents)]);
+ summaryRows.push(['Plant Machinery','Plant / unresolved',fmt(data.plantGroups.length),
+  fmt(T.plant.count),sumLitres(T.plant.cents)]);
+ summaryRows.push(['Transfers & Bowsers','Fuel movements',fmt(data.transferGroups.length),
+  fmt(T.transfer.count),sumLitres(T.transfer.cents)]);
+ p.section('CFO | Fuel allocation summary','Emma reporting categories | '+period,
+  [['Total diesel',sumLitres(T.totalCents)],['Road / other',sumLitres(T.road.cents)],['Reporting months',fmt(data.monthKeys.length)]],
+  [{title:'Reporting category',width:70,bold:true},{title:'Included departments',width:91},
+   {title:'Assets',width:24,align:'right'},{title:'Dispenses',width:29,align:'right'},
+   {title:'Fuel issued',width:53,align:'right'}],
+  summaryRows,
+  'Road / other, Plant / unresolved and Transfers sum to total diesel issued. Transfers are counted once, not as additional consumption.');
+ // Separate page for each CFO group: Skips, Trade Waste, and all remaining original departments.
+ for(const section of report.sections){
+  const rows=section.groups.map(g=>[
+   deptForGroup(g)||'Unassigned',labelFor(g.code),[...g.sourceAccounts].join(', '),
+   fmt(g.count),litres(g.total)]);
+  p.section(section.name,
+   section.departments.filter(Boolean).join(' + ')||'No original road department assigned',
+   [['Diesel issued',sumLitres(section.cents)],['Vehicles',fmt(section.groups.length)],
+    ['Dispenses',fmt(section.dispenses)]],
+   [{title:'CheckDiesel department',width:52},{title:'Vehicle / registration',width:80,bold:true},
+    {title:'Source fob(s)',width:62},{title:'Dispenses',width:28,align:'right'},
+    {title:'Fuel issued',width:45,align:'right'}],
+   rows,
+   "Original CheckDiesel departments remain unchanged. This grouping exists only in Emma's report.");
+ }
+ if(data.otherRoadGroups.length){
+  p.section('Other non-road accounts','Issues assigned to non-road accounts | '+period,
+   [['Fuel issued',sumLitres(report.otherCents)],['Asset IDs',fmt(data.otherRoadGroups.length)],
+    ['Dispenses',fmt(report.otherDispenses)]],
+   [{title:'Account / asset',width:86,bold:true},{title:'Source fob(s)',width:72},
+    {title:'Classification',width:43},{title:'Dispenses',width:26,align:'right'},
+    {title:'Fuel issued',width:40,align:'right'}],
+   data.otherRoadGroups.map(g=>[labelFor(g.code),[...g.sourceAccounts].join(', '),
+    typeOf(g.code),fmt(g.count),litres(g.total)]),
+   'These issues are retained separately so the CFO report reconciles with all diesel issued.');
+ }
+ const plantGroups=data.plantGroups.slice().sort((a,b)=>b.total-a.total);
+ p.section('Plant Machinery','Plant and unresolved fuel issues | '+period,
+  [['Diesel issued',sumLitres(T.plant.cents)],['Machine / asset IDs',fmt(plantGroups.length)],
+   ['Dispenses',fmt(T.plant.count)]],
+  [{title:'Machine / identifier',width:78,bold:true},{title:'Source fob(s)',width:60},
+   {title:'Class',width:40},{title:'Dispenses',width:32,align:'right'},
+   {title:'Fuel issued',width:57,align:'right'}],
+  plantGroups.map(g=>[labelFor(g.code),[...g.sourceAccounts].join(', '),
+   typeOf(g.code)==='unmapped'?'Unclassified':typeOf(g.code)==='plant'?'Plant machinery':'Review',
+   fmt(g.count),litres(g.total)]),
+  'Unclassified PLANT2 issues remain visible and are included in the site diesel total.');
+ const transferGroups=data.transferGroups.slice().sort((a,b)=>b.total-a.total);
+ p.section('Transfers & Bowsers','Sheffield, bowsers and confirmed movements | '+period,
+  [['Diesel issued',sumLitres(T.transfer.cents)],['Transfer purposes',fmt(transferGroups.length)],
+   ['Dispenses',fmt(T.transfer.count)]],
+  [{title:'Transfer purpose',width:85,bold:true},{title:'Source fob(s)',width:65},
+   {title:'Issues',width:35,align:'right'},{title:'Last issue',width:42},
+   {title:'Fuel issued',width:40,align:'right'}],
+  transferGroups.map(g=>[labelFor(g.code),[...g.sourceAccounts].join(', '),
+   fmt(g.count),pdfDisplayDate(g.events.map(r=>r.date).sort().at(-1)),litres(g.total)]),
+  'Transfers are movements of fuel, included once in diesel issued; do not add them again as consumption.');
+ p.footer();
+}
+
 function buildUnassignedReportPdf(doc,data){
  const period=data.periodLabel,p=createPdfLayout(doc,'Unassigned dispenses',period);
  let y=p.drawTop('UNASSIGNED DIESEL DISPENSES','Review register | '+period+' | Original dispenser timestamps');
