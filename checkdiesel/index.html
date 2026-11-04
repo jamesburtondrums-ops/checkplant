@@ -1008,7 +1008,8 @@ function drawMappings(){
   const code=g.code,info=rowIdentity(g.example),alias=info.key,setting=mappings[code]||{},rule=knownRule(code),
   t=setting.type||info.type,matchedReg=t==='road'?(isReg(alias)?alias:(setting.registration||suggestedReg(code)||'')):'',
   selected=codeKey(setting.fuelAccount)||'',individual=exceptions.get(code)||0;
-  const regOpts='<option value="">No registration link</option>'+regs.map(reg=>'<option value="'+esc(reg)+'" '+(reg===matchedReg?'selected':'')+'>'+esc(reg)+'</option>').join(''),
+  const department=setting.department||vehicleDepartments['PLANT2:'+code]||vehicleDepartments[codeKey(info.key)]||'',
+  regOpts='<option value="">No registration link</option>'+regs.map(reg=>'<option value="'+esc(reg)+'" '+(reg===matchedReg?'selected':'')+'>'+esc(reg)+'</option>').join(''),
   accountOpts='<option value="">Keep fuel on PLANT2</option>'+accounts.map(a=>'<option value="'+esc(a)+'"'+(a===selected?' selected':'')+'>'+esc(a)+' · '+esc(accountIdentity(a).name)+'</option>').join('')+
    (selected&&!accounts.includes(selected)?'<option value="'+esc(selected)+'" selected>'+esc(selected)+' (saved)</option>':''),
   plantId=setting.checkPlantId||machineForCode(code)?.id||'',
@@ -1018,9 +1019,10 @@ function drawMappings(){
    '<td><select data-map-type="'+esc(code)+'"><option value="unmapped" '+(t==='unmapped'?'selected':'')+'>Unclassified</option><option value="road" '+(t==='road'?'selected':'')+'>Road vehicle</option><option value="plant" '+(t==='plant'?'selected':'')+'>Plant machinery</option><option value="transfer" '+(t==='transfer'?'selected':'')+'>Bowser / transfer</option></select></td>'+
    '<td><input data-map-name="'+esc(code)+'" value="'+esc(setting.name||rule?.name||'')+'" placeholder="Optional name"></td><td><select data-map-reg="'+esc(code)+'">'+regOpts+'</select></td>'+
    '<td><select data-map-account="'+esc(code)+'">'+accountOpts+'</select><input data-map-newaccount="'+esc(code)+'" placeholder="Or create account code" maxlength="20" style="min-width:148px;margin-top:5px">'+(individual?'<div class="smalltxt">'+individual+' individual exceptions retained</div>':'')+'</td>'+
+   '<td><select class="fleet-department-select" data-map-department="'+esc(code)+'" aria-label="Road department for '+esc(code)+'">'+departmentOptions(t==='road'?department:'')+'</select></td>'+
    '<td><select data-map-cp="'+esc(code)+'">'+plantOpts+'</select></td>'+
    '<td><button class="btn small light" data-save="'+esc(code)+'">Save</button></td></tr>';
- }).join('')||'<tr><td colspan="9" class="empty">No PLANT2 entries match this filter.</td></tr>';
+ }).join('')||'<tr><td colspan="10" class="empty">No PLANT2 entries match this filter.</td></tr>';
 }
 
 function draw(){
