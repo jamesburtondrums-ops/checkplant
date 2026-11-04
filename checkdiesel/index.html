@@ -1541,8 +1541,17 @@ $('meterExport').addEventListener('click',exportReadings);
 $('importMileageBtn').addEventListener('click',async()=>{try{await importHistoryFile($('mileageFile').files?.[0],'road')}catch(err){$('mileageStatus').textContent=err.message;toast(err.message)}});
 $('importHoursBtn').addEventListener('click',async()=>{try{await importHistoryFile($('hoursFile').files?.[0],'plant')}catch(err){$('checkplantStatus').textContent=err.message;toast(err.message)}});
 $('checkplantSync').addEventListener('click',syncCheckPlant);$('closeModal').addEventListener('click',closeDrawer);$('assetModal').addEventListener('click',e=>{if(e.target===$('assetModal'))closeDrawer()});document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDrawer()});$('menuBtn').addEventListener('click',()=>$('sidebar').classList.toggle('open'));$('importTopBtn').addEventListener('click',()=>navigate('import'));$('exportBtn').addEventListener('click',()=>download(csvLines(visible())));
-$('pdfReportBtn').addEventListener('click',()=>downloadFuelPdf('report'));
-$('pdfUnassignedBtn').addEventListener('click',()=>downloadFuelPdf('unassigned'));$('resetBtn').addEventListener('click',()=>{$('filterText').value='';$('filterClass').value='';$('filterAccountGroup').value='';$('filterDriver').value='';$('filterOrigin').value='';$('dateFrom').value=rows[0]?.date||'';$('dateTo').value=rows[rows.length-1]?.date||'';pageAssets=1;pageTx=1;draw()});// Delay free-text redraw until the user pauses typing, keeping keystrokes responsive.
+$('pdfReportBtn').addEventListener('click',()=>openPdfMonthPicker('report'));
+$('pdfUnassignedBtn').addEventListener('click',()=>openPdfMonthPicker('unassigned'));
+$('pdfMonthChoices').addEventListener('change',updatePdfMonthSummary);
+$('pdfMonthsAll').addEventListener('click',()=>{for(const e of $('pdfMonthChoices').querySelectorAll('input[data-pdf-month]'))e.checked=true;updatePdfMonthSummary()});
+$('pdfMonthsClear').addEventListener('click',()=>{for(const e of $('pdfMonthChoices').querySelectorAll('input[data-pdf-month]'))e.checked=false;updatePdfMonthSummary()});
+$('pdfOptionsDownload').addEventListener('click',()=>downloadFuelPdf(pdfReportKind,pdfSelectedMonths(),'download'));
+$('pdfOptionsPrint').addEventListener('click',()=>downloadFuelPdf(pdfReportKind,pdfSelectedMonths(),'print'));
+$('pdfOptionsClose').addEventListener('click',closePdfMonthPicker);
+$('pdfOptionsCancel').addEventListener('click',closePdfMonthPicker);
+$('pdfOptionsModal').addEventListener('click',e=>{if(e.target===$('pdfOptionsModal'))closePdfMonthPicker()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('pdfOptionsModal').classList.contains('open'))closePdfMonthPicker()});$('resetBtn').addEventListener('click',()=>{$('filterText').value='';$('filterClass').value='';$('filterAccountGroup').value='';$('filterDriver').value='';$('filterOrigin').value='';$('dateFrom').value=rows[0]?.date||'';$('dateTo').value=rows[rows.length-1]?.date||'';pageAssets=1;pageTx=1;draw()});// Delay free-text redraw until the user pauses typing, keeping keystrokes responsive.
 let searchDrawTimer=null;
 $('filterText').addEventListener('input',()=>{
  pageAssets=1;pageTx=1;
