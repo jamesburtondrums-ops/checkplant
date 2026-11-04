@@ -125,7 +125,23 @@ const regKey=x=>String(x??'').trim().toUpperCase().replace(/[\s-]+/g,'');
 // UK current AA00AAA and legacy prefix A000AAA formats; not broad, ambiguous vehicle guesses.
 const isReg=x=>/^(?:[A-Z]{2}\d{2}[A-Z]{3}|[A-Z]\d{1,3}[A-Z]{3})$/.test(regKey(x));
 const codeKey=x=>String(x??'').trim().toUpperCase().replace(/\s+/g,' ');
-function knownRegistrations(){
+// Derived identity data is read-only and regenerated on any dashboard refresh.
+// Never cached to localStorage: the imported fuel and manual mappings remain authoritative.
+let cachedKnownRegs=null,cachedVehicleChoices=null,cachedRoadAccounts=null;
+let cachedAccountIds=new Map(),cachedRowIds=new WeakMap(),cachedReportAccounts=new WeakMap(),cachedGroups=new WeakMap();
+function resetDerivedCaches(){
+ cachedKnownRegs=null;cachedVehicleChoices=null;cachedRoadAccounts=null;
+ cachedAccountIds=new Map();cachedRowIds=new WeakMap();cachedReportAccounts=new WeakMap();cachedGroups=new WeakMap();
+}
+function knownRoadSourceAccounts(){
+ if(cachedRoadAccounts)return cachedRoadAccounts;
+ const accounts=[...new Set(rows.map(r=>codeKey(r.driver)).filter(x=>x&&x!=='PLANT2'))]
+  .filter(acc=>accountIdentity(acc).type==='road');
+ cachedRoadAccounts=accounts;
+ return accounts;
+}
+function knownRegistrations(){return cachedKnownRegs||(cachedKnownRegs=computeKnownRegistrations())}
+function computeKnownRegistrations(){
  const regs=new Set();
  for(const r of rows){if(isReg(r.code))regs.add(regKey(r.code));if(isReg(r.driver))regs.add(regKey(r.driver))}
  for(const m of meters){if(m.kind==='road'&&isReg(m.asset))regs.add(regKey(m.asset))}
@@ -183,6 +199,10 @@ rows.sort(stableSort);
 function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');clearTimeout(msgT);msgT=setTimeout(()=>t.classList.remove('show'),3800)}
 function mapped(code){const raw=codeKey(code);return mappings[raw]||mappings[canonicalCode(raw)]||null}
 function accountIdentity(account){
+ const key=codeKey(account);if(cachedAccountIds.has(key))return cachedAccountIds.get(key);
+ const info=computeAccountIdentity(key);cachedAccountIds.set(key,info);return info;
+}
+function computeAccountIdentity(account){
  const acc=codeKey(account),over=accountMappings[acc]||{},regs=knownRegistrations();
  if(acc==='PLANT2')return {key:'PLANT2',type:'unmapped',name:'Shared PLANT2 account',verified:false};
  let reg=isReg(over.registration)?regKey(over.registration):null;
@@ -192,7 +212,8 @@ function accountIdentity(account){
  const type=over.type||'road',key=type==='road'?(reg||'ACCOUNT:'+acc):'ACCOUNT:'+acc;
  return {key,type,name:type==='road'?(reg||over.name||'Vehicle account '+acc):(over.name||'Fuel account '+acc),account:acc,registration:type==='road'?(reg||''):'',verified:Boolean(reg||over.type),source:'dispenser account'};
 }
-function vehicleAccountChoices(){
+function vehicleAccountChoices(){return cachedVehicleChoices||(cachedVehicleChoices=computeVehicleAccountChoices())}
+function computeVehicleAccountChoices(){
  const set=new Set();
  for(const r of rows){const a=codeKey(r.driver);if(a&&a!=='PLANT2'&&accountMappings[a]?.type!=='plant'&&accountMappings[a]?.type!=='transfer'&&accountMappings[a]?.type!=='unmapped')set.add(a)}
  for(const [a,m] of Object.entries(accountMappings)){if(m?.type==='road'&&codeKey(a)!=='PLANT2')set.add(codeKey(a))}
@@ -204,7 +225,7 @@ function roadLinkFromPlant2(r){
  const raw=codeKey(r.code),override=mappings[raw]||mappings[plantOrTransferAlias(raw)]||{},rule=knownRule(raw);
  if(rule?.type==='transfer'||(override.type&&override.type!=='road')||(!override.type&&rule?.type==='plant'))return null;
  const reg=isReg(override.registration)?regKey(override.registration):suggestedReg(raw);
- const accounts=[...new Set(rows.map(x=>codeKey(x.driver)).filter(x=>x&&x!=='PLANT2'))].filter(acc=>accountIdentity(acc).type==='road');
+ const accounts=knownRoadSourceAccounts();
  const exact=accounts.filter(acc=>acc===raw),matchingReg=reg?accounts.filter(acc=>accountIdentity(acc).registration===reg):[];
  const account=exact.length===1?exact[0]:matchingReg.length===1?matchingReg[0]:null;
  if(override.type!=='road'&&!reg&&!account)return null;
@@ -212,6 +233,10 @@ function roadLinkFromPlant2(r){
  return {account:account||'ROAD:'+key,key,name:reg||override.name||'Vehicle '+raw,verified:Boolean(reg||override.type==='road'||account)};
 }
 function reportingAccount(r){
+ if(cachedReportAccounts.has(r))return cachedReportAccounts.get(r);
+ const account=computeReportingAccount(r);cachedReportAccounts.set(r,account);return account;
+}
+function computeReportingAccount(r){
  const source=sourceAccount(r);
  if(source!=='PLANT2')return source;
  if(knownRule(r.code)?.type==='transfer')return source;
@@ -222,6 +247,10 @@ function reportingAccount(r){
  return roadLinkFromPlant2(r)?.account||'PLANT2';
 }
 function rowIdentity(r){
+ if(cachedRowIds.has(r))return cachedRowIds.get(r);
+ const identity=computeRowIdentity(r);cachedRowIds.set(r,identity);return identity;
+}
+function computeRowIdentity(r){
  // DRIVER is the dispenser account in this export; REG. NUMBER may be a person or equipment label.
  const acc=codeKey(r.driver),raw=codeKey(r.code),override=mappings[raw]||mappings[plantOrTransferAlias(raw)]||null;
  // Confirmed Sheffield and bowser movements are transfers even if issued on another account.
@@ -295,7 +324,7 @@ function rowType(r){return rowIdentity(r).type}
 function badge(code){const t=typeOf(code);return '<span class="badge '+(t==='road'?'road':t==='plant'?'plant':t==='transfer'?'transfer':'unknown')+'">'+({road:'Road vehicle',plant:'Plant machinery',transfer:'Bowser / transfer',unmapped:'Unclassified'}[t])+(verified(code)?' ✓':' ?')+'</span>'}
 function filters(){return {accountGroup:$('filterAccountGroup').value,q:$('filterText').value.trim().toUpperCase(),a:$('dateFrom').value,b:$('dateTo').value,type:$('filterClass').value,driver:$('filterDriver').value,source:$('filterOrigin').value}}
 function visible(){const f=filters();return rows.filter(r=>(!f.accountGroup||(f.accountGroup==='plant2'?(reportingAccount(r)==='PLANT2'&&rowType(r)!=='transfer'):(reportingAccount(r)!=='PLANT2'&&rowType(r)!=='transfer')))&&(!f.a||r.date>=f.a)&&(!f.b||r.date<=f.b)&&(!f.type||rowType(r)===f.type)&&(!f.driver||reportingAccount(r)===f.driver)&&(!f.source||sourceAccount(r)===f.source)&&(!f.q||[r.code,rowIdentity(r).key,sourceAccount(r),reportingAccount(r),rowIdentity(r).name,String(r.reading),String(r.unit)].join(' ').toUpperCase().includes(f.q)))}
-function group(data){const mp=new Map();for(const r of data){const info=rowIdentity(r),groupCode=info.key;let it=mp.get(groupCode);if(!it){it={code:groupCode,count:0,total:0,invalid:0,flags:0,events:[],sourceAccounts:new Set(),rawCodes:new Set()};mp.set(groupCode,it)}it.count++;it.total+=r.litres;it.events.push(r);it.sourceAccounts.add(codeKey(r.driver));it.rawCodes.add(codeKey(r.code));if(validRead(r.reading)===null&&!placeholderMeter(r.reading))it.invalid++;if(reportableIssues(r).length)it.flags++}return [...mp.values()].sort((a,b)=>b.total-a.total)}
+function group(data){if(cachedGroups.has(data))return cachedGroups.get(data);const mp=new Map();for(const r of data){const info=rowIdentity(r),groupCode=info.key;let it=mp.get(groupCode);if(!it){it={code:groupCode,count:0,total:0,invalid:0,flags:0,events:[],sourceAccounts:new Set(),rawCodes:new Set()};mp.set(groupCode,it)}it.count++;it.total+=r.litres;it.events.push(r);it.sourceAccounts.add(codeKey(r.driver));it.rawCodes.add(codeKey(r.code));if(validRead(r.reading)===null&&!placeholderMeter(r.reading))it.invalid++;if(reportableIssues(r).length)it.flags++}const grouped=[...mp.values()].sort((a,b)=>b.total-a.total);cachedGroups.set(data,grouped);return grouped}
 
 function saveMeterStore(){try{localStorage.setItem(K_METERS,JSON.stringify(meters));return true}catch(e){toast('Browser storage is full; meter data is only available this session');return false}}
 function meterIdentity(m){return [m.kind,m.machineId||m.asset,m.date,m.reading,m.unit].join('|')}
@@ -531,6 +560,7 @@ function dispenserEfficiency(g){if(!verified(g.code)||!['road','plant'].includes
 if(!count||!metres||!covered)return {count:0,invalid};const typ=typeOf(g.code);const unit=mappings[g.code]?.unit||'mi';let mpg=null,l100=null;if(typ==='road'){const miles=unit==='km'?metres/1.609344:metres;const km=unit==='km'?metres:metres*1.609344;mpg=miles*4.54609/covered;l100=covered*100/km}return {count,invalid,metres,unit,rate:covered/metres,mpg,l100,covered}}
 function efficiency(g){const historic=meterHistoryRate(g);if(historic?.count||historic?.intervals)return historic;if(codeKey(g.code).startsWith('CHECKPLANT:'))return {count:0,method:'Awaiting dated CheckPlant daily checks'};return dispenserEfficiency(g)}
 function filterSetup(){
+ resetDerivedCaches();
  const old=$('filterDriver').value,origin=$('filterOrigin').value,
  accounts=[...new Set(rows.map(reportingAccount))].sort(),sources=[...new Set(rows.map(sourceAccount))].sort();
  $('filterDriver').innerHTML='<option value="">All reporting accounts</option>'+accounts.map(x=>'<option value="'+esc(x)+'">'+esc(x.startsWith('ROAD:')?'Road vehicle (PLANT2) · '+x.slice(5):x)+'</option>').join('');
@@ -541,8 +571,8 @@ function filterSetup(){
  showStatus()
 }
 
-function showStatus(){
- const filtered=visible(),moved=rows.filter(r=>sourceAccount(r)==='PLANT2'&&reportingAccount(r)!=='PLANT2');
+function showStatus(filtered=visible()){
+ const moved=rows.filter(r=>sourceAccount(r)==='PLANT2'&&reportingAccount(r)!=='PLANT2');
  $('filterCount').textContent='Showing '+fmt(filtered.length)+' of '+fmt(rows.length)+' records';
  $('dataDot').classList.toggle('warn',!rows.length);
  $('dataStatus').textContent=rows.length?'Data loaded · '+fmt(rows.length)+' original transactions · '+fmt(group(rows).length)+' allocated assets · '+fmt(moved.length)+' PLANT2 fills reassigned':'No records loaded · Import a dispenser export';
@@ -611,7 +641,7 @@ function renderPlantFillIntervals(result){
  '<div class="tip">For each consecutive pair of fuel issues, use the daily-check hours available by each refuel. Indicative L/h uses <b>the litres added at the next refuel</b> divided by the increase in engine hours. '+fmt(count)+' measurable intervals; '+fmt(skipped)+' excluded. Partial fills may distort the rate. '+esc(result.reason||'')+'</div>'+
  (body?'<div class="tablebox"><table class="datagrid"><thead><tr><th>Refuel interval</th><th>CheckPlant hours</th><th>Hours operated</th><th>Litres at next fill</th><th>Indicative L/h</th><th>Quality</th></tr></thead><tbody>'+body+'</tbody></table></div>':'<p class="smalltxt">Two refuels and daily-check readings are required to calculate an interval.</p>');
 }
-function drawTypes(data){const gs=group(data);for(const type of ['road','plant']){const targ=$(type==='road'?'fleetTable':'plantTable');const x=gs.filter(g=>typeOf(g.code)===type);targ.innerHTML=x.length?x.map(g=>{const ef=efficiency(g);const meter=ef?.count?fmt(ef.metres)+(type==='plant'?' h':' '+(ef.unit==='km'?'km':'mi')):'—';const count=ef?.count||0;const quality=ef?.intervals?(count?'<span class="badge verified">Daily checks · '+count+' matched interval(s) · '+(ef.invalid||0)+' excluded</span>':'<span class="badge flag" title="'+esc(ef.reason||'')+'">'+esc(ef.reason||'Missing or invalid daily check')+'</span>'):(count?'<span class="badge '+(g.invalid?'unknown':'verified')+'">Indicative · '+(ef?.method?esc(ef.method)+' · ':'')+g.invalid+' missing source readings</span>':'<span class="badge flag">Insufficient readings</span>');return '<tr><td><button class="linklike" data-asset="'+esc(g.code)+'">'+esc(labelFor(g.code))+'</button><div class="smalltxt">'+esc(g.code)+(type==='road'&&g.events.some(r=>sourceAccount(r)==='PLANT2')?' · Includes PLANT2 fob fuel':'')+'</div></td><td><b>'+litres(g.total)+'</b></td><td>'+g.count+'</td><td>'+meter+'</td><td>'+ (ef?.count?'<b>'+fmt(type==='road'?ef.mpg:ef.rate,type==='road'?1:2)+'</b>':'—')+'</td>'+(type==='road'?'<td>'+(ef?.count?fmt(ef.l100,1):'—')+'</td>':'')+'<td>'+quality+'</td><td><button class="btn light small" data-asset="'+esc(g.code)+'">View →</button></td></tr>'}).join(''):'<tr><td colspan="8" class="empty">None categorised. Confirm asset types in Asset Mapping.</td></tr>'}}
+function drawTypes(data,only=null){const gs=group(data);for(const type of (only?[only]:['road','plant'])){const targ=$(type==='road'?'fleetTable':'plantTable');const x=gs.filter(g=>typeOf(g.code)===type);targ.innerHTML=x.length?x.map(g=>{const ef=efficiency(g);const meter=ef?.count?fmt(ef.metres)+(type==='plant'?' h':' '+(ef.unit==='km'?'km':'mi')):'—';const count=ef?.count||0;const quality=ef?.intervals?(count?'<span class="badge verified">Daily checks · '+count+' matched interval(s) · '+(ef.invalid||0)+' excluded</span>':'<span class="badge flag" title="'+esc(ef.reason||'')+'">'+esc(ef.reason||'Missing or invalid daily check')+'</span>'):(count?'<span class="badge '+(g.invalid?'unknown':'verified')+'">Indicative · '+(ef?.method?esc(ef.method)+' · ':'')+g.invalid+' missing source readings</span>':'<span class="badge flag">Insufficient readings</span>');return '<tr><td><button class="linklike" data-asset="'+esc(g.code)+'">'+esc(labelFor(g.code))+'</button><div class="smalltxt">'+esc(g.code)+(type==='road'&&g.events.some(r=>sourceAccount(r)==='PLANT2')?' · Includes PLANT2 fob fuel':'')+'</div></td><td><b>'+litres(g.total)+'</b></td><td>'+g.count+'</td><td>'+meter+'</td><td>'+ (ef?.count?'<b>'+fmt(type==='road'?ef.mpg:ef.rate,type==='road'?1:2)+'</b>':'—')+'</td>'+(type==='road'?'<td>'+(ef?.count?fmt(ef.l100,1):'—')+'</td>':'')+'<td>'+quality+'</td><td><button class="btn light small" data-asset="'+esc(g.code)+'">View →</button></td></tr>'}).join(''):'<tr><td colspan="8" class="empty">None categorised. Confirm asset types in Asset Mapping.</td></tr>'}}
 function drawAccounts(data){
  const grouped=new Map();
  for(const r of data){
@@ -808,7 +838,7 @@ async function fetchMachineHours(id){
 }
 
 function drawMappings(){
- drawAccountMappings();drawMachineRegister();
+ drawAccountMappings();
  const regs=knownRegistrations(),accounts=vehicleAccountChoices(),filter=$('mappingAccount').value||'all',groups=new Map(),
  plant2Rows=rows.filter(r=>sourceAccount(r)==='PLANT2'),
  countType=t=>plant2Rows.filter(r=>rowType(r)===t).reduce((sum,r)=>sum+Number(r.litres||0),0);
@@ -839,8 +869,27 @@ function drawMappings(){
  }).join('')||'<tr><td colspan="9" class="empty">No PLANT2 entries match this filter.</td></tr>';
 }
 
-function draw(){const data=visible();showStatus();drawOverview(data);drawTypes(data);drawAccounts(data);drawTransfers(data);drawReview(data);drawTx(data);drawMappings();drawMeterHistory()}
-function navigate(view){active=view;if((view==='machines'||view==='meterhistory'||view==='mapping')&&!machineSyncAttempted){machineSyncAttempted=true;syncCheckPlant()}document.querySelectorAll('[data-view]').forEach(x=>x.classList.toggle('active',x.dataset.view===view));document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id==='view-'+view));let name={overview:'Fuel overview',fleet:'Road vehicle efficiency',plant:'Plant machinery efficiency',accounts:'Dispenser accounts',transfers:'Transfers & bowsers',unmapped:'Needs review',transactions:'All fuel dispenses',mapping:'Asset mapping',machines:'CheckPlant machines',meterhistory:'Mileage & engine hours',import:'Import dispenser data'};$('pageTitle').textContent=name[view]||name.overview;$('pageSubtitle').textContent={overview:'Your entire site fuel usage at a glance',fleet:'Consumption, MPG and vehicle performance',plant:'Engine-hour efficiency and machine-level usage',accounts:'Compare PLANT2 with the fleet and other fuel accounts',transfers:'Sheffield branch and Shires/emergency fuel movements',unmapped:'Investigate unclassified assets and suspect meter readings',transactions:'Search the complete dispenser audit trail',mapping:'Manually separate PLANT2 machinery and road vehicles, with CheckPlant links',machines:'All CheckPlant machines, fuel links and engine-hour efficiency',meterhistory:'Import road mileage and read dated CheckPlant engine hours',import:'Bring dispenser exports straight into your dashboard'}[view];$('sidebar').classList.remove('open');window.scrollTo(0,0)}
+function draw(){
+ resetDerivedCaches();
+ const data=visible();showStatus(data);
+ // Only draw the active page. Rebuilding hidden maps/machine selects and every
+ // 1,000-row table on each keystroke was the main cause of freezing.
+ switch(active){
+  case 'overview':drawOverview(data);break;
+  case 'fleet':drawTypes(data,'road');break;
+  case 'plant':drawTypes(data,'plant');break;
+  case 'accounts':drawAccounts(data);break;
+  case 'transfers':drawTransfers(data);break;
+  case 'unmapped':drawReview(data);break;
+  case 'transactions':drawTx(data);break;
+  case 'mapping':drawMappings();break;
+  case 'machines':drawMachineRegister();break;
+  case 'meterhistory':drawMeterHistory();break;
+  case 'import':break;
+  default:drawOverview(data);
+ }
+}
+function navigate(view){active=view;if((view==='machines'||view==='meterhistory'||view==='mapping')&&!machineSyncAttempted){machineSyncAttempted=true;syncCheckPlant()}document.querySelectorAll('[data-view]').forEach(x=>x.classList.toggle('active',x.dataset.view===view));document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id==='view-'+view));let name={overview:'Fuel overview',fleet:'Road vehicle efficiency',plant:'Plant machinery efficiency',accounts:'Dispenser accounts',transfers:'Transfers & bowsers',unmapped:'Needs review',transactions:'All fuel dispenses',mapping:'Asset mapping',machines:'CheckPlant machines',meterhistory:'Mileage & engine hours',import:'Import dispenser data'};$('pageTitle').textContent=name[view]||name.overview;$('pageSubtitle').textContent={overview:'Your entire site fuel usage at a glance',fleet:'Consumption, MPG and vehicle performance',plant:'Engine-hour efficiency and machine-level usage',accounts:'Compare PLANT2 with the fleet and other fuel accounts',transfers:'Sheffield branch and Shires/emergency fuel movements',unmapped:'Investigate unclassified assets and suspect meter readings',transactions:'Search the complete dispenser audit trail',mapping:'Manually separate PLANT2 machinery and road vehicles, with CheckPlant links',machines:'All CheckPlant machines, fuel links and engine-hour efficiency',meterhistory:'Import road mileage and read dated CheckPlant engine hours',import:'Bring dispenser exports straight into your dashboard'}[view];$('sidebar').classList.remove('open');window.scrollTo(0,0);draw()}
 function drawer(code){openCode=code;const g=group(rows.filter(r=>rowIdentity(r).key===code))[0];if(!g)return;const vis=group(visible().filter(r=>rowIdentity(r).key===code))[0]||g;const e=efficiency(g);$('drawerTitle').textContent=labelFor(code);$('drawerSub').textContent=(isReg(canonicalCode(code))?'Vehicle registration':'Dispenser asset')+' · '+canonicalCode(code)+(knownRule(code)?.destination?' · '+knownRule(code).destination:'')+' · Source accounts: '+[...new Set(g.events.map(r=>codeKey(r.driver)))].join(', ')+' · Original REG. NUMBER entries: '+[...new Set(g.events.map(r=>codeKey(r.code)))].join(', ')+(e?.method?' · Efficiency source: '+e.method:'');$('drawerBadge').innerHTML=badge(code);const ev=g.events.slice().reverse();$('drawerInner').innerHTML='<div class="drawer-cards"><div class="microcard"><span>Litres issued (all time)</span><strong>'+litres(g.total)+'</strong></div><div class="microcard"><span>Total dispenses</span><strong>'+fmt(g.count)+'</strong></div><div class="microcard"><span>Invalid meter readings</span><strong>'+fmt(g.invalid)+'</strong></div><div class="microcard"><span>Indicative efficiency</span><strong>'+(e?.count?(typeOf(code)==='road'?fmt(e.mpg,1)+' MPG':fmt(e.rate,2)+' L/h'):'Not available')+'</strong></div></div><div class="tip">'+(verified(code)?'Asset category confirmed in this browser.':'Type not confirmed. Confirm this asset in Asset Mapping to unlock indicative efficiency.')+' Meter readings are not enough to prove actual fuel consumption without complete fill records.</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn small" data-map="'+esc(code)+'">Edit classification</button><span style="color:#8592a1;font-size:12px;align-self:center">'+fmt(vis.count)+' dispenses in current filters</span></div><h3>Recent refuelling transactions</h3><div class="tablebox"><table class="datagrid"><thead><tr><th>Date</th><th>Litres</th><th>Meter</th><th>Account</th><th>Quality</th></tr></thead><tbody>'+ev.slice(0,60).map(r=>'<tr><td>'+r.date+'<div class="smalltxt">'+esc(r.time)+'</div></td><td>'+litres(r.litres)+'</td><td>'+esc(r.reading)+'</td><td>'+esc(r.driver)+'</td><td>'+(reportableIssues(r).length?'<span class="badge flag">'+reportableIssues(r).length+' flag(s)</span>':'—')+'</td></tr>').join('')+'</tbody></table></div>'+renderPlantFillIntervals(e); $('assetModal').classList.add('open')}
 function saveMap(code){
  const norm=codeKey(code),get=k=>document.querySelector('['+k+'="'+CSS.escape(norm)+'"]'),
