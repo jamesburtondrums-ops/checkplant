@@ -284,7 +284,7 @@ function computeRowIdentity(r){
  if(rule&&rule.type!=='road')return {key:plantOrTransferAlias(raw),type:rule.type,name:rule.name,verified:true,source:'plant/transfer rule'};
  const full=suggestedReg(raw);
  if(full)return {key:full,type:'road',name:full,verified:true,source:'registration cross-reference'};
- if(raw&&raw!=='0'&&(accountMappings[raw]||rows.some(x=>codeKey(x.driver)===raw&&codeKey(x.driver)!=='PLANT2'))){
+ if(raw&&raw!=='0'&&(accountMappings[raw]||sourceAccountSet().has(raw))){
   const match=accountIdentity(raw);if(match.type==='road')return {...match,source:'account cross-reference on PLANT2'};
  }
  return {key:'UNRESOLVED:'+raw,type:'unmapped',name:raw||'Unidentified issue',verified:false,source:'PLANT2 needs mapping'};
@@ -323,10 +323,10 @@ function labelFor(code){
 function rowType(r){return rowIdentity(r).type}
 function badge(code){const t=typeOf(code);return '<span class="badge '+(t==='road'?'road':t==='plant'?'plant':t==='transfer'?'transfer':'unknown')+'">'+({road:'Road vehicle',plant:'Plant machinery',transfer:'Bowser / transfer',unmapped:'Unclassified'}[t])+(verified(code)?' ✓':' ?')+'</span>'}
 function filters(){return {accountGroup:$('filterAccountGroup').value,q:$('filterText').value.trim().toUpperCase(),a:$('dateFrom').value,b:$('dateTo').value,type:$('filterClass').value,driver:$('filterDriver').value,source:$('filterOrigin').value}}
-function visible(){const f=filters();return rows.filter(r=>(!f.accountGroup||(f.accountGroup==='plant2'?(reportingAccount(r)==='PLANT2'&&rowType(r)!=='transfer'):(reportingAccount(r)!=='PLANT2'&&rowType(r)!=='transfer')))&&(!f.a||r.date>=f.a)&&(!f.b||r.date<=f.b)&&(!f.type||rowType(r)===f.type)&&(!f.driver||reportingAccount(r)===f.driver)&&(!f.source||sourceAccount(r)===f.source)&&(!f.q||[r.code,rowIdentity(r).key,sourceAccount(r),reportingAccount(r),rowIdentity(r).name,String(r.reading),String(r.unit)].join(' ').toUpperCase().includes(f.q)))}
+function visible(){const f=filters();return rows.filter(r=>{if((f.a&&r.date<f.a)||(f.b&&r.date>f.b))return false;const meta=filterMeta(r);return (!f.accountGroup||(f.accountGroup==='plant2'?(meta.account==='PLANT2'&&meta.type!=='transfer'):(meta.account!=='PLANT2'&&meta.type!=='transfer')))&&(!f.type||meta.type===f.type)&&(!f.driver||meta.account===f.driver)&&(!f.source||meta.source===f.source)&&(!f.q||meta.search.includes(f.q))})}
 function group(data){if(cachedGroups.has(data))return cachedGroups.get(data);const mp=new Map();for(const r of data){const info=rowIdentity(r),groupCode=info.key;let it=mp.get(groupCode);if(!it){it={code:groupCode,count:0,total:0,invalid:0,flags:0,events:[],sourceAccounts:new Set(),rawCodes:new Set()};mp.set(groupCode,it)}it.count++;it.total+=r.litres;it.events.push(r);it.sourceAccounts.add(codeKey(r.driver));it.rawCodes.add(codeKey(r.code));if(validRead(r.reading)===null&&!placeholderMeter(r.reading))it.invalid++;if(reportableIssues(r).length)it.flags++}const grouped=[...mp.values()].sort((a,b)=>b.total-a.total);cachedGroups.set(data,grouped);return grouped}
 
-function saveMeterStore(){try{localStorage.setItem(K_METERS,JSON.stringify(meters));return true}catch(e){toast('Browser storage is full; meter data is only available this session');return false}}
+function saveMeterStore(){meterRevision++;try{localStorage.setItem(K_METERS,JSON.stringify(meters));return true}catch(e){toast('Browser storage is full; meter data is only available this session');return false}}
 function meterIdentity(m){return [m.kind,m.machineId||m.asset,m.date,m.reading,m.unit].join('|')}
 function mergeMeterRows(next){
  const index=new Map(meters.map(m=>[meterIdentity(m),m]));let added=0,skipped=0,invalid=0,upgraded=0;
@@ -568,7 +568,7 @@ function dispenserEfficiency(g){if(!verified(g.code)||!['road','plant'].includes
 if(!count||!metres||!covered)return {count:0,invalid};const typ=typeOf(g.code);const unit=mappings[g.code]?.unit||'mi';let mpg=null,l100=null;if(typ==='road'){const miles=unit==='km'?metres/1.609344:metres;const km=unit==='km'?metres:metres*1.609344;mpg=miles*4.54609/covered;l100=covered*100/km}return {count,invalid,metres,unit,rate:covered/metres,mpg,l100,covered}}
 function efficiency(g){const historic=meterHistoryRate(g);if(historic?.count||historic?.intervals)return historic;if(codeKey(g.code).startsWith('CHECKPLANT:'))return {count:0,method:'Awaiting dated CheckPlant daily checks'};return dispenserEfficiency(g)}
 function filterSetup(){
- resetDerivedCaches();
+ ensureDerived();
  const old=$('filterDriver').value,origin=$('filterOrigin').value,
  accounts=[...new Set(rows.map(reportingAccount))].sort(),sources=[...new Set(rows.map(sourceAccount))].sort();
  $('filterDriver').innerHTML='<option value="">All reporting accounts</option>'+accounts.map(x=>'<option value="'+esc(x)+'">'+esc(x.startsWith('ROAD:')?'Road vehicle (PLANT2) · '+x.slice(5):x)+'</option>').join('');
@@ -891,7 +891,7 @@ function drawMappings(){
 }
 
 function draw(){
- resetDerivedCaches();
+ ensureDerived();
  const data=visible();showStatus(data);
  // Only draw the active page. Rebuilding hidden maps/machine selects and every
  // 1,000-row table on each keystroke was the main cause of freezing.
@@ -1050,6 +1050,44 @@ $('openHistoryBtn').addEventListener('click',showHistory);
 $('unlockHistoryBtn').addEventListener('click',unlockHistory);
 $('dismissHistoryBtn').addEventListener('click',()=>{closeHistory();navigate('import')});
 $('historyKey').addEventListener('keydown',e=>{if(e.key==='Enter')unlockHistory()});
+// Derived values belong to a reporting revision, never to the source fuel rows.
+// Mapping objects can change in place; meter saves also cover upgraded daily checks.
+let derivedRows=null,derivedMachines=null,derivedMeters=null,derivedMeterCount=-1,derivedSignature='',meterRevision=0;
+const derivedResetters=[];
+const resetIdentityCaches=resetDerivedCaches;
+function ensureDerived(){
+ const signature=JSON.stringify([mappings,accountMappings,transactionAllocations,meterRevision]);
+ if(derivedRows===rows&&derivedMachines===plantMachines&&derivedMeters===meters&&derivedMeterCount===meters.length&&derivedSignature===signature)return;
+ derivedRows=rows;derivedMachines=plantMachines;derivedMeters=meters;derivedMeterCount=meters.length;derivedSignature=signature;
+ resetIdentityCaches();
+ for(const reset of derivedResetters)reset();
+}
+function memoDerived(fn,weak=false){
+ let cache=weak?new WeakMap():new Map();
+ derivedResetters.push(()=>{cache=weak?new WeakMap():new Map()});
+ return function(key){if(cache.has(key))return cache.get(key);const value=fn(key);cache.set(key,value);return value};
+}
+suggestedReg=memoDerived(suggestedReg);
+canonicalCode=memoDerived(canonicalCode);
+knownRule=memoDerived(knownRule);
+const sourceAccountSet=memoDerived(()=>new Set(rows.map(r=>codeKey(r.driver)).filter(a=>a&&a!=='PLANT2')));
+// A PLANT2 default depends on its original label, not its individual transaction.
+const resolveRoadLink=roadLinkFromPlant2;
+roadLinkFromPlant2=memoDerived(code=>resolveRoadLink({code}));
+const cachedRoadLink=roadLinkFromPlant2;
+roadLinkFromPlant2=r=>cachedRoadLink(r.code);
+machineForCode=memoDerived(machineForCode);
+typeOf=memoDerived(typeOf);
+verified=memoDerived(verified);
+labelFor=memoDerived(labelFor);
+efficiency=memoDerived(efficiency,true);
+checkAtDispense=memoDerived(checkAtDispense,true);
+const filterMeta=memoDerived(r=>{const info=rowIdentity(r),source=sourceAccount(r),account=reportingAccount(r);return {type:info.type,source,account,search:[r.code,info.key,source,account,info.name,String(r.reading),String(r.unit)].join(' ').toUpperCase()}},true);
+let visibleKey='',visibleRows=null;
+derivedResetters.push(()=>{visibleRows=null;visibleKey=''});
+const selectVisible=visible;
+visible=function(){const key=JSON.stringify(filters());if(visibleRows&&key===visibleKey)return visibleRows;visibleKey=key;return visibleRows=selectVisible()};
+
 filterSetup();draw();
 if(!rows.length&&SEALED_HISTORY)setTimeout(showHistory,220);
 })();
