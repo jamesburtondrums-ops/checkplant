@@ -1535,10 +1535,12 @@ function downloadFuelPdf(kind,selectedMonths,action='download'){
   try{
    const data=pdfReportSnapshot(selectedMonths);
    const doc=new window.jspdf.jsPDF({orientation:'landscape',unit:'mm',format:'a4',compress:true});
-   if(kind==='unassigned')buildUnassignedReportPdf(doc,data);else buildFuelReportPdf(doc,data);
+   if(kind==='unassigned')buildUnassignedReportPdf(doc,data);
+   else if(kind==='emma')buildEmmasReportPdf(doc,data);
+   else buildFuelReportPdf(doc,data);
    const code=data.monthKeys.length<=6?data.monthKeys.join('_'):
     data.monthKeys[0]+'_'+data.monthKeys.at(-1)+'_'+data.monthKeys.length+'months';
-   const filename='CheckDiesel_'+(kind==='unassigned'?'Unassigned_Dispenses':'Fuel_Management_Report')+'_'+code+'.pdf';
+   const filename='CheckDiesel_'+(kind==='unassigned'?'Unassigned_Dispenses':kind==='emma'?'Emmas_PDF_Report':'Fuel_Management_Report')+'_'+code+'.pdf';
    if(action==='print'&&preview){
     const blob=doc.output('blob'),url=URL.createObjectURL(blob);
     preview.location.replace(url);
@@ -1547,7 +1549,7 @@ function downloadFuelPdf(kind,selectedMonths,action='download'){
    }else{
     if(action==='print')toast('Pop-up blocked; downloading PDF instead. Open it and choose Print.');
     doc.save(filename);
-    if(action!=='print')toast((kind==='unassigned'?'Unassigned dispenses':'Fuel management report')+' PDF downloaded');
+    if(action!=='print')toast((kind==='unassigned'?'Unassigned dispenses':kind==='emma'?"Emma's CFO report":'Fuel management report')+' PDF downloaded');
    }
    pdfLastSelection=data.monthKeys.slice();
    closePdfMonthPicker();
