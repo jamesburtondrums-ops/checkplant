@@ -686,7 +686,93 @@ function renderPlantFillIntervals(result){
  '<div class="tip">For each consecutive pair of fuel issues, use the daily-check hours available by each refuel. Indicative L/h uses <b>the litres added at the next refuel</b> divided by the increase in engine hours. '+fmt(count)+' measurable intervals; '+fmt(skipped)+' excluded. Partial fills may distort the rate. '+esc(result.reason||'')+'</div>'+
  (body?'<div class="tablebox"><table class="datagrid"><thead><tr><th>Refuel interval</th><th>CheckPlant hours</th><th>Hours operated</th><th>Litres at next fill</th><th>Indicative L/h</th><th>Quality</th></tr></thead><tbody>'+body+'</tbody></table></div>':'<p class="smalltxt">Two refuels and daily-check readings are required to calculate an interval.</p>');
 }
-function drawTypes(data,only=null){const gs=group(data);for(const type of (only?[only]:['road','plant'])){const targ=$(type==='road'?'fleetTable':'plantTable');const x=gs.filter(g=>typeOf(g.code)===type);targ.innerHTML=x.length?x.map(g=>{const ef=efficiency(g);const meter=ef?.count?fmt(ef.metres)+(type==='plant'?' h':' '+(ef.unit==='km'?'km':'mi')):'—';const count=ef?.count||0;const quality=ef?.intervals?(count?'<span class="badge verified">Daily checks · '+count+' matched interval(s) · '+(ef.invalid||0)+' excluded</span>':'<span class="badge flag" title="'+esc(ef.reason||'')+'">'+esc(ef.reason||'Missing or invalid daily check')+'</span>'):(count?'<span class="badge '+(g.invalid?'unknown':'verified')+'">Indicative · '+(ef?.method?esc(ef.method)+' · ':'')+g.invalid+' missing source readings</span>':'<span class="badge flag">Insufficient readings</span>');return '<tr><td><button class="linklike" data-asset="'+esc(g.code)+'">'+esc(labelFor(g.code))+'</button><div class="smalltxt">'+esc(g.code)+(type==='road'&&g.events.some(r=>sourceAccount(r)==='PLANT2')?' · Includes PLANT2 fob fuel':'')+'</div></td><td><b>'+litres(g.total)+'</b></td><td>'+g.count+'</td><td>'+meter+'</td><td>'+ (ef?.count?'<b>'+fmt(type==='road'?ef.mpg:ef.rate,type==='road'?1:2)+'</b>':'—')+'</td>'+(type==='road'?'<td>'+(ef?.count?fmt(ef.l100,1):'—')+'</td>':'')+'<td>'+quality+'</td><td><button class="btn light small" data-asset="'+esc(g.code)+'">View →</button></td></tr>'}).join(''):'<tr><td colspan="8" class="empty">None categorised. Confirm asset types in Asset Mapping.</td></tr>'}}
+const ROAD_DEPARTMENTS=['Skip Lorries','Artics',"Ro Ro's",'Bin Lorries','FELs','Tippers','Grab Wagon','Company Vans','Road Sweepers'];
+const deptValid=v=>ROAD_DEPARTMENTS.includes(v);
+function departmentOptions(selected='',includeAll=false){
+ let opts=includeAll?'<option value="">All departments</option>':'<option value="">Unassigned</option>';
+ return opts+ROAD_DEPARTMENTS.map(v=>'<option value="'+esc(v)+'"'+(selected===v?' selected':'')+'>'+esc(v)+'</option>').join('')+
+ (includeAll?'<option value="__unassigned"'+(selected==='__unassigned'?' selected':'')+'>Unassigned vehicles</option>':'');
+}
+function deptForGroup(g){
+ // Asset group identity has precedence over dispenser-account and source labels.
+ const key=codeKey(g.code);
+ if(deptValid(vehicleDepartments[key]))return vehicleDepartments[key];
+ if(isReg(key)&&deptValid(vehicleDepartments['REG:'+regKey(key)]))return vehicleDepartments['REG:'+regKey(key)];
+ const nonPlant=[...new Set(g.events.filter(r=>sourceAccount(r)!=='PLANT2').map(r=>sourceAccount(r)))];
+ for(const acc of nonPlant){
+  if(deptValid(vehicleDepartments['ACCOUNT:'+acc]))return vehicleDepartments['ACCOUNT:'+acc];
+  if(deptValid(accountMappings[acc]?.department))return accountMappings[acc].department;
+ }
+ for(const r of g.events){
+  const raw=codeKey(r.code);
+  if(sourceAccount(r)==='PLANT2'){
+   if(deptValid(vehicleDepartments['PLANT2:'+raw]))return vehicleDepartments['PLANT2:'+raw];
+   if(deptValid(mappings[raw]?.department))return mappings[raw].department;
+  }
+ }
+ return '';
+}
+function saveVehicleDepartment(asset,dept){
+ if(dept&&!deptValid(dept)){toast('Choose one of the listed vehicle departments');return}
+ const key=codeKey(asset),g=group(rows).find(x=>codeKey(x.code)===key);
+ if(!g||typeOf(g.code)!=='road'){toast('The department can only be assigned to road vehicles');return}
+ vehicleDepartments[key]=dept;
+ if(isReg(key))vehicleDepartments['REG:'+regKey(key)]=dept;
+ const accounts=[...new Set(g.events.filter(r=>sourceAccount(r)!=='PLANT2').map(r=>sourceAccount(r)))];
+ for(const acc of accounts)vehicleDepartments['ACCOUNT:'+acc]=dept;
+ // Only save a PLANT2 identifier alias if it always resolves to this vehicle.
+ const seen=new Set(g.events.filter(r=>sourceAccount(r)==='PLANT2').map(r=>codeKey(r.code)));
+ for(const raw of seen){
+  const matches=rows.filter(r=>sourceAccount(r)==='PLANT2'&&codeKey(r.code)===raw);
+  if(matches.length&&matches.every(r=>codeKey(rowIdentity(r).key)===key))vehicleDepartments['PLANT2:'+raw]=dept;
+ }
+ try{localStorage.setItem(K_DEPARTMENTS,JSON.stringify(vehicleDepartments))}
+ catch{toast('Department assigned for this session; browser storage is full')}
+ draw();toast(labelFor(g.code)+' categorised as '+(dept||'Unassigned'));
+}
+function drawRoadFleet(data){
+ const all=group(data).filter(g=>typeOf(g.code)==='road'),
+ selection=$('fleetDepartmentFilter').value||'',sort=$('fleetSort').value||'fuel',counts=new Map(),
+ tot=all.reduce((sum,g)=>sum+g.total,0),unassigned=all.filter(g=>!deptForGroup(g)).length;
+ for(const dep of ROAD_DEPARTMENTS.concat([''])){
+  counts.set(dep,{vehicles:0,fuel:0,dispenses:0});
+ }
+ for(const g of all){
+  const v=deptForGroup(g),entry=counts.get(v)||counts.get('');
+  entry.vehicles++;entry.fuel+=g.total;entry.dispenses+=g.count;
+ }
+ $('fleetTotalLitres').textContent=litres(tot);
+ $('fleetVehicleCount').textContent=fmt(all.length);
+ $('fleetUnassignedCount').textContent=fmt(unassigned);
+ // Preserve current filter, and make every department visible even when empty.
+ $('fleetDepartmentFilter').innerHTML=departmentOptions(selection,true);
+ const cards=ROAD_DEPARTMENTS.concat(['']);
+ $('fleetDepartmentStats').innerHTML=cards.map(d=>{
+  const x=counts.get(d),selected=(d?(selection===d):(selection==='__unassigned'));
+  return '<button type="button" class="fleet-department-card'+(selected?' active':'')+'" data-department-filter="'+esc(d||'__unassigned')+'" aria-pressed="'+(selected?'true':'false')+'">'+
+   '<strong>'+esc(d||'Unassigned')+'</strong><span class="fleet-amount">'+litres(x.fuel)+'</span>'+
+   '<span class="fleet-meta">'+fmt(x.vehicles)+' vehicle'+(x.vehicles===1?'':'s')+' · '+fmt(x.dispenses)+' dispenses</span></button>';
+ }).join('');
+ const shown=all.filter(g=>!selection||(selection==='__unassigned'?!deptForGroup(g):deptForGroup(g)===selection));
+ shown.sort((a,b)=>sort==='name'?labelFor(a.code).localeCompare(labelFor(b.code)):sort==='department'?(deptForGroup(a)||'zzz').localeCompare(deptForGroup(b)||'zzz')||b.total-a.total:b.total-a.total);
+ $('fleetFilterCount').textContent=fmt(shown.length)+' of '+fmt(all.length)+' vehicles shown';
+ $('fleetTable').innerHTML=shown.map(g=>{
+  const ef=efficiency(g),dept=deptForGroup(g);
+  const quality=ef?.count?'<span class="badge verified">'+fmt(ef.count)+' valid mileage interval(s)</span>':
+   '<span class="badge unknown">Mileage data required</span>';
+  const fromPlant=g.events.some(r=>sourceAccount(r)==='PLANT2');
+  return '<tr><td><button class="linklike" data-asset="'+esc(g.code)+'">'+esc(labelFor(g.code))+'</button>'+
+   '<div class="smalltxt">'+esc(g.code)+(fromPlant?' · Includes PLANT2 fob fuel':'')+'</div></td>'+
+   '<td><select class="fleet-department-select" aria-label="Department for '+esc(labelFor(g.code))+'" data-fleet-department="'+esc(g.code)+'">'+departmentOptions(dept)+'</select></td>'+
+   '<td><b>'+litres(g.total)+'</b></td><td>'+fmt(g.count)+'</td>'+
+   '<td>'+(ef?.count?fmt(ef.metres,0)+' '+(ef.unit==='km'?'km':'mi'):'—')+'</td>'+
+   '<td>'+(ef?.count?fmt(ef.mpg,1):'—')+'</td>'+
+   '<td>'+(ef?.count?fmt(ef.l100,1):'—')+'</td><td>'+quality+'</td>'+
+   '<td><button class="btn small light" data-asset="'+esc(g.code)+'">View</button></td></tr>';
+ }).join('')||'<tr><td colspan="9" class="empty">'+(all.length?'No vehicles in this department. Select another department or classify a vehicle above.':'No road vehicles found for the current filters.')+'</td></tr>';
+}
+
+function drawTypes(data,only=null){if(only==='road'){drawRoadFleet(data);return}const gs=group(data);for(const type of (only?[only]:['plant'])){const targ=$(type==='road'?'fleetTable':'plantTable');const x=gs.filter(g=>typeOf(g.code)===type);targ.innerHTML=x.length?x.map(g=>{const ef=efficiency(g);const meter=ef?.count?fmt(ef.metres)+(type==='plant'?' h':' '+(ef.unit==='km'?'km':'mi')):'—';const count=ef?.count||0;const quality=ef?.intervals?(count?'<span class="badge verified">Daily checks · '+count+' matched interval(s) · '+(ef.invalid||0)+' excluded</span>':'<span class="badge flag" title="'+esc(ef.reason||'')+'">'+esc(ef.reason||'Missing or invalid daily check')+'</span>'):(count?'<span class="badge '+(g.invalid?'unknown':'verified')+'">Indicative · '+(ef?.method?esc(ef.method)+' · ':'')+g.invalid+' missing source readings</span>':'<span class="badge flag">Insufficient readings</span>');return '<tr><td><button class="linklike" data-asset="'+esc(g.code)+'">'+esc(labelFor(g.code))+'</button><div class="smalltxt">'+esc(g.code)+(type==='road'&&g.events.some(r=>sourceAccount(r)==='PLANT2')?' · Includes PLANT2 fob fuel':'')+'</div></td><td><b>'+litres(g.total)+'</b></td><td>'+g.count+'</td><td>'+meter+'</td><td>'+ (ef?.count?'<b>'+fmt(type==='road'?ef.mpg:ef.rate,type==='road'?1:2)+'</b>':'—')+'</td>'+(type==='road'?'<td>'+(ef?.count?fmt(ef.l100,1):'—')+'</td>':'')+'<td>'+quality+'</td><td><button class="btn light small" data-asset="'+esc(g.code)+'">View →</button></td></tr>'}).join(''):'<tr><td colspan="8" class="empty">None categorised. Confirm asset types in Asset Mapping.</td></tr>'}}
 function drawAccounts(data){
  const grouped=new Map();
  for(const r of data){
@@ -1069,6 +1155,17 @@ document.addEventListener('click',ev=>{
 });
 document.addEventListener('click',ev=>{const b=ev.target.closest('[data-save-account]');if(b)saveAccount(b.dataset.saveAccount)});
 $('mappingAccount').addEventListener('change',drawMappings);
+$('fleetDepartmentFilter').addEventListener('change',()=>{if(active==='fleet')drawRoadFleet(visible())});
+$('fleetSort').addEventListener('change',()=>{if(active==='fleet')drawRoadFleet(visible())});
+document.addEventListener('click',ev=>{
+ const b=ev.target.closest('[data-department-filter]');if(!b)return;
+ const value=b.dataset.departmentFilter;
+ $('fleetDepartmentFilter').value=$('fleetDepartmentFilter').value===value?'':value;
+ if(active!=='fleet')navigate('fleet');else drawRoadFleet(visible());
+});
+document.addEventListener('change',ev=>{
+ const el=ev.target.closest('[data-fleet-department]');if(el)saveVehicleDepartment(el.dataset.fleetDepartment,el.value);
+});
 $('mileageTemplate').addEventListener('click',()=>csvTemplate('road'));
 $('hoursTemplate').addEventListener('click',()=>csvTemplate('plant'));
 $('meterExport').addEventListener('click',exportReadings);
