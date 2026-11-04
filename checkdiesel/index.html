@@ -1052,7 +1052,7 @@ function saveMap(code){
  type=get('data-map-type')?.value||'unmapped',name=get('data-map-name')?.value.trim()||'',
  registration=type==='road'?(get('data-map-reg')?.value||''):'',
  checkPlantId=get('data-map-cp')?.value||'',selected=codeKey(get('data-map-account')?.value||''),
- proposed=codeKey(get('data-map-newaccount')?.value||''),target=proposed||selected,oldTarget=codeKey(mappings[norm]?.fuelAccount||'');
+ proposed=codeKey(get('data-map-newaccount')?.value||''),target=proposed||selected,oldTarget=codeKey(mappings[norm]?.fuelAccount||''),department=get('data-map-department')?.value||'';
  if(target){
   if(knownRule(norm)?.type==='transfer')return toast('This code is a confirmed bowser/branch transfer; it cannot be moved into vehicle fuel');
   if(!/^[A-Z0-9][A-Z0-9_-]{1,19}$/.test(target)||target==='PLANT2')return toast('Enter a valid non-PLANT2 dispenser account code');
@@ -1066,13 +1066,22 @@ function saveMap(code){
  }
  if(isReg(norm)&&registration&&regKey(registration)!==regKey(norm))return toast('A full registration cannot be reassigned to a different registration');
  if(checkPlantId&&type!=='plant')return toast('Choose Plant machinery before linking a CheckPlant machine');
+ if(department&&!deptValid(department))return toast('Choose a valid road department');
+ if(department&&type!=='road')return toast('Select Road vehicle before assigning a fleet department');
  if(proposed&&!vehicleAccountChoices().includes(target)){
-  accountMappings[target]={type:'road',name:'Vehicle account '+target,registration:isReg(registration)?regKey(registration):(isReg(norm)?regKey(norm):''),confirmedAt:new Date().toISOString()};
+  accountMappings[target]={type:'road',name:'Vehicle account '+target,registration:isReg(registration)?regKey(registration):(isReg(norm)?regKey(norm):''),department,confirmedAt:new Date().toISOString()};
   try{localStorage.setItem(K_ACCOUNTS,JSON.stringify(accountMappings))}catch{}
  }
  mappings[norm]={type,name,registration:type==='road'?(isReg(norm)?regKey(norm):registration):'',
   unit:mappings[norm]?.unit||'mi',checkPlantId:type==='plant'?checkPlantId:'',
-  fuelAccount:type==='road'?target:'',confirmedAt:new Date().toISOString()};
+  fuelAccount:type==='road'?target:'',department:type==='road'?department:'',confirmedAt:new Date().toISOString()};
+ if(type==='road'){
+  vehicleDepartments['PLANT2:'+norm]=department;
+  if(isReg(norm))vehicleDepartments[regKey(norm)]=department;
+  if(isReg(registration))vehicleDepartments[regKey(registration)]=department;
+  if(target)vehicleDepartments['ACCOUNT:'+target]=department;
+  try{localStorage.setItem(K_DEPARTMENTS,JSON.stringify(vehicleDepartments))}catch{toast('Department saved for this session only')}
+ }
  try{localStorage.setItem(K_MAP,JSON.stringify(mappings))}catch{toast('Saved for this session, but browser storage is full')}
  filterSetup();draw();
  toast(target?'PLANT2 '+norm+' reallocated to '+target+' for reporting':'PLANT2 '+norm+' mapping saved');
