@@ -5,6 +5,7 @@
 <style>
 :root{--ink:#122138;--muted:#64748b;--navy:#122137;--navy2:#1a2e46;--green:#16a873;--light:#f5f7fa;--line:#e5eaf0;--red:#ba4142;--orange:#bc7a26;--white:#fff;--shadow:0 9px 35px rgba(18,33,56,.055)}*{box-sizing:border-box}body{margin:0;background:var(--light);color:var(--ink);font:14px/1.55 Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select{font:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #8bcbbb;outline-offset:2px}.shell{display:grid;grid-template-columns:246px minmax(0,1fr);min-height:100vh}.side{background:var(--navy);padding:22px 14px 23px;color:#c7d2df;display:flex;flex-direction:column;gap:13px}.brand{display:flex;align-items:center;gap:11px;padding:2px 12px 20px}.brandmark{width:37px;height:37px;display:grid;place-items:center;border-radius:11px;background:var(--green);font-size:23px;color:white}.brand b{font-size:17px;letter-spacing:-.5px;color:white;display:block;line-height:1.1}.brand small{font-size:10px;text-transform:uppercase;letter-spacing:1.4px;color:#91adbf}.side-label{font-size:10px;letter-spacing:1.6px;text-transform:uppercase;margin:10px 12px 3px;color:#7991a8;font-weight:850}.navitem{width:100%;display:flex;align-items:center;gap:12px;padding:11px 13px;border-radius:9px;color:#aec1d0;text-align:left;background:transparent;border:0;font-weight:660;letter-spacing:.03px}.navitem svg{width:18px;height:18px;flex-shrink:0}.navitem.active{background:#24415a;color:white}.navitem:hover:not(.active){background:#1c354d;color:#fff}.navitem .count{margin-left:auto;font-size:11px;background:#36506a;padding:2px 7px;border-radius:7px}.sidefoot{margin-top:auto;padding:14px 12px 0;border-top:1px solid #ffffff17;font-size:11px;line-height:1.65;color:#91aabf}.sidefoot a{color:#c6e2d9;text-decoration:none}.sidefoot strong{color:#e8f5ef}.content{min-width:0}.top{height:76px;background:white;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 27px}.top h1{font-size:21px;letter-spacing:-.65px;margin:0;font-weight:820}.top .caption{color:var(--muted);font-size:12px;margin-top:1px}.topright{display:flex;align-items:center;gap:9px;flex-wrap:wrap;justify-content:flex-end}
 .topright #pdfReportBtn{background:#eaf7f2;color:#08664e;border:1px solid #bfebd9}
+.topright #pdfEmmaBtn{background:#173e4b;color:#fff;border:1px solid #173e4b}
 .topright #pdfUnassignedBtn{border:1px solid #e1e7ed;color:#455b73;background:#fff}
 @media(max-width:800px){.topright .btn{padding:8px 10px;min-height:34px;font-size:11px}}
 .btn{border:0;border-radius:10px;background:var(--green);color:#fff;padding:11px 14px;font-weight:780;display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:40px}.btn.light{background:white;color:var(--ink);border:1px solid #dce4ec}.btn.ghost{background:transparent;color:var(--muted);border:1px solid #dde5ec}.btn.small{padding:7px 12px;min-height:32px;font-size:12px}.btn:disabled{opacity:.45;cursor:not-allowed}.btn:hover:not(:disabled){filter:brightness(.97)}.page{padding:23px 27px 45px;max-width:1570px;margin:auto}.filters{display:grid;grid-template-columns:minmax(200px,1.65fr) repeat(4,minmax(120px,1fr)) auto;gap:10px;margin-bottom:18px}.field label{font-size:10px;letter-spacing:.45px;display:block;font-weight:850;color:#738095;text-transform:uppercase;margin-bottom:6px}.field input,.field select{width:100%;height:40px;border:1px solid #dbe3eb;border-radius:9px;background:white;padding:0 11px;color:var(--ink);outline-offset:0}.field input::placeholder{color:#a5b0be}.filter-reset{align-self:end;height:40px;background:white;border:1px solid #dbe3eb;border-radius:9px;padding:0 12px;color:#627387;font-weight:750}.toolbar-note{color:var(--muted);font-size:12px;margin:8px 0 17px;display:flex;gap:8px;align-items:center}.dot{width:7px;height:7px;background:var(--green);border-radius:50%;display:inline-block}.dot.warn{background:var(--orange)}.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:17px}.kpi,.panel{border:1px solid var(--line);background:white;border-radius:14px;box-shadow:var(--shadow)}.kpi{padding:17px 18px 15px}.kpi-head{display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:750;color:#758397}.kpi .ico{width:28px;height:28px;display:grid;place-items:center;border-radius:9px;background:#e7f6f0;color:var(--green);font-size:16px}.kpi .num{font-size:27px;letter-spacing:-1px;color:var(--ink);font-weight:850;margin-top:9px;line-height:1.2;white-space:nowrap}.kpi .foot{margin-top:8px;font-size:11px;color:#8290a0}
@@ -80,6 +81,7 @@
 <div class="sidefoot"><strong>CHECKPLANT ECOSYSTEM</strong><div class="helperlinks"><a href="https://github.com/jamesburtondrums-ops/checkplant" target="_blank" rel="noopener">CheckPlant code ↗</a></div><div style="margin-top:9px">Dispenser data stays in this browser. This preview does not upload it to a public database.</div></div></aside>
 <div class="content"><header class="top"><div style="display:flex;align-items:center;gap:11px"><button class="btn light mobilemenu" id="menuBtn" aria-label="Open menu">☰</button><div><h1 id="pageTitle">Fuel overview</h1><div class="caption" id="pageSubtitle">Your entire site fuel usage at a glance</div></div></div><div class="topright">
 <button class="btn light" id="pdfReportBtn" title="A4 landscape PDF: summary, Road Vehicles, each of the nine fleet departments, Plant and Transfers">↓ Fuel report PDF</button>
+<button class="btn light" id="pdfEmmaBtn" title="CFO report: Skips combines Skip Lorries, Grab Wagon and Ro Ro's; Trade Waste combines FELs and Bin Lorries. All other categories remain separate.">↓ Emma's PDF Report</button>
 <button class="btn light" id="pdfUnassignedBtn" title="A4 landscape PDF listing every unassigned dispense with its original date and time">↓ Unassigned PDF</button>
 <button class="btn light smallhide" id="exportBtn">↓ CSV</button>
 <button class="btn" id="importTopBtn">＋ Import data</button></div></header>
@@ -1150,8 +1152,9 @@ function updatePdfMonthSummary(){
 }
 function openPdfMonthPicker(kind){
  if(!rows.length){toast('Import diesel records before exporting a PDF');return}
- pdfReportKind=kind==='unassigned'?'unassigned':'report';
- $('pdfOptionsTitle').textContent=pdfReportKind==='unassigned'?'Unassigned dispenses · select months':'Fuel management report · select months';
+ pdfReportKind=kind==='unassigned'?'unassigned':kind==='emma'?'emma':'report';
+ $('pdfOptionsTitle').textContent=pdfReportKind==='unassigned'?'Unassigned dispenses · select months':
+  pdfReportKind==='emma'?"Emma's PDF Report · select months":'Fuel management report · select months';
  const available=pdfAvailableMonths();
  const last=pdfLastSelection?.filter(m=>available.includes(m));
  const selected=new Set(last?.length?last:available);
@@ -1368,6 +1371,129 @@ function buildFuelReportPdf(doc,data){
   'Transfers count once in the total diesel issued. They are a movement of fuel and should not be added again as end-use consumption.');
  p.footer();
 }
+
+// Emma's management-report categories are projections only: no edits to
+// ROAD_DEPARTMENTS, accountMappings, mappings, or vehicleDepartments.
+const EMMA_PDF_SECTIONS=[
+ {name:'Skips',departments:['Skip Lorries','Grab Wagon',"Ro Ro's"]},
+ {name:'Trade Waste',departments:['FELs','Bin Lorries']},
+ ...ROAD_DEPARTMENTS.filter(d=>!['Skip Lorries','Grab Wagon',"Ro Ro's",'FELs','Bin Lorries'].includes(d))
+  .map(d=>({name:d,departments:[d]})),
+ {name:'Unassigned Road Vehicles',departments:['']}
+];
+function emmaReportSections(data){
+ const sections=EMMA_PDF_SECTIONS.map(x=>({...x,groups:[],cents:0,dispenses:0}));
+ const byOriginalDept=new Map();
+ for(const section of sections)for(const dept of section.departments){
+  if(byOriginalDept.has(dept))throw Error("Emma's report contains an overlapping department: "+dept);
+  byOriginalDept.set(dept,section);
+ }
+ if(byOriginalDept.size!==ROAD_DEPARTMENTS.length+1)
+  throw Error("Emma's report must cover every road department exactly once");
+ const centsOf=g=>g.events.reduce((sum,r)=>sum+Math.round(Number(r.litres||0)*100),0);
+ for(const g of data.vehicles){
+  const original=deptForGroup(g),section=byOriginalDept.get(original);
+  if(!section)throw Error("Unrecognised department in Emma's report: "+original);
+  section.groups.push(g);section.cents+=centsOf(g);section.dispenses+=g.count;
+ }
+ for(const sec of sections)sec.groups.sort((a,b)=>b.total-a.total);
+ const otherCents=data.otherRoadGroups.reduce((sum,g)=>sum+centsOf(g),0);
+ const groupedRoad=sections.reduce((sum,sec)=>sum+sec.cents,0)+otherCents;
+ if(groupedRoad!==data.totals.road.cents)
+  throw Error("Emma's report failed road-fuel reconciliation; PDF export stopped");
+ return {sections,otherCents,otherDispenses:data.otherRoadGroups.reduce((sum,g)=>sum+g.count,0),groupedRoad};
+}
+function buildEmmasReportPdf(doc,data){
+ const d=doc,period=data.periodLabel,p=createPdfLayout(d,"Emma's PDF Report",period),T=data.totals,
+ sumLitres=c=>litres(c/100),report=emmaReportSections(data);
+ p.drawTop("EMMA'S FUEL REPORT",'CFO / Operational diesel management | '+period+
+  ' | Generated '+new Date().toLocaleDateString('en-GB'));
+ d.setFont('helvetica','normal');d.setFontSize(10);d.setTextColor(...p.muted);
+ d.text('SITE FUEL RECONCILIATION',p.left,58);
+ p.stat(p.left,64,84,'Plant / unresolved',sumLitres(T.plant.cents));
+ p.stat(p.left+91,64,84,'Road / other accounts',sumLitres(T.road.cents));
+ p.stat(p.left+182,64,85,'Bowser / transfers',sumLitres(T.transfer.cents));
+ d.setFillColor(...p.navy);d.roundedRect(p.left,96,p.width,29,3,3,'F');
+ d.setFont('helvetica','normal');d.setTextColor(204,230,224);d.setFontSize(10);
+ d.text('TOTAL DIESEL ISSUED',p.left+8,105);
+ d.setFont('helvetica','bold');d.setTextColor(255,255,255);d.setFontSize(23);
+ d.text(sumLitres(T.totalCents),p.left+8,118);
+ d.setFont('helvetica','normal');d.setFontSize(9);d.setTextColor(204,230,224);
+ d.text(fmt(T.count)+' original dispenses',p.right-8,116,{align:'right'});
+ d.setFont('helvetica','bold');d.setFontSize(11);d.setTextColor(...p.navy);
+ d.text('CFO REPORTING GROUPS',p.left,138);
+ d.setFont('helvetica','normal');d.setFontSize(9);d.setTextColor(...p.muted);
+ d.text("Skips = Skip Lorries + Grab Wagon + Ro Ro's",p.left+3,148);
+ d.text('Trade Waste = FELs + Bin Lorries',p.left+3,157);
+ d.text('Artics, Tippers, Company Vans, Road Sweepers and unassigned vehicles remain separate.',p.left+3,166);
+ p.note("These are PDF-only reporting groupings. No CheckDiesel vehicle department, mapping or dispenser allocation is changed.",178);
+ const summaryRows=report.sections.map(sec=>[
+  sec.name,sec.departments.filter(Boolean).join(' + ')||'Not yet categorised',
+  fmt(sec.groups.length),fmt(sec.dispenses),sumLitres(sec.cents)]);
+ if(data.otherRoadGroups.length)summaryRows.push([
+  'Other non-road accounts','Other dispenser allocations',
+  fmt(data.otherRoadGroups.length),fmt(report.otherDispenses),sumLitres(report.otherCents)]);
+ summaryRows.push(['Plant Machinery','Plant / unresolved',fmt(data.plantGroups.length),
+  fmt(T.plant.count),sumLitres(T.plant.cents)]);
+ summaryRows.push(['Transfers & Bowsers','Fuel movements',fmt(data.transferGroups.length),
+  fmt(T.transfer.count),sumLitres(T.transfer.cents)]);
+ p.section('CFO | Fuel allocation summary','Emma reporting categories | '+period,
+  [['Total diesel',sumLitres(T.totalCents)],['Road / other',sumLitres(T.road.cents)],['Reporting months',fmt(data.monthKeys.length)]],
+  [{title:'Reporting category',width:70,bold:true},{title:'Included departments',width:91},
+   {title:'Assets',width:24,align:'right'},{title:'Dispenses',width:29,align:'right'},
+   {title:'Fuel issued',width:53,align:'right'}],
+  summaryRows,
+  'Road / other, Plant / unresolved and Transfers sum to total diesel issued. Transfers are counted once, not as additional consumption.');
+ // Separate page for each CFO group: Skips, Trade Waste, and all remaining original departments.
+ for(const section of report.sections){
+  const rows=section.groups.map(g=>[
+   deptForGroup(g)||'Unassigned',labelFor(g.code),[...g.sourceAccounts].join(', '),
+   fmt(g.count),litres(g.total)]);
+  p.section(section.name,
+   section.departments.filter(Boolean).join(' + ')||'No original road department assigned',
+   [['Diesel issued',sumLitres(section.cents)],['Vehicles',fmt(section.groups.length)],
+    ['Dispenses',fmt(section.dispenses)]],
+   [{title:'CheckDiesel department',width:52},{title:'Vehicle / registration',width:80,bold:true},
+    {title:'Source fob(s)',width:62},{title:'Dispenses',width:28,align:'right'},
+    {title:'Fuel issued',width:45,align:'right'}],
+   rows,
+   "Original CheckDiesel departments remain unchanged. This grouping exists only in Emma's report.");
+ }
+ if(data.otherRoadGroups.length){
+  p.section('Other non-road accounts','Issues assigned to non-road accounts | '+period,
+   [['Fuel issued',sumLitres(report.otherCents)],['Asset IDs',fmt(data.otherRoadGroups.length)],
+    ['Dispenses',fmt(report.otherDispenses)]],
+   [{title:'Account / asset',width:86,bold:true},{title:'Source fob(s)',width:72},
+    {title:'Classification',width:43},{title:'Dispenses',width:26,align:'right'},
+    {title:'Fuel issued',width:40,align:'right'}],
+   data.otherRoadGroups.map(g=>[labelFor(g.code),[...g.sourceAccounts].join(', '),
+    typeOf(g.code),fmt(g.count),litres(g.total)]),
+   'These issues are retained separately so the CFO report reconciles with all diesel issued.');
+ }
+ const plantGroups=data.plantGroups.slice().sort((a,b)=>b.total-a.total);
+ p.section('Plant Machinery','Plant and unresolved fuel issues | '+period,
+  [['Diesel issued',sumLitres(T.plant.cents)],['Machine / asset IDs',fmt(plantGroups.length)],
+   ['Dispenses',fmt(T.plant.count)]],
+  [{title:'Machine / identifier',width:78,bold:true},{title:'Source fob(s)',width:60},
+   {title:'Class',width:40},{title:'Dispenses',width:32,align:'right'},
+   {title:'Fuel issued',width:57,align:'right'}],
+  plantGroups.map(g=>[labelFor(g.code),[...g.sourceAccounts].join(', '),
+   typeOf(g.code)==='unmapped'?'Unclassified':typeOf(g.code)==='plant'?'Plant machinery':'Review',
+   fmt(g.count),litres(g.total)]),
+  'Unclassified PLANT2 issues remain visible and are included in the site diesel total.');
+ const transferGroups=data.transferGroups.slice().sort((a,b)=>b.total-a.total);
+ p.section('Transfers & Bowsers','Sheffield, bowsers and confirmed movements | '+period,
+  [['Diesel issued',sumLitres(T.transfer.cents)],['Transfer purposes',fmt(transferGroups.length)],
+   ['Dispenses',fmt(T.transfer.count)]],
+  [{title:'Transfer purpose',width:85,bold:true},{title:'Source fob(s)',width:65},
+   {title:'Issues',width:35,align:'right'},{title:'Last issue',width:42},
+   {title:'Fuel issued',width:40,align:'right'}],
+  transferGroups.map(g=>[labelFor(g.code),[...g.sourceAccounts].join(', '),
+   fmt(g.count),pdfDisplayDate(g.events.map(r=>r.date).sort().at(-1)),litres(g.total)]),
+  'Transfers are movements of fuel, included once in diesel issued; do not add them again as consumption.');
+ p.footer();
+}
+
 function buildUnassignedReportPdf(doc,data){
  const period=data.periodLabel,p=createPdfLayout(doc,'Unassigned dispenses',period);
  let y=p.drawTop('UNASSIGNED DIESEL DISPENSES','Review register | '+period+' | Original dispenser timestamps');
@@ -1409,10 +1535,12 @@ function downloadFuelPdf(kind,selectedMonths,action='download'){
   try{
    const data=pdfReportSnapshot(selectedMonths);
    const doc=new window.jspdf.jsPDF({orientation:'landscape',unit:'mm',format:'a4',compress:true});
-   if(kind==='unassigned')buildUnassignedReportPdf(doc,data);else buildFuelReportPdf(doc,data);
+   if(kind==='unassigned')buildUnassignedReportPdf(doc,data);
+   else if(kind==='emma')buildEmmasReportPdf(doc,data);
+   else buildFuelReportPdf(doc,data);
    const code=data.monthKeys.length<=6?data.monthKeys.join('_'):
     data.monthKeys[0]+'_'+data.monthKeys.at(-1)+'_'+data.monthKeys.length+'months';
-   const filename='CheckDiesel_'+(kind==='unassigned'?'Unassigned_Dispenses':'Fuel_Management_Report')+'_'+code+'.pdf';
+   const filename='CheckDiesel_'+(kind==='unassigned'?'Unassigned_Dispenses':kind==='emma'?'Emmas_PDF_Report':'Fuel_Management_Report')+'_'+code+'.pdf';
    if(action==='print'&&preview){
     const blob=doc.output('blob'),url=URL.createObjectURL(blob);
     preview.location.replace(url);
@@ -1421,7 +1549,7 @@ function downloadFuelPdf(kind,selectedMonths,action='download'){
    }else{
     if(action==='print')toast('Pop-up blocked; downloading PDF instead. Open it and choose Print.');
     doc.save(filename);
-    if(action!=='print')toast((kind==='unassigned'?'Unassigned dispenses':'Fuel management report')+' PDF downloaded');
+    if(action!=='print')toast((kind==='unassigned'?'Unassigned dispenses':kind==='emma'?"Emma's CFO report":'Fuel management report')+' PDF downloaded');
    }
    pdfLastSelection=data.monthKeys.slice();
    closePdfMonthPicker();
@@ -1542,6 +1670,7 @@ $('importMileageBtn').addEventListener('click',async()=>{try{await importHistory
 $('importHoursBtn').addEventListener('click',async()=>{try{await importHistoryFile($('hoursFile').files?.[0],'plant')}catch(err){$('checkplantStatus').textContent=err.message;toast(err.message)}});
 $('checkplantSync').addEventListener('click',syncCheckPlant);$('closeModal').addEventListener('click',closeDrawer);$('assetModal').addEventListener('click',e=>{if(e.target===$('assetModal'))closeDrawer()});document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDrawer()});$('menuBtn').addEventListener('click',()=>$('sidebar').classList.toggle('open'));$('importTopBtn').addEventListener('click',()=>navigate('import'));$('exportBtn').addEventListener('click',()=>download(csvLines(visible())));
 $('pdfReportBtn').addEventListener('click',()=>openPdfMonthPicker('report'));
+$('pdfEmmaBtn').addEventListener('click',()=>openPdfMonthPicker('emma'));
 $('pdfUnassignedBtn').addEventListener('click',()=>openPdfMonthPicker('unassigned'));
 $('pdfMonthChoices').addEventListener('change',updatePdfMonthSummary);
 $('pdfMonthsAll').addEventListener('click',()=>{for(const e of $('pdfMonthChoices').querySelectorAll('input[data-pdf-month]'))e.checked=true;updatePdfMonthSummary()});
