@@ -856,18 +856,28 @@ function drawAccountMappings(){
    '<td><select data-acc-type="'+esc(acc)+'"><option value="road" '+(type==='road'?'selected':'')+'>Road vehicle</option><option value="plant" '+(type==='plant'?'selected':'')+'>Plant machinery</option><option value="transfer" '+(type==='transfer'?'selected':'')+'>Transfer / bowser</option><option value="unmapped" '+(type==='unmapped'?'selected':'')+'>Unclassified</option></select></td>'+
    '<td><select data-acc-reg="'+esc(acc)+'">'+options+'</select><input data-acc-newreg="'+esc(acc)+'" placeholder="Or enter full registration" maxlength="12" style="min-width:150px;margin-top:5px"></td>'+
    '<td><input data-acc-name="'+esc(acc)+'" placeholder="Optional friendly name" value="'+esc(setting.name||'')+'"></td>'+
+   '<td><select class="fleet-department-select" data-acc-department="'+esc(acc)+'" aria-label="Department for account '+esc(acc)+'">'+departmentOptions(setting.department||vehicleDepartments['ACCOUNT:'+acc]||vehicleDepartments[codeKey(identity.key)]||'')+'</select></td>'+
    '<td><button class="btn small light" data-save-account="'+esc(acc)+'">Save</button><div class="smalltxt">'+(identity.registration?'✓ Matched to '+esc(identity.registration):'Uses account ID until registration is known')+'</div></td></tr>';
- }).join(''):'<tr><td colspan="6" class="empty">Unlock the October archive or import fuel records to see dispenser accounts.</td></tr>';
+ }).join(''):'<tr><td colspan="7" class="empty">Unlock the October archive or import fuel records to see dispenser accounts.</td></tr>';
 }
 function saveAccount(account){
  const acc=codeKey(account),el=k=>document.querySelector('['+k+'="'+CSS.escape(acc)+'"]');
  if(!acc||acc==='PLANT2')return toast('PLANT2 must be allocated per individual fuel issue');
  const type=el('data-acc-type')?.value||'road',name=el('data-acc-name')?.value.trim()||'',
- manual=regKey(el('data-acc-newreg')?.value||''),chosen=regKey(el('data-acc-reg')?.value||''),registration=manual||chosen;
+ manual=regKey(el('data-acc-newreg')?.value||''),chosen=regKey(el('data-acc-reg')?.value||''),registration=manual||chosen,
+ department=el('data-acc-department')?.value||'';
  if(registration&&!isReg(registration))return toast('Enter a full, valid vehicle registration');
+ if(department&&!deptValid(department))return toast('Select a valid fleet department');
  if(registration&&type!=='road')return toast('A vehicle registration requires Road vehicle allocation');
  if(isReg(acc)&&type==='road'&&registration&&registration!==regKey(acc))return toast('A full dispenser registration cannot be assigned to a different registration');
- accountMappings[acc]={type,name,registration:type==='road'?registration:'',confirmedAt:new Date().toISOString()};
+ const oldIdentity=accountIdentity(acc),newReg=type==='road'?registration:'';
+ accountMappings[acc]={...accountMappings[acc],type,name,registration:newReg,department:type==='road'?department:'',confirmedAt:new Date().toISOString()};
+ if(type==='road'){
+  vehicleDepartments['ACCOUNT:'+acc]=department;
+  if(isReg(newReg))vehicleDepartments[regKey(newReg)]=department;
+  if(oldIdentity.type==='road')vehicleDepartments[codeKey(oldIdentity.key)]=department;
+  try{localStorage.setItem(K_DEPARTMENTS,JSON.stringify(vehicleDepartments))}catch{toast('Department saved for this session only')}
+ }
  try{localStorage.setItem(K_ACCOUNTS,JSON.stringify(accountMappings))}catch{toast('Saved for this session, but browser storage is full')}
  toast('Account '+acc+(registration?' → '+registration:'')+' mapping saved');draw();
 }
