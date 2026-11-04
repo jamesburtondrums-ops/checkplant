@@ -78,7 +78,7 @@
 <button class="navitem" data-view="mapping"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 7 7 0 3 4 6 0M4 17h7l3-4h6M17 8l3 3-3 3"/></svg>Asset mapping</button>
 <button class="navitem" data-view="meterhistory">▤ Mileage &amp; engine hours</button>
 <button class="navitem" data-view="import"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/></svg>Import data</button>
-<div class="sidefoot"><strong>CHECKPLANT ECOSYSTEM</strong><div class="helperlinks"><a href="https://github.com/jamesburtondrums-ops/checkplant" target="_blank" rel="noopener">CheckPlant code ↗</a></div><div style="margin-top:9px">Dispenser data stays in this browser. This preview does not upload it to a public database.</div></div></aside>
+<div class="sidefoot"><strong>CHECKPLANT ECOSYSTEM</strong><div class="helperlinks"><a href="https://github.com/jamesburtondrums-ops/checkplant" target="_blank" rel="noopener">CheckPlant code ↗</a></div><div style="margin-top:9px">Connect shared storage to save online. A browser copy is retained for offline work.</div></div></aside>
 <div class="content"><header class="top"><div style="display:flex;align-items:center;gap:11px"><button class="btn light mobilemenu" id="menuBtn" aria-label="Open menu">☰</button><div><h1 id="pageTitle">Fuel overview</h1><div class="caption" id="pageSubtitle">Your entire site fuel usage at a glance</div></div></div><div class="topright">
 <button class="btn light" id="pdfReportBtn" title="A4 landscape PDF: summary, Road Vehicles, each of the nine fleet departments, Plant and Transfers">↓ Fuel report PDF</button>
 <button class="btn light" id="pdfEmmaBtn" title="CFO report: Skips combines Skip Lorries, Grab Wagon and Ro Ro's; Trade Waste combines FELs and Bin Lorries. All other categories remain separate.">↓ Emma's PDF Report</button>
@@ -86,6 +86,7 @@
 <button class="btn light smallhide" id="exportBtn">↓ CSV</button>
 <button class="btn" id="importTopBtn">＋ Import data</button></div></header>
 <main class="page">
+<section class="panel" style="margin-bottom:17px" aria-label="Shared storage"><div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:200px"><strong>Shared storage</strong><div id="cloudStatus" class="smalltxt" role="status">Connect to save and access your CheckDiesel data across devices.</div></div><input id="cloudAccessKey" type="password" autocomplete="current-password" aria-label="CheckDiesel access key" placeholder="CheckDiesel access key" style="padding:10px;border:1px solid #cdd7e0;border-radius:8px"><button class="btn" id="cloudConnect" type="button">Connect / Sync</button></div><div class="smalltxt" style="margin-top:7px">Saves dispenses, mappings, departments, allocations, machine lists and meter history. Connect on each device using the same key. Existing shared mappings take priority when first joining from another browser.</div></section>
 <div class="filters"><div class="field"><label>Account group</label><select id="filterAccountGroup"><option value="">All dispenser accounts</option><option value="plant2">PLANT2 plant / unresolved</option><option value="other">Road vehicles &amp; other accounts</option></select></div><div class="field"><label>Find an asset / registration</label><input id="filterText" type="search" placeholder="Search original fob, reporting account, registration or label..."></div><div class="field"><label>From date</label><input id="dateFrom" type="date"></div><div class="field"><label>To date</label><input id="dateTo" type="date"></div><div class="field"><label>Asset class</label><select id="filterClass"><option value="">All types</option><option value="road">Road vehicles</option><option value="plant">Plant machinery</option><option value="transfer">Bowsers / transfers</option><option value="unmapped">Unclassified</option></select></div><div class="field"><label>Reporting dispense account</label><select id="filterDriver"><option value="">All accounts</option></select></div><div class="field"><label>Original dispensing fob</label><select id="filterOrigin"><option value="">All original fobs</option></select></div><button class="filter-reset" id="resetBtn">Reset</button></div>
 <div class="toolbar-note"><span class="dot" id="dataDot"></span><span id="dataStatus">No fuel records loaded</span> <span>•</span><span id="filterCount">Showing 0 records</span></div><div class="pdf-export-note">Click a PDF button, <b>choose the months</b> (including non-consecutive months), then Download or Print / Preview. Month selection controls the exported report independently of on-screen filters. Files are generated locally; no fuel data is uploaded.</div>
 <div class="view active" id="view-overview">
@@ -179,7 +180,7 @@
 </div><p class="smalltxt">Choose one or more sections. Report totals include only your choices.</p></fieldset>
 <div class="pdf-month-summary" id="pdfMonthSummary" aria-live="polite">Select at least one month.</div>
 <div class="pdf-month-actions"><button class="btn light" id="pdfOptionsCancel" type="button">Cancel</button><button class="btn light" id="pdfOptionsDownload" type="button">↓ Download PDF</button><button class="btn" id="pdfOptionsPrint" type="button">Print / Preview PDF</button></div>
-<p class="smalltxt pdf-month-tip">Print / Preview opens the PDF in a new browser tab so you can print it on paper. Your diesel information remains in this browser.</p>
+<p class="smalltxt pdf-month-tip">Print / Preview opens the PDF in a new browser tab so you can print it on paper. PDFs use your current CheckDiesel records.</p>
 </div></div>
 <div id="assetModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="drawerTitle"><div class="drawer"><div class="header"><div><div class="sub" id="drawerSub">Asset overview</div><h2 id="drawerTitle">—</h2><div id="drawerBadge"></div></div><button class="xbtn" id="closeModal" aria-label="Close details">×</button></div><div id="drawerInner"></div></div></div><div id="toast" class="toast" role="status"></div>
 <script>
@@ -403,7 +404,7 @@ function filters(){return {accountGroup:$('filterAccountGroup').value,q:$('filte
 function visible(){const f=filters();return rows.filter(r=>{if((f.a&&r.date<f.a)||(f.b&&r.date>f.b))return false;const meta=filterMeta(r);return (!f.accountGroup||(f.accountGroup==='plant2'?(meta.account==='PLANT2'&&meta.type!=='transfer'):(meta.account!=='PLANT2'&&meta.type!=='transfer')))&&(!f.type||meta.type===f.type)&&(!f.driver||meta.account===f.driver)&&(!f.source||meta.source===f.source)&&(!f.q||meta.search.includes(f.q))})}
 function group(data){if(cachedGroups.has(data))return cachedGroups.get(data);const mp=new Map();for(const r of data){const info=rowIdentity(r),groupCode=info.key;let it=mp.get(groupCode);if(!it){it={code:groupCode,count:0,total:0,invalid:0,flags:0,events:[],sourceAccounts:new Set(),rawCodes:new Set()};mp.set(groupCode,it)}it.count++;it.total+=r.litres;it.events.push(r);it.sourceAccounts.add(codeKey(r.driver));it.rawCodes.add(codeKey(r.code));if(validRead(r.reading)===null&&!placeholderMeter(r.reading))it.invalid++;if(reportableIssues(r).length)it.flags++}const grouped=[...mp.values()].sort((a,b)=>b.total-a.total);cachedGroups.set(data,grouped);return grouped}
 
-function saveMeterStore(){meterRevision++;try{localStorage.setItem(K_METERS,JSON.stringify(meters));return true}catch(e){toast('Browser storage is full; meter data is only available this session');return false}}
+function saveMeterStore(){meterRevision++;try{saveLocal(K_METERS,JSON.stringify(meters));return true}catch(e){toast('Browser storage is full; meter data is only available this session');return false}}
 function meterIdentity(m){return [m.kind,m.machineId||m.asset,m.date,m.reading,m.unit].join('|')}
 function mergeMeterRows(next){
  const index=new Map(meters.map(m=>[meterIdentity(m),m]));let added=0,skipped=0,invalid=0,upgraded=0;
@@ -619,7 +620,7 @@ async function syncCheckPlant(){
    const v=d.data();return {id:d.id,name:String(v.name||d.id),serialNumber:String(v.serialNumber||''),
    branch:String(v.branch||''),category:String(v.categoryKey||v.category||''),currentHours:Number(v.currentHours)||0};
   }).sort((a,b)=>(a.branch||'').localeCompare(b.branch||'')||a.name.localeCompare(b.name));
-  try{localStorage.setItem(K_PLANTS,JSON.stringify(plantMachines))}catch{toast('Machine roster available only for this session')}
+  try{saveLocal(K_PLANTS,JSON.stringify(plantMachines))}catch{toast('Machine roster available only for this session')}
   draw();
   status.textContent='Loaded '+plantMachines.length+' machines. Reading recent dated hours…';
   try{
@@ -766,7 +767,7 @@ function saveVehicleDepartment(asset,dept){
   const matches=rows.filter(r=>sourceAccount(r)==='PLANT2'&&codeKey(r.code)===raw);
   if(matches.length&&matches.every(r=>codeKey(rowIdentity(r).key)===key))vehicleDepartments['PLANT2:'+raw]=dept;
  }
- try{localStorage.setItem(K_DEPARTMENTS,JSON.stringify(vehicleDepartments))}
+ try{saveLocal(K_DEPARTMENTS,JSON.stringify(vehicleDepartments))}
  catch{toast('Department assigned for this session; browser storage is full')}
  draw();toast(labelFor(g.code)+' categorised as '+(dept||'Unassigned'));
 }
@@ -874,7 +875,7 @@ function applyTransactionAccount(encoded,clear=false){
   // Explicit PLANT2 value suppresses a broader identifier mapping for this individual fuel issue.
   transactionAllocations[key]=target;
  }
- try{localStorage.setItem(K_REALLOC,JSON.stringify(transactionAllocations))}catch{toast('Allocation applied this session but browser storage is full')}
+ try{saveLocal(K_REALLOC,JSON.stringify(transactionAllocations))}catch{toast('Allocation applied this session but browser storage is full')}
  filterSetup();draw();toast(clear?'Individual exception cleared; default asset mapping restored':'Individual PLANT2 refuel allocation saved');
 }
 
@@ -916,9 +917,9 @@ function saveAccount(account){
   vehicleDepartments['ACCOUNT:'+acc]=department;
   if(isReg(newReg))vehicleDepartments[regKey(newReg)]=department;
   if(oldIdentity.type==='road')vehicleDepartments[codeKey(oldIdentity.key)]=department;
-  try{localStorage.setItem(K_DEPARTMENTS,JSON.stringify(vehicleDepartments))}catch{toast('Department saved for this session only')}
+  try{saveLocal(K_DEPARTMENTS,JSON.stringify(vehicleDepartments))}catch{toast('Department saved for this session only')}
  }
- try{localStorage.setItem(K_ACCOUNTS,JSON.stringify(accountMappings))}catch{toast('Saved for this session, but browser storage is full')}
+ try{saveLocal(K_ACCOUNTS,JSON.stringify(accountMappings))}catch{toast('Saved for this session, but browser storage is full')}
  toast('Account '+acc+(registration?' → '+registration:'')+' mapping saved');draw();
 }
 
@@ -993,10 +994,10 @@ function connectMachine(id){
  if(existing!=='plant'&&!confirm('This identifier is currently '+existing+'. Reclassify '+code+' as plant machine '+machine.name+'?'))return;
  if(source==='PLANT2'){
   mappings[code]={...config,type:'plant',name:config.name||machine.name,registration:'',checkPlantId:id,confirmedAt:new Date().toISOString()};
-  try{localStorage.setItem(K_MAP,JSON.stringify(mappings))}catch{toast('Mapping saved for this session only')}
+  try{saveLocal(K_MAP,JSON.stringify(mappings))}catch{toast('Mapping saved for this session only')}
  }else{
   accountMappings[code]={...config,type:'plant',name:config.name||machine.name,registration:'',checkPlantId:id,confirmedAt:new Date().toISOString()};
-  try{localStorage.setItem(K_ACCOUNTS,JSON.stringify(accountMappings))}catch{toast('Mapping saved for this session only')}
+  try{saveLocal(K_ACCOUNTS,JSON.stringify(accountMappings))}catch{toast('Mapping saved for this session only')}
  }
  draw();toast('Linked '+code+' to '+machine.name+' (CheckPlant ID preserved)');
  fetchMachineHours(id).catch(e=>toast('Linked successfully; CheckPlant hours access unavailable: '+e.message));
@@ -1005,7 +1006,7 @@ function unlinkMachine(id){
  const links=linkedFuelSources(id),machine=plantMachines.find(m=>m.id===id);
  if(!links.length||!confirm('Unlink '+links.length+' fuel identifier(s) from '+(machine?.name||id)+'? Fuel records and imported hours will be retained.'))return;
  for(const item of links){if(item.source==='PLANT2')delete mappings[item.code].checkPlantId;else delete accountMappings[item.code].checkPlantId}
- try{localStorage.setItem(K_MAP,JSON.stringify(mappings));localStorage.setItem(K_ACCOUNTS,JSON.stringify(accountMappings))}catch{}
+ try{saveLocal(K_MAP,JSON.stringify(mappings));saveLocal(K_ACCOUNTS,JSON.stringify(accountMappings))}catch{}
  draw();toast('Fuel links removed; historical data retained.');
 }
 async function fetchMachineHours(id){
@@ -1110,7 +1111,7 @@ function saveMap(code){
  if(department&&type!=='road')return toast('Select Road vehicle before assigning a fleet department');
  if(proposed&&!vehicleAccountChoices().includes(target)){
   accountMappings[target]={type:'road',name:'Vehicle account '+target,registration:isReg(registration)?regKey(registration):(isReg(norm)?regKey(norm):''),department,confirmedAt:new Date().toISOString()};
-  try{localStorage.setItem(K_ACCOUNTS,JSON.stringify(accountMappings))}catch{}
+  try{saveLocal(K_ACCOUNTS,JSON.stringify(accountMappings))}catch{}
  }
  mappings[norm]={type,name,registration:type==='road'?(isReg(norm)?regKey(norm):registration):'',
   unit:mappings[norm]?.unit||'mi',checkPlantId:type==='plant'?checkPlantId:'',
@@ -1120,9 +1121,9 @@ function saveMap(code){
   if(isReg(norm))vehicleDepartments[regKey(norm)]=department;
   if(isReg(registration))vehicleDepartments[regKey(registration)]=department;
   if(target)vehicleDepartments['ACCOUNT:'+target]=department;
-  try{localStorage.setItem(K_DEPARTMENTS,JSON.stringify(vehicleDepartments))}catch{toast('Department saved for this session only')}
+  try{saveLocal(K_DEPARTMENTS,JSON.stringify(vehicleDepartments))}catch{toast('Department saved for this session only')}
  }
- try{localStorage.setItem(K_MAP,JSON.stringify(mappings))}catch{toast('Saved for this session, but browser storage is full')}
+ try{saveLocal(K_MAP,JSON.stringify(mappings))}catch{toast('Saved for this session, but browser storage is full')}
  filterSetup();draw();
  toast(target?'PLANT2 '+norm+' reallocated to '+target+' for reporting':'PLANT2 '+norm+' mapping saved');
  if(openCode===norm&&$('assetModal').classList.contains('open'))drawer(norm);
@@ -1638,13 +1639,13 @@ async function unlockHistory(){
   const decoded=JSON.parse(await new Response(stream).text());
   if(!Array.isArray(decoded)||decoded.length!==323||Math.abs(decoded.reduce((sum,r)=>sum+Number(r.litres||0),0)-55802.41)>0.001)throw Error('Unexpected historic archive contents.');
   const result=mergeRows(rows,decoded);rows=result.rows;
-  try{localStorage.setItem(K_DATA,JSON.stringify(rows))}catch{toast('Could not store records. Browser storage may be full.')}
+  try{saveLocal(K_DATA,JSON.stringify(rows))}catch{toast('Could not store records. Browser storage may be full.')}
   closeHistory();filterSetup();navigate('overview');
   toast(result.added?result.added+' historic transactions loaded · '+result.skipped+' already present':'All 323 archive transactions are already in this browser');
  }catch(err){$('historyError').textContent='Unable to unlock: '+(err?.name==='OperationError'?'incorrect archive access key':err.message||'invalid key')}
  finally{submit.disabled=false}
 }
-async function loadFile(file){if(!file)return;if(file.size>20_000_000)throw Error('File is too large (20MB maximum).');let matrix;if(/\.csv$/i.test(file.name))matrix=parseCSV(await file.text());else if(/\.xlsx$/i.test(file.name))matrix=await parseXLSX(file);else throw Error('Select .xlsx or .csv.');const result=processFile(matrix);if(!result.length){const sample=matrix[1]?.[0];throw Error('No valid fuel issues found. Check the DATE format and positive QUANTITY (L) values.'+(sample!==undefined?' First date: '+String(sample).slice(0,45):''))}const merged=mergeRows(rows,result);if(!confirm('Add '+merged.added+' new dispense rows and skip '+merged.skipped+' exact duplicates?'))return;rows=merged.rows;try{localStorage.setItem(K_DATA,JSON.stringify(rows))}catch(e){toast('Imported, but browser storage limit reached; data is only available for this session.')}const ids=['filterText','filterClass','filterAccountGroup','filterDriver','filterOrigin'];for(const id of ids)$(id).value='';$('dateFrom').value=rows[0]?.date||'';$('dateTo').value=rows[rows.length-1]?.date||'';pageAssets=1;pageTx=1;filterSetup();navigate('overview');toast(merged.added+' new dispenses imported');$('importResult').textContent=merged.added+' new records added · '+merged.skipped+' duplicates skipped from '+file.name+' · Dates '+(rows[0]?.date||'')+' to '+(rows[rows.length-1]?.date||'')}
+async function loadFile(file){if(!file)return;if(file.size>20_000_000)throw Error('File is too large (20MB maximum).');let matrix;if(/\.csv$/i.test(file.name))matrix=parseCSV(await file.text());else if(/\.xlsx$/i.test(file.name))matrix=await parseXLSX(file);else throw Error('Select .xlsx or .csv.');const result=processFile(matrix);if(!result.length){const sample=matrix[1]?.[0];throw Error('No valid fuel issues found. Check the DATE format and positive QUANTITY (L) values.'+(sample!==undefined?' First date: '+String(sample).slice(0,45):''))}const merged=mergeRows(rows,result);if(!confirm('Add '+merged.added+' new dispense rows and skip '+merged.skipped+' exact duplicates?'))return;rows=merged.rows;try{saveLocal(K_DATA,JSON.stringify(rows))}catch(e){toast('Imported, but browser storage limit reached; data is only available for this session.')}const ids=['filterText','filterClass','filterAccountGroup','filterDriver','filterOrigin'];for(const id of ids)$(id).value='';$('dateFrom').value=rows[0]?.date||'';$('dateTo').value=rows[rows.length-1]?.date||'';pageAssets=1;pageTx=1;filterSetup();navigate('overview');toast(merged.added+' new dispenses imported');$('importResult').textContent=merged.added+' new records added · '+merged.skipped+' duplicates skipped from '+file.name+' · Dates '+(rows[0]?.date||'')+' to '+(rows[rows.length-1]?.date||'')}
 function handleClicks(ev){let el=ev.target.closest('[data-view],[data-account-group],[data-source-account],[data-goto],[data-asset],[data-page],[data-direction],[data-map],[data-save]');if(!el)return;if(el.dataset.view){if(el.dataset.view==='transfers'){$('filterAccountGroup').value='';$('filterDriver').value='';$('filterClass').value='';$('filterOrigin').value=''}navigate(el.dataset.view)}if(el.dataset.accountGroup!==undefined){$('filterAccountGroup').value=el.dataset.accountGroup;$('filterDriver').value='';$('filterOrigin').value='';navigate('overview')}if(el.dataset.sourceAccount){$('filterAccountGroup').value='';$('filterOrigin').value='';$('filterDriver').value=el.dataset.sourceAccount;navigate('transactions')}if(el.dataset.goto){ev.preventDefault?.();navigate(el.dataset.goto)}if(el.dataset.asset)drawer(el.dataset.asset);if(el.dataset.map){closeDrawer();navigate('mapping');
  const c=codeKey(el.dataset.map),account=c.startsWith('ACCOUNT:')?c.slice(8):null,raw=c.startsWith('UNRESOLVED:')?c.slice(11):c.startsWith('VEHICLE:')?c.slice(8):c.startsWith('PLANT:')?c.slice(6):c.startsWith('TRANSFER:')?c.slice(9):c;
  const matchingAccounts=rows.filter(r=>codeKey(r.driver)!=='PLANT2'&&rowIdentity(r).key===c).map(r=>codeKey(r.driver));
@@ -1752,7 +1753,125 @@ derivedResetters.push(()=>{visibleRows=null;visibleKey=''});
 const selectVisible=visible;
 visible=function(){const key=JSON.stringify(filters());if(visibleRows&&key===visibleKey)return visibleRows;visibleKey=key;return visibleRows=selectVisible()};
 
+// Shared storage retains browser copies for offline work and recovery.
+const CLOUD_URL='https://checkdiesel-storage.james-burton-drums.workers.dev/state';
+let cloudKey='',cloudRevision=0,cloudBase=null,cloudDirty=false,cloudBusy=false,cloudTimer=null,cloudConnected=false;
+const cloudStatus=message=>$('cloudStatus').textContent=message;
+function cloudSnapshot(){return JSON.parse(JSON.stringify({rows,mappings,accountMappings,transactionAllocations,vehicleDepartments,meters,plantMachines}));}
+function saveLocal(key,value){
+ let error;
+ try{localStorage.setItem(key,value)}catch(e){error=e}
+ cloudDirty=true;
+ cloudStatus(cloudConnected?'Changes waiting to save…':'Changes on this device — connect shared storage to save online');
+ clearTimeout(cloudTimer);if(cloudConnected)cloudTimer=setTimeout(saveCloud,900);
+ if(error)throw error;
+}
+function cloudBackup(){
+ try{localStorage.setItem('cd_cloud_recovery_v1',JSON.stringify({at:new Date().toISOString(),state:cloudSnapshot()}))}catch{throw Error('Cannot create a recovery copy. Free some browser storage before connecting.');}
+}
+function applyCloud(state){
+ rows=state.rows;mappings=state.mappings;accountMappings=state.accountMappings;
+ transactionAllocations=state.transactionAllocations;vehicleDepartments=state.vehicleDepartments;
+ meters=state.meters;plantMachines=state.plantMachines;
+ for(const [key,value] of [[K_DATA,rows],[K_MAP,mappings],[K_ACCOUNTS,accountMappings],[K_REALLOC,transactionAllocations],[K_DEPARTMENTS,vehicleDepartments],[K_METERS,meters],[K_PLANTS,plantMachines]]){
+  try{localStorage.setItem(key,JSON.stringify(value))}catch{}
+ }
+ meterRevision++;filterSetup();draw();
+}
+function mergeCloudState(remote,local,base){
+ const merged={};
+ const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+ for(const key of ['mappings','accountMappings','transactionAllocations','vehicleDepartments']){
+  merged[key]={...remote[key]};
+  for(const [id,value] of Object.entries(local[key])){
+   if(base){
+    if(same(value,base[key]?.[id]))continue;
+    if(!same(remote[key][id],base[key]?.[id])&&!same(remote[key][id],value))throw Error('Conflicting '+key+' entry '+id+'. Your changes remain on this device; do not clear browser data.');
+    merged[key][id]=value;
+   }else if(!(id in merged[key]))merged[key][id]=value;
+  }
+  if(base)for(const id of Object.keys(base[key]||{}))if(!(id in local[key])){
+   if(!same(remote[key][id],base[key][id])&&id in remote[key])throw Error('Conflicting removal in '+key+'. Your local changes are retained.');
+   delete merged[key][id];
+  }
+ }
+ merged.rows=mergeRows(remote.rows,local.rows).rows;
+ const union=(a,b,id)=>[...new Map([...b,...a].map(v=>[id(v),v])).values()];
+ merged.meters=union(remote.meters,local.meters,v=>JSON.stringify(v));
+ merged.plantMachines=union(remote.plantMachines,local.plantMachines,v=>v.id);
+ return merged;
+}
+async function cloudRequest(method,body){
+ const response=await fetch(CLOUD_URL,{method,headers:{Authorization:'Bearer '+cloudKey,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(20000)});
+ const data=await response.json();
+ if(!response.ok){const error=Error(data.error||'Shared storage unavailable');error.status=response.status;throw error;}
+ return data;
+}
+function cloudSaved(state,result){
+ cloudBase=state;cloudRevision=result.revision;
+ try{localStorage.setItem('cd_cloud_base_v1',JSON.stringify(state))}catch{}
+ cloudStatus('Saved online · '+new Date(result.savedAt||Date.now()).toLocaleString('en-GB'));
+}
+async function connectCloud(){
+ if(cloudBusy)return;
+ const entered=$('cloudAccessKey').value.trim();if(entered)cloudKey=entered;
+ if(!cloudKey){cloudStatus('Enter your existing CheckDiesel access key.');$('cloudAccessKey').focus();return;}
+ cloudBusy=true;$('cloudConnect').disabled=true;cloudStatus('Connecting to shared storage…');
+ try{
+  cloudBackup();
+  const remote=await cloudRequest('GET');
+  const local=cloudSnapshot();
+  let baseline=cloudBase;
+  if(!baseline)try{baseline=JSON.parse(localStorage.getItem('cd_cloud_base_v1')||'null')}catch{}
+  const merged=remote.state?mergeCloudState(remote.state,local,baseline):local;
+  // Do not replace local work if the shared revision changes while connecting.
+  const result=remote.state&&JSON.stringify(merged)===JSON.stringify(remote.state)?remote:await cloudRequest('PUT',{revision:remote.revision,state:merged});
+  // Include edits made while the network request was in flight in the next save.
+  const changed=JSON.stringify(local)!==JSON.stringify(cloudSnapshot());
+  cloudSaved(merged,result);cloudDirty=changed;cloudConnected=true;
+  if(!changed)applyCloud(merged);
+  else {cloudBase=local;try{localStorage.setItem('cd_cloud_base_v1',JSON.stringify(local))}catch{}cloudConnected=false;cloudStatus('Local changes made during connection. Click Connect / Sync again to merge safely.');}
+  $('cloudAccessKey').value='';
+  $('cloudConnect').textContent='Connect / Sync';
+  if(cloudConnected){try{sessionStorage.setItem('cd_cloud_session_key_v1',cloudKey)}catch{}toast('Shared storage connected. Future changes save automatically.');}
+ }catch(error){cloudConnected=false;if(error.status===401)try{sessionStorage.removeItem('cd_cloud_session_key_v1')}catch{}cloudStatus('Not synced: '+error.message);}
+ finally{cloudBusy=false;$('cloudConnect').disabled=false;}
+}
+async function saveCloud(){
+ if(!cloudConnected||!cloudDirty)return;
+ if(cloudBusy){cloudTimer=setTimeout(saveCloud,1000);return;}
+ cloudBusy=true;const state=cloudSnapshot();cloudStatus('Saving online…');
+ try{
+  const result=await cloudRequest('PUT',{revision:cloudRevision,state});
+  cloudSaved(state,result);cloudDirty=JSON.stringify(state)!==JSON.stringify(cloudSnapshot());
+  if(cloudDirty)cloudTimer=setTimeout(saveCloud,900);
+ }catch(error){
+  cloudDirty=true;
+  if(error.status===409||error.status===401)cloudConnected=false;
+  cloudStatus('Not saved online: '+error.message+' Local copy retained.');
+  if(cloudConnected)cloudTimer=setTimeout(saveCloud,15000);
+ }finally{cloudBusy=false;}
+}
+async function refreshCloud(){
+ if(!cloudConnected||cloudDirty||cloudBusy||document.hidden)return;
+ cloudBusy=true;
+ try{
+  const remote=await cloudRequest('GET');
+  if(remote.state&&remote.revision!==cloudRevision){
+   // User edits can occur while awaiting fetch; never overwrite them.
+   if(cloudDirty)return;
+   cloudBackup();applyCloud(remote.state);cloudSaved(remote.state,remote);
+  }
+ }catch(error){cloudStatus('Could not refresh shared data. Local copy retained.');}
+ finally{cloudBusy=false;}
+}
+$('cloudConnect').addEventListener('click',connectCloud);
+$('cloudAccessKey').addEventListener('keydown',event=>{if(event.key==='Enter')connectCloud()});
+window.addEventListener('online',()=>{if(cloudConnected)saveCloud()});
+window.addEventListener('beforeunload',event=>{if(cloudDirty){event.preventDefault();event.returnValue='';}});
+setInterval(refreshCloud,30000);
+
 filterSetup();draw();
-if(!rows.length&&SEALED_HISTORY)setTimeout(showHistory,220);
+try{cloudKey=sessionStorage.getItem('cd_cloud_session_key_v1')||'';if(cloudKey)setTimeout(connectCloud,100)}catch{}
 })();
 </script></body></html>
