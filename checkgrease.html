@@ -55,7 +55,7 @@
 
   // Weekly reporting uses the saved Firestore greaseRecords snapshot; it does not modify records.
   function greaseWeekBounds(value){
-    if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(value||""))return null;
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(value||""))return null;
     const day=new Date(value+"T12:00:00Z");
     if(Number.isNaN(day.getTime()))return null;
     const monday=new Date(day);monday.setUTCDate(day.getUTCDate()-((day.getUTCDay()+6)%7));
@@ -78,7 +78,7 @@
     const width=doc.internal.pageSize.getWidth(),height=doc.internal.pageSize.getHeight();
     const left=38,right=width-38,usable=right-left;
     let page=0,y=0;
-    const safe=v=>String(v===null||v===undefined||v===""?"—":v).replace(/[^\\x20-\\x7E\\xA0-\\xFF]/g," ");
+    const safe=v=>String(v===null||v===undefined||v===""?"—":v).replace(/[^\x20-\x7E\xA0-\xFF]/g," ");
     function newPage(title,subtitle){
       if(page++)doc.addPage();
       doc.setFillColor(46,46,143);doc.rect(0,0,width,72,"F");
