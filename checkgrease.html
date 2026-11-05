@@ -31,7 +31,7 @@
     <div class="card"><div class="section-title">Grease Applier Notes</div><label>Additional machine-specific grease points completed</label><textarea id="additionalPointsNotes" placeholder="Optional. Record extra grease points completed that are unique to this machine or attachment."></textarea><label style="margin-top:12px">General notes</label><textarea id="greaseGeneralNotes" placeholder="Optional notes about this greasing round."></textarea><label class="checkbox-row" style="margin-top:12px"><input id="greaseConfirm" type="checkbox"><span>I confirm I have completed the standard points shown and any additional applicable machine-specific grease points, and recorded all issues found.</span></label><button class="btn btn-primary btn-block" onclick="saveGreaseRecord()">Complete Greasing Record & Create PDF</button></div>
   </section>
   <section id="screen-complete" class="screen"><button class="back-link" onclick="goHome()">← Back to Home</button><div class="card"><div class="section-title">Greasing Record Saved</div><div id="completionMessage" class="alert green">The record has been saved.</div><div id="completionSummary"></div><div class="row" style="margin-top:14px"><button class="btn btn-primary" onclick="viewLastPDF()">View PDF</button><button class="btn btn-secondary" onclick="downloadLastPDF()">Download PDF</button></div><button class="btn btn-secondary btn-block" style="margin-top:10px" onclick="showScreen('history')">View All Grease Records</button><button class="btn btn-primary btn-block" style="margin-top:10px" onclick="startGrease()">Start Another Greasing Record</button></div></section>
-  <section id="screen-history" class="screen"><button class="back-link" onclick="goHome()">← Back to Home</button><h1 style="color:var(--navy);margin-top:4px">Grease History & PDFs</h1><div class="card"><div class="row"><div><label>Filter machine type</label><select id="historyTypeFilter" onchange="populateHistoryMachines();renderHistory()"></select></div><div><label>Filter machine</label><select id="historyMachineFilter" onchange="renderHistory()"><option value="all">All machines</option></select></div><div><label>Filter result</label><select id="historyResultFilter" onchange="renderHistory()"><option value="all">All results</option><option value="completed">Completed</option><option value="completed-with-exception">Completed with exception</option></select></div></div><div id="historyList" style="margin-top:14px"></div></div></section>
+  <section id="screen-history" class="screen"><button class="back-link" onclick="goHome()">← Back to Home</button><h1 style="color:var(--navy);margin-top:4px">Grease History & PDFs</h1><div class="card"><div class="row"><div><label>Filter machine type</label><select id="historyTypeFilter" onchange="populateHistoryMachines();renderHistory()"></select></div><div><label>Filter machine</label><select id="historyMachineFilter" onchange="renderHistory()"><option value="all">All machines</option></select></div><div><label>Filter result</label><select id="historyResultFilter" onchange="renderHistory()"><option value="all">All results</option><option value="completed">Completed</option><option value="completed-with-exception">Completed with exception</option></select></div></div><div class="card"><div class="section-title">Weekly Greasing Report</div><p class="subtle">Select any date in the required week. The PDF includes Monday to Sunday, each day’s greasing records, exceptions and a weekly summary.</p><div class="row"><div><label>Week containing</label><input id="weeklyGreaseDate" type="date" onchange="updateGreaseWeekLabel()"></div><div><label>Report period</label><div id="weeklyGreasePeriod" style="padding:12px 0;font-weight:700">Select a date</div></div></div><button class="btn btn-primary" onclick="downloadWeeklyGreaseReport()">Download Weekly PDF</button> <button class="btn btn-secondary" onclick="printWeeklyGreaseReport()">Print Weekly Report</button><p id="weeklyGreaseFeedback" class="subtle" aria-live="polite" style="margin-top:10px"></p></div><div id="historyList" style="margin-top:14px"></div></div></section>
 </main><div id="toast" class="toast"></div>
 <script>
   const firebaseConfig={apiKey:"AIzaSyD60Z04IRIvv-EaSyPzoA33fEQ3yT6wsQQ",authDomain:"checkplant-kcm.firebaseapp.com",projectId:"checkplant-kcm",storageBucket:"checkplant-kcm.firebasestorage.app",messagingSenderId:"492245064396",appId:"1:492245064396:web:c79e64b32b9856766bc069"};
@@ -52,7 +52,107 @@
   async function saveGreaseRecord(){if(!selectedMachine){toast("Select a machine first.");return}const operative=$("greaseOperative").value.trim();if(!operative){toast("Enter the grease applier name.");return}if(!$("greaseConfirm").checked){toast("Tick the completion confirmation.");return}const visualIssue=$("visualResult").value==="issue",visualNotes=$("visualNotes").value.trim();if(visualIssue&&!visualNotes){toast("Enter visual-check notes for the issue found.");return}const points=STANDARD_POINTS[machineType(selectedMachine)]||[],pointResults=points.map((p,i)=>({pointId:p[0],pointName:p[1],result:pointState[p[0]]?.result||"not-recorded",notes:$("point-note-"+i)?$("point-note-"+i).value.trim():"",createDefect:$("point-defect-"+i)?$("point-defect-"+i).checked:false})),incomplete=pointResults.filter(p=>p.result==="not-recorded");if(incomplete.length){toast("Record an outcome for every standard grease point.");return}const exceptions=pointResults.filter(p=>["unable-to-grease","defect-found"].includes(p.result));for(const p of exceptions)if(!p.notes){toast("Add notes to every point marked unable or defect found.");return}const recordRef=db.collection("greaseRecords").doc(),batch=db.batch(),linkedDefectIds=[],newDefect=(itemName,result,notes,pointId=null,pointName=null)=>{const ref=db.collection("defects").doc();linkedDefectIds.push(ref.id);batch.set(ref,{machineId:selectedMachine.id,machineName:selectedMachine.name,itemName,dateRaised:$("greaseDate").value,status:"open",resolvedDate:null,resolvedBy:null,resolutionRecordId:null,severity:"routine",source:"checkgrease",greaseRecordId:recordRef.id,greasePointId:pointId,greasePointName:pointName,greaseResult:result,notes,createdAt:firebase.firestore.FieldValue.serverTimestamp()});return ref.id};if(visualIssue&&$("visualCreateDefect").checked)newDefect("Greasing: visual blockage or defect found","visual-check-issue",visualNotes);pointResults.forEach(p=>{if(["unable-to-grease","defect-found"].includes(p.result)&&p.createDefect)p.linkedDefectId=newDefect(`Greasing: ${p.pointId} — ${p.pointName}`,p.result,p.notes,p.pointId,p.pointName)});const hours=$("greaseHours").value,hasException=visualIssue||exceptions.length>0,type=machineType(selectedMachine),record={type:"grease",source:"checkgrease",machineId:selectedMachine.id,machineName:selectedMachine.name,serialNumber:selectedMachine.serialNumber||"",branch:selectedMachine.branch||"",categoryKey:selectedMachine.categoryKey||"",greaseType:type,greaseTypeLabel:TYPE_LABELS[type]||type,date:$("greaseDate").value,operativeName:operative,hoursReading:hours===""?null:Number(hours),greaseProduct:$("greaseProduct").value.trim(),greaseBatch:$("greaseBatch").value.trim(),visualCheck:{result:visualIssue?"issue":"clear",notes:visualNotes},pointResults,additionalPointsNotes:$("additionalPointsNotes").value.trim(),notes:$("greaseGeneralNotes").value.trim(),overallResult:hasException?"completed-with-exception":"completed",linkedDefectIds,createdAt:firebase.firestore.FieldValue.serverTimestamp()};batch.set(recordRef,record);if(hours!=="")batch.update(db.collection("machines").doc(selectedMachine.id),{currentHours:Number(hours)});try{await batch.commit();generateGreasePDF({...record,id:recordRef.id});$("completionMessage").textContent=linkedDefectIds.length?`Greasing record saved and ${linkedDefectIds.length} linked CheckPlant defect${linkedDefectIds.length===1?"":"s"} created.`:"Greasing record saved. No linked CheckPlant defect was created.";$("completionSummary").innerHTML=`<div class="summary-grid"><div class="summary-box"><b>${pointResults.filter(p=>p.result==='greased').length}</b><span>Greased</span></div><div class="summary-box"><b>${pointResults.filter(p=>p.result==='not-required').length}</b><span>Not required</span></div><div class="summary-box"><b>${exceptions.length}</b><span>Point exceptions</span></div><div class="summary-box"><b>${linkedDefectIds.length}</b><span>Defects created</span></div></div><p class="subtle">Record ID: ${recordRef.id}</p>`;showScreen("complete")}catch(err){console.error(err);toast("Save failed: "+err.message)}}
   function generateGreasePDF(record){const jsPDF=window.jspdf.jsPDF,doc=new jsPDF({unit:"pt",format:"a4"}),pageW=doc.internal.pageSize.getWidth(),pageH=doc.internal.pageSize.getHeight(),margin=40;let y=46;const nextPage=()=>{doc.addPage();y=48};const line=(x1,y1,x2,y2)=>{doc.setDrawColor(220,220,220);doc.line(x1,y1,x2,y2)};const text=(value,x,yy,width,fontSize=10,style="normal")=>{doc.setFontSize(fontSize);doc.setFont(undefined,style);const lines=doc.splitTextToSize(String(value??"—"),width);if(y+lines.length*(fontSize+4)>pageH-54)nextPage();doc.text(lines,x,yy);return lines.length*(fontSize+4)};doc.setFillColor(46,46,143);doc.rect(0,0,pageW,74,"F");doc.setFillColor(47,174,78);doc.rect(0,70,pageW,4,"F");doc.setTextColor(255,255,255);doc.setFontSize(20);doc.setFont(undefined,"bold");doc.text("CheckGrease",margin,33);doc.setFontSize(10);doc.setFont(undefined,"normal");doc.text("KCM WASTE MANAGEMENT",margin,50);doc.text("Manual Greasing Record",margin,64);doc.setTextColor(28,31,38);y=100;doc.setFontSize(14);doc.setFont(undefined,"bold");doc.text(record.machineName||"Machine",margin,y);y+=20;doc.setFontSize(10);doc.setFont(undefined,"normal");doc.text(`Date: ${record.date||"—"}`,margin,y);doc.text(`Grease applier: ${record.operativeName||"—"}`,margin+250,y);y+=16;doc.text(`Type: ${record.greaseTypeLabel||"—"}`,margin,y);doc.text(`S/N: ${record.serialNumber||"—"}`,margin+250,y);y+=16;doc.text(`Hour meter: ${record.hoursReading??"—"}`,margin,y);doc.text(`Branch: ${record.branch||"—"}`,margin+250,y);y+=13;line(margin,y,pageW-margin,y);y+=22;doc.setTextColor(46,46,143);doc.setFontSize(12);doc.setFont(undefined,"bold");doc.text("Grease Product",margin,y);doc.setTextColor(28,31,38);y+=16;doc.setFontSize(10);doc.setFont(undefined,"normal");doc.text(`Product: ${record.greaseProduct||"Not recorded"}`,margin,y);y+=15;doc.text(`Batch / cartridge reference: ${record.greaseBatch||"Not recorded"}`,margin,y);y+=18;line(margin,y,pageW-margin,y);y+=22;doc.setTextColor(46,46,143);doc.setFontSize(12);doc.setFont(undefined,"bold");doc.text("Visual Check",margin,y);doc.setTextColor(28,31,38);y+=16;doc.setFontSize(10);doc.setFont(undefined,"normal");doc.text(record.visualCheck?.result==="issue"?"Physical blockage or defect found":"No visible blockage or defect found",margin,y);y+=15;if(record.visualCheck?.notes){y+=text(`Notes: ${record.visualCheck.notes}`,margin,y,pageW-margin*2,10)}y+=7;line(margin,y,pageW-margin,y);y+=22;doc.setTextColor(46,46,143);doc.setFontSize(12);doc.setFont(undefined,"bold");doc.text("Standard Grease Points",margin,y);y+=16;doc.setTextColor(28,31,38);doc.setFontSize(9);doc.setFont(undefined,"bold");doc.text("POINT",margin,y);doc.text("DESCRIPTION",margin+78,y);doc.text("RESULT",pageW-margin-115,y);y+=8;line(margin,y,pageW-margin,y);y+=14;(record.pointResults||[]).forEach(p=>{if(y>pageH-88)nextPage();doc.setFontSize(9);doc.setFont(undefined,"bold");doc.text(p.pointId||"—",margin,y);doc.setFont(undefined,"normal");const description=doc.splitTextToSize(p.pointName||"—",pageW-300);doc.text(description,margin+78,y);let status=(p.result||"not-recorded").replaceAll("-"," ");doc.setFont(undefined,"bold");if(["unable-to-grease","defect-found"].includes(p.result))doc.setTextColor(220,38,38);else if(p.result==="greased")doc.setTextColor(38,143,64);else doc.setTextColor(107,114,128);doc.text(status.toUpperCase(),pageW-margin-115,y);doc.setTextColor(28,31,38);doc.setFont(undefined,"normal");y+=Math.max(16,description.length*12);if(p.notes){y+=text(`Issue notes: ${p.notes}`,margin+78,y,pageW-margin-78,8)+2}line(margin,y-5,pageW-margin,y-5);y+=8});if(y>pageH-130)nextPage();doc.setTextColor(46,46,143);doc.setFontSize(12);doc.setFont(undefined,"bold");doc.text("Additional Machine-Specific Points",margin,y);doc.setTextColor(28,31,38);y+=16;doc.setFontSize(10);doc.setFont(undefined,"normal");y+=text(record.additionalPointsNotes||"None recorded.",margin,y,pageW-margin*2,10);y+=8;if(y>pageH-130)nextPage();doc.setTextColor(46,46,143);doc.setFontSize(12);doc.setFont(undefined,"bold");doc.text("General Notes",margin,y);doc.setTextColor(28,31,38);y+=16;doc.setFontSize(10);doc.setFont(undefined,"normal");y+=text(record.notes||"None recorded.",margin,y,pageW-margin*2,10);y+=8;line(margin,y,pageW-margin,y);y+=20;doc.setTextColor(46,46,143);doc.setFontSize(12);doc.setFont(undefined,"bold");doc.text("Record Outcome",margin,y);doc.setTextColor(28,31,38);y+=16;doc.setFontSize(10);doc.setFont(undefined,"normal");doc.text(record.overallResult==="completed"?"COMPLETED":"COMPLETED WITH EXCEPTION",margin,y);y+=15;doc.text(`Linked CheckPlant defects created: ${(record.linkedDefectIds||[]).length}`,margin,y);doc.setFontSize(8);doc.setTextColor(130,130,130);doc.text(`CheckGrease · KCM Waste Management · Generated ${new Date().toLocaleString("en-GB")}`,margin,pageH-28);lastPDF=doc;lastPDFRecord=record;return doc}
   function pdfFilename(record){return `CheckGrease_${String(record.machineName||"Machine").replace(/[^a-z0-9]+/gi,"_").replace(/^_|_$/g,"")}_${record.date||todayISO()}.pdf`}function viewLastPDF(){if(!lastPDF){toast("No PDF is ready. Open a record from Grease History.");return}window.open(lastPDF.output("bloburl"),"_blank")}function downloadLastPDF(){if(!lastPDF||!lastPDFRecord){toast("No PDF is ready.");return}lastPDF.save(pdfFilename(lastPDFRecord))}function viewRecordPDF(id){const record=greaseRecords.find(r=>r.id===id);if(!record){toast("Record not found.");return}generateGreasePDF(record);viewLastPDF()}function downloadRecordPDF(id){const record=greaseRecords.find(r=>r.id===id);if(!record){toast("Record not found.");return}generateGreasePDF(record);downloadLastPDF()}
+
+  // Weekly reporting uses the saved Firestore greaseRecords snapshot; it does not modify records.
+  function greaseWeekBounds(value){
+    if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(value||""))return null;
+    const day=new Date(value+"T12:00:00Z");
+    if(Number.isNaN(day.getTime()))return null;
+    const monday=new Date(day);monday.setUTCDate(day.getUTCDate()-((day.getUTCDay()+6)%7));
+    const sunday=new Date(monday);sunday.setUTCDate(monday.getUTCDate()+6);
+    return {monday,sunday,start:monday.toISOString().slice(0,10),end:sunday.toISOString().slice(0,10)};
+  }
+  function greaseDisplayDate(date){return new Date(date+"T12:00:00Z").toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric",timeZone:"UTC"})}
+  function updateGreaseWeekLabel(){
+    const input=$("weeklyGreaseDate");if(!input)return;
+    const bounds=greaseWeekBounds(input.value);
+    $("weeklyGreasePeriod").textContent=bounds?greaseDisplayDate(bounds.start)+" – "+greaseDisplayDate(bounds.end):"Choose a date";
+    $("weeklyGreaseFeedback").textContent="";
+  }
+  function buildWeeklyGreaseReport(){
+    const bounds=greaseWeekBounds($("weeklyGreaseDate")?.value);
+    if(!bounds){toast("Select a date for the reporting week.");return null}
+    if(!window.jspdf?.jsPDF){toast("PDF generator unavailable. Check your connection.");return null}
+    const rows=greaseRecords.filter(r=>r.date>=bounds.start&&r.date<=bounds.end);
+    const doc=new window.jspdf.jsPDF({unit:"pt",format:"a4"});
+    const width=doc.internal.pageSize.getWidth(),height=doc.internal.pageSize.getHeight();
+    const left=38,right=width-38,usable=right-left;
+    let page=0,y=0;
+    const safe=v=>String(v===null||v===undefined||v===""?"—":v).replace(/[^\\x20-\\x7E\\xA0-\\xFF]/g," ");
+    function newPage(title,subtitle){
+      if(page++)doc.addPage();
+      doc.setFillColor(46,46,143);doc.rect(0,0,width,72,"F");
+      doc.setFillColor(47,174,78);doc.rect(0,69,width,3,"F");
+      doc.setTextColor(255,255,255);doc.setFont("helvetica","bold");doc.setFontSize(18);doc.text("CheckGrease",left,31);
+      doc.setFontSize(10);doc.text("KCM WASTE MANAGEMENT",left,48);
+      doc.setFont("helvetica","normal");doc.setFontSize(9);doc.text("Weekly Greasing Report",right,48,{align:"right"});
+      doc.setTextColor(28,31,38);y=97;
+      doc.setFont("helvetica","bold");doc.setFontSize(14);doc.text(safe(title),left,y);y+=17;
+      doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(105,113,126);
+      doc.text(safe(subtitle),left,y);y+=20;doc.setTextColor(28,31,38);
+    }
+    function footer(){
+      const n=doc.getNumberOfPages();for(let p=1;p<=n;p++){
+        doc.setPage(p);doc.setDrawColor(220,224,230);doc.line(left,height-39,right,height-39);
+        doc.setFontSize(8);doc.setFont("helvetica","normal");doc.setTextColor(110,116,126);
+        doc.text("CheckGrease | Week "+bounds.start+" to "+bounds.end,left,height-25);
+        doc.text("Page "+p+" of "+n,right,height-25,{align:"right"});
+      }
+    }
+    function lines(value,size=9,indent=0,bold=false){
+      doc.setFont("helvetica",bold?"bold":"normal");doc.setFontSize(size);doc.setTextColor(28,31,38);
+      const list=doc.splitTextToSize(safe(value),usable-indent);
+      const step=size+4;
+      if(y+step*list.length>height-55)newPage("Continued","Week "+bounds.start+" to "+bounds.end);
+      doc.text(list,left+indent,y);y+=step*list.length+4;
+    }
+    function rule(){doc.setDrawColor(221,225,231);doc.line(left,y,right,y);y+=12}
+    const daily=Array.from({length:7},(_,i)=>{
+      const d=new Date(bounds.monday);d.setUTCDate(d.getUTCDate()+i);
+      const date=d.toISOString().slice(0,10);
+      return {date,records:rows.filter(r=>r.date===date).sort((a,b)=>(a.machineName||"").localeCompare(b.machineName||""))};
+    });
+    const exceptions=rows.filter(r=>r.overallResult==="completed-with-exception");
+    const totalPoints=rows.reduce((t,r)=>t+(r.pointResults||[]).filter(p=>p.result==="greased").length,0);
+    const totalDefects=rows.reduce((t,r)=>t+(r.linkedDefectIds||[]).length,0);
+    newPage("Weekly Overview",greaseDisplayDate(bounds.start)+" - "+greaseDisplayDate(bounds.end));
+    lines("Greasing records: "+rows.length+"   |   Machines: "+new Set(rows.map(r=>r.machineId||r.machineName)).size,11,0,true);
+    lines("Points greased: "+totalPoints+"   |   Exception records: "+exceptions.length+"   |   Linked defects: "+totalDefects,10);
+    y+=8;rule();
+    for(const day of daily){
+      lines(greaseDisplayDate(day.date)+": "+day.records.length+" record"+(day.records.length===1?"":"s"),10,0,true);
+    }
+    lines("Daily details follow on separate pages, including days with no recorded greasing.",9);
+    for(const day of daily){
+      newPage(greaseDisplayDate(day.date),day.records.length+" greasing record"+(day.records.length===1?"":"s"));
+      if(!day.records.length){lines("No greasing records saved for this date.",10);continue}
+      for(let i=0;i<day.records.length;i++){
+        const r=day.records[i],points=r.pointResults||[];
+        if(y>height-195)newPage(greaseDisplayDate(day.date)+" (continued)","Greasing details");
+        lines((i+1)+". "+(r.machineName||"Machine")+"  ["+(r.greaseTypeLabel||"Unclassified")+"]",10,0,true);
+        lines("Grease applier: "+(r.operativeName||"Not recorded")+"   |   Hours: "+(r.hoursReading??"Not recorded"),9,7);
+        lines("Result: "+(r.overallResult==="completed"?"Completed":"Completed with exception")+
+          "   |   Greased points: "+points.filter(p=>p.result==="greased").length+
+          "   |   Linked defects: "+(r.linkedDefectIds||[]).length,9,7);
+        lines("Standard points: "+(points.length?points.map(p=>(p.pointId||"Point")+" "+(p.pointName||"")+": "+(p.result||"not recorded")).join("; "):"No standard points recorded"),8,7);
+        const issues=points.filter(p=>p.notes||["defect-found","unable-to-grease"].includes(p.result));
+        if(r.visualCheck?.result==="issue")lines("Visual issue: "+(r.visualCheck.notes||"Issue recorded"),9,7);
+        for(const p of issues)lines("Point issue: "+(p.pointId||"")+" "+(p.pointName||"")+" - "+(p.notes||p.result),9,7);
+        if(r.additionalPointsNotes)lines("Additional points: "+r.additionalPointsNotes,9,7);
+        if(r.notes)lines("Notes: "+r.notes,9,7);
+        lines("Record ID: "+(r.id||"Not available"),7,7);
+        rule();
+      }
+    }
+    footer();
+    $("weeklyGreaseFeedback").textContent="Prepared "+rows.length+" saved record(s) for "+bounds.start+" to "+bounds.end+".";
+    return {doc,filename:"CheckGrease_Weekly_"+bounds.start+"_to_"+bounds.end+".pdf"};
+  }
+  function downloadWeeklyGreaseReport(){const report=buildWeeklyGreaseReport();if(report)report.doc.save(report.filename)}
+  function printWeeklyGreaseReport(){const report=buildWeeklyGreaseReport();if(!report)return;const url=report.doc.output("bloburl");const tab=window.open(url,"_blank");if(!tab)toast("Pop-up blocked. Use Download Weekly PDF and print the file.")}
+
   function populateHistoryTypes(){const sel=$("historyTypeFilter"),current=sel.value||"all";sel.innerHTML=typeOptions(true);sel.value=current}function populateHistoryMachines(){const sel=$("historyMachineFilter");if(!sel)return;const current=sel.value||"all",type=$("historyTypeFilter")?.value||"all";sel.innerHTML='<option value="all">All machines</option>'+sortedMachines().filter(m=>type==="all"||machineType(m)===type).map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join("");sel.value=[...sel.options].some(o=>o.value===current)?current:"all"}function renderHistory(){const target=$("historyList");if(!target)return;const type=$("historyTypeFilter")?.value||"all",machine=$("historyMachineFilter")?.value||"all",result=$("historyResultFilter")?.value||"all",rows=greaseRecords.filter(r=>(type==="all"||r.greaseType===type)&&(machine==="all"||r.machineId===machine)&&(result==="all"||r.overallResult===result));if(!rows.length){target.innerHTML='<div class="empty-state">No greasing records match this filter.</div>';return}target.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Date</th><th>Machine</th><th>Applier</th><th>Result</th><th>Defects</th><th>PDF</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.date||"—")}</td><td>${esc(r.machineName||"—")}</td><td>${esc(r.operativeName||"—")}</td><td><span class="pill ${r.overallResult==='completed'?'completed':'exception'}">${r.overallResult==='completed'?'Completed':'Exception'}</span></td><td>${(r.linkedDefectIds||[]).length}</td><td><button class="btn btn-primary btn-sm" onclick="viewRecordPDF('${r.id}')">View</button> <button class="btn btn-secondary btn-sm" onclick="downloadRecordPDF('${r.id}')">Download</button></td></tr>`).join("")}</tbody></table></div>`}
+  $("weeklyGreaseDate").value=todayISO();updateGreaseWeekLabel();
   initFirestore();
 </script>
 </body>
