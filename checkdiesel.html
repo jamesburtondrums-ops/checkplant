@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#2E2E8F">
+<title>CheckDiesel | CheckPlant</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+:root{--navy:#2E2E8F;--green:#2FAE4E;--ink:#202532;--muted:#667085;--line:#e1e6ec;--bg:#f3f6f8;--red:#bc3434;--amber:#a66705}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.48 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
+header{background:var(--navy);color:white;padding:14px max(16px,calc((100vw - 1140px)/2));display:flex;gap:14px;align-items:center;justify-content:space-between}
+header h1{font-size:1.2rem;margin:0}header small{display:block;opacity:.8;font-size:.77rem}header a{color:#fff;text-decoration:none;border:1px solid #ffffff55;padding:9px 13px;border-radius:9px;font-weight:700;white-space:nowrap}
+#connection{font-size:.77rem;background:#fff;border-bottom:1px solid var(--line);padding:8px 16px;color:var(--muted);text-align:center}
+main{max-width:1140px;margin:0 auto;padding:23px 15px 70px}
+.titleline{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:17px}.titleline h2{margin:0;color:var(--navy);font-size:1.45rem}.titleline p{margin:4px 0 0;color:var(--muted);font-size:.87rem}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}.stat{border:1px solid var(--line);border-radius:14px;background:white;padding:17px}.stat .num{font-size:1.7rem;font-weight:900;color:var(--navy)}.stat .lbl{font-size:.79rem;color:var(--muted);font-weight:700}
+.card{background:white;border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:15px}.card h3{margin:0 0 11px;color:var(--navy);font-size:1.05rem}
+.tank-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:12px}.tank{border:1px solid var(--line);border-radius:13px;padding:14px;background:#fff}.tank .name{font-weight:900}.tank .meta{color:var(--muted);font-size:.77rem;margin:3px 0 13px}.tank .volume{font-size:1.3rem;font-weight:900;color:var(--navy)}.bar{height:8px;background:#eaeef2;border-radius:9px;overflow:hidden;margin:9px 0}.bar span{display:block;height:100%;background:var(--green)}.bar.low span{background:#dc8530}.pill{display:inline-block;border-radius:20px;font-size:.72rem;font-weight:800;padding:3px 9px;background:#e8f6ee;color:#167237}.pill.low{background:#fff3df;color:#935a0e}
+.tabs{display:flex;gap:7px;overflow-x:auto;margin-bottom:15px;padding-bottom:5px}.tab{border:1px solid var(--line);background:white;padding:10px 13px;border-radius:10px;font-weight:800;cursor:pointer;white-space:nowrap;color:var(--navy)}.tab.active{color:white;background:var(--navy);border-color:var(--navy)}
+.panel{display:none}.panel.active{display:block}.formgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}.wide{grid-column:1/-1}
+label{font-size:.82rem;font-weight:800;display:block;margin-bottom:5px}label .muted{font-weight:500}input,select,textarea{width:100%;font:inherit;padding:12px;border:1.5px solid #d7dde5;border-radius:10px;color:var(--ink);background:white;min-height:46px}textarea{min-height:85px;resize:vertical}
+button{font:inherit;cursor:pointer}.btn{border:none;border-radius:10px;background:var(--green);color:white;font-weight:800;padding:12px 17px}.btn:disabled{opacity:.55;cursor:wait}.btn.secondary{background:#e9edf1;color:var(--ink)}.actions{display:flex;gap:9px;justify-content:flex-end;align-items:center;margin-top:17px}
+.hint{font-size:.81rem;color:var(--muted);line-height:1.5;margin:8px 0 12px}.alert{border:1px solid #f0d39a;background:#fff9ec;border-radius:10px;padding:12px;font-size:.83rem;color:#7b4c0f}
+.tablewrap{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:.84rem}th,td{text-align:left;border-bottom:1px solid var(--line);padding:10px 9px;vertical-align:top}th{color:var(--navy);font-size:.72rem;text-transform:uppercase;white-space:nowrap}td{min-width:80px}.empty{padding:17px;color:var(--muted);font-size:.85rem}
+.filters{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end;margin-bottom:10px}
+#message{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);max-width:min(92vw,570px);background:#202532;color:white;padding:13px 18px;border-radius:12px;box-shadow:0 4px 24px #0003;display:none;z-index:30;font-weight:600}#message.show{display:block}#message.error{background:#aa3030}
+@media(max-width:820px){.stats{grid-template-columns:repeat(2,1fr)}.filters{grid-template-columns:1fr 1fr}.formgrid{grid-template-columns:1fr}.wide{grid-column:auto}}
+@media(max-width:480px){header a{font-size:.74rem;padding:7px}main{padding:15px 10px}.stats{gap:8px}.stat{padding:12px}.stat .num{font-size:1.3rem}.card{padding:14px}.filters{grid-template-columns:1fr}.titleline h2{font-size:1.28rem}}
+</style>
+</head>
+<body>
+<header><div><h1>CheckDiesel</h1><small>Fuel management · CheckPlant ecosystem</small></div><div><a href="index.html">CheckPlant</a> <a href="managerdash.html">ManagerDash</a></div></header>
+<div id="connection" role="status">Connecting to the CheckPlant machine register…</div>
+<main>
+<div class="titleline"><div><h2>Site diesel control</h2><p>Manage diesel issued to both plant machinery and road vehicles.</p></div><a href="checkdiesel-dashboard.html" class="btn" style="text-decoration:none">Plant &amp; Fleet Efficiency →</a></div>
+<div class="stats"><div class="stat"><div class="num" id="metric-stock">—</div><div class="lbl">Litres in tanks</div></div><div class="stat"><div class="num" id="metric-issued">—</div><div class="lbl">Litres issued · 30 days</div></div><div class="stat"><div class="num" id="metric-cost">—</div><div class="lbl">Issued fuel value · 30 days</div></div><div class="stat"><div class="num" id="metric-low">—</div><div class="lbl">Tanks below reorder level</div></div></div>
+<section class="card"><h3>Site tanks &amp; mobile bowsers</h3><div class="tank-grid" id="tank-grid"><p class="empty">Loading tanks…</p></div></section>
+<nav class="tabs" aria-label="Diesel operations">
+<button class="tab active" data-panel="refuel" type="button">Refuel asset</button>
+<button class="tab" data-panel="delivery" type="button">Receive delivery</button>
+<button class="tab" data-panel="transfer" type="button">Transfer diesel</button>
+<button class="tab" data-panel="dip" type="button">Tank stock check</button>
+<button class="tab" data-panel="history" type="button">Usage &amp; reports</button>
+<button class="tab" data-panel="setup" type="button">Add tank / bowser</button>
+</nav>
+<section class="card panel active" id="panel-refuel"><h3>Record a plant or road vehicle refuel</h3>
+<form id="form-refuel" class="formgrid">
+<div><label for="refuel-tank">Diesel tank / bowser *</label><select id="refuel-tank" required></select></div>
+<div><label for="refuel-kind">Asset type *</label><select id="refuel-kind"><option value="plant">Plant machinery</option><option value="vehicle">Road vehicle</option></select></div><div id="refuel-plant-row"><label for="refuel-machine">CheckPlant machine *</label><select id="refuel-machine" required></select></div><div id="refuel-vehicle-row" hidden><label for="refuel-vehicle">Registered road vehicle *</label><select id="refuel-vehicle" disabled></select><p class="hint">Register vehicles in <a href="checkdiesel-intelligence.html">Fuel Intelligence</a> first.</p></div>
+<div><label for="refuel-litres">Litres dispensed *</label><input id="refuel-litres" type="number" min=".01" step=".01" required></div>
+<div><label id="refuel-reading-label" for="refuel-hours">Engine hours <span class="muted">(optional)</span></label><input id="refuel-hours" type="number" min="0" step=".1" placeholder="Current engine hours"></div>
+<div><label for="refuel-operator">Dispensed by *</label><input id="refuel-operator" maxlength="100" required placeholder="Operative name"></div>
+<div><label for="refuel-date">Date *</label><input id="refuel-date" type="date" required></div>
+<div class="wide"><label for="refuel-note">Reference / notes</label><input id="refuel-note" maxlength="300" placeholder="Job, shift, or fill-up note"></div>
+<div class="wide"><p class="hint">Uses CheckPlant machinery or the CheckDiesel road-vehicle register. Meter readings are stored with the fill and never overwrite CheckPlant service hours.</p><div class="actions"><button class="btn" type="submit">Save refuelling</button></div></div>
+</form></section>
+<section class="card panel" id="panel-delivery"><h3>Record incoming diesel</h3><form id="form-delivery" class="formgrid">
+<div><label for="delivery-tank">Tank / bowser *</label><select id="delivery-tank" required></select></div>
+<div><label for="delivery-litres">Delivered litres *</label><input id="delivery-litres" type="number" min=".01" step=".01" required></div>
+<div><label for="delivery-price">Price per litre (£, ex VAT) *</label><input id="delivery-price" type="number" min="0" step=".0001" required></div>
+<div><label for="delivery-date">Delivery date *</label><input id="delivery-date" type="date" required></div>
+<div><label for="delivery-supplier">Supplier *</label><input id="delivery-supplier" maxlength="120" required></div>
+<div><label for="delivery-ref">Delivery note / invoice reference *</label><input id="delivery-ref" maxlength="100" required></div>
+<div class="wide"><label for="delivery-operator">Received by *</label><input id="delivery-operator" maxlength="100" required></div>
+<div class="wide"><div class="actions"><button class="btn" type="submit">Add to stock</button></div></div>
+</form></section>
+<section class="card panel" id="panel-transfer"><h3>Move diesel between tanks</h3><form id="form-transfer" class="formgrid">
+<div><label for="transfer-from">From tank / bowser *</label><select id="transfer-from" required></select></div>
+<div><label for="transfer-to">To tank / bowser *</label><select id="transfer-to" required></select></div>
+<div><label for="transfer-litres">Litres transferred *</label><input id="transfer-litres" type="number" min=".01" step=".01" required></div>
+<div><label for="transfer-date">Transfer date *</label><input id="transfer-date" type="date" required></div>
+<div><label for="transfer-operator">Transferred by *</label><input id="transfer-operator" maxlength="100" required></div>
+<div><label for="transfer-ref">Transfer reference / note</label><input id="transfer-ref" maxlength="300"></div>
+<div class="wide"><div class="actions"><button class="btn" type="submit">Record transfer</button></div></div>
+</form><p class="hint">Transfers move stock and its weighted-average cost together. Both tank balances update in one transaction.</p></section>
+<section class="card panel" id="panel-dip"><h3>Physical dip / stock reconciliation</h3><form id="form-dip" class="formgrid">
+<div><label for="dip-tank">Tank / bowser *</label><select id="dip-tank" required></select></div>
+<div><label for="dip-stock">Actual measured litres *</label><input id="dip-stock" type="number" min="0" step=".01" required></div>
+<div><label for="dip-date">Check date *</label><input id="dip-date" type="date" required></div>
+<div><label for="dip-operator">Checked by *</label><input id="dip-operator" maxlength="100" required></div>
+<div class="wide"><label for="dip-note">Reason / variance notes *</label><textarea id="dip-note" maxlength="500" required placeholder="Measured dip, expected level, discrepancy and investigation"></textarea></div>
+<div class="wide"><div class="alert">Differences are stored as permanent stock adjustments; past refuelling and deliveries are never deleted.</div><div class="actions"><button class="btn" type="submit">Record stock check</button></div></div>
+</form></section>
+<section class="card panel" id="panel-history"><h3>Diesel usage &amp; audit trail</h3>
+<div class="filters">
+<div><label for="report-month">Month</label><input type="month" id="report-month"></div>
+<div><label for="report-site">Site / branch</label><select id="report-site"><option value="">All sites</option></select></div>
+<div><label for="report-machine">Machine</label><select id="report-machine"><option value="">All machines</option></select></div>
+<button class="btn secondary" id="export-csv" type="button">Export CSV</button>
+</div>
+<p class="hint">Fuel-per-hour is shown only where two or more increasing hour-meter readings exist; the first fill is excluded from the calculated interval.</p>
+<h3>Asset fuel use</h3><div class="tablewrap"><table><thead><tr><th>Machine</th><th>Site</th><th>Litres issued</th><th>Cost allocated</th><th>Litres/hour*</th></tr></thead><tbody id="machine-usage"></tbody></table></div>
+<p class="hint"><a href="checkdiesel-intelligence.html">Open Fuel Intelligence</a> for road-vehicle MPG, plant L/hour, unmapped dispenser records and Excel import.</p><h3 style="margin-top:23px">Movement history</h3><div class="tablewrap"><table><thead><tr><th>Date</th><th>Type</th><th>Site</th><th>Tank</th><th>Machine / counterparty</th><th>Litres +/-</th><th>Operator</th><th>Value</th><th>Reference</th></tr></thead><tbody id="movement-list"></tbody></table></div>
+</section>
+<section class="card panel" id="panel-setup"><h3>Register a site tank or mobile bowser</h3><form id="form-setup" class="formgrid">
+<div><label for="setup-name">Tank name / identifier *</label><input id="setup-name" maxlength="100" required placeholder="Main bunded diesel tank"></div>
+<div><label for="setup-site">Site / branch *</label><input id="setup-site" list="site-options" maxlength="100" required placeholder="e.g. Rotherham"><datalist id="site-options"></datalist></div>
+<div><label for="setup-kind">Tank type *</label><select id="setup-kind"><option value="fixed">Fixed site tank</option><option value="bowser">Mobile bowser</option></select></div>
+<div><label for="setup-capacity">Capacity (litres) *</label><input id="setup-capacity" type="number" min=".01" step=".01" required></div>
+<div><label for="setup-opening">Opening balance (litres) *</label><input id="setup-opening" type="number" min="0" step=".01" value="0" required></div>
+<div><label for="setup-reorder">Reorder point (litres) *</label><input id="setup-reorder" type="number" min="0" step=".01" required></div>
+<div><label for="setup-cost">Opening stock unit cost (£/litre ex VAT) *</label><input id="setup-cost" type="number" min="0" step=".0001" value="0" required></div>
+<div><label for="setup-operator">Created by *</label><input id="setup-operator" maxlength="100" required></div>
+<div class="wide"><p class="hint">Register stock once, then record deliveries, issues, transfers and verified stock checks. Do not create duplicates of existing tanks.</p><div class="actions"><button class="btn" type="submit">Register tank</button></div></div>
+</form></section>
+</main><div id="message" role="status" aria-live="polite"></div>
+<script>
+"use strict";
+const firebaseConfig={apiKey:"AIzaSyD60Z04IRIvv-EaSyPzoA33fEQ3yT6wsQQ",authDomain:"checkplant-kcm.firebaseapp.com",projectId:"checkplant-kcm",storageBucket:"checkplant-kcm.firebasestorage.app",messagingSenderId:"492245064396",appId:"1:492245064396:web:c79e64b32b9856766bc069"};
+firebase.initializeApp(firebaseConfig);
+const db=firebase.firestore(),nowStamp=()=>firebase.firestore.Timestamp.now();
+const $=id=>document.getElementById(id);
+const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const dateLocal=()=>{const d=new Date(),p=n=>String(n).padStart(2,"0");return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())};
+const litres=n=>Number(n||0).toLocaleString("en-GB",{maximumFractionDigits:2})+" L";
+const cash=n=>"£"+Number(n||0).toLocaleString("en-GB",{minimumFractionDigits:2,maximumFractionDigits:2});
+const num=id=>Number($(id).value);
+const val=id=>$(id).value.trim();
+let tanks=[],machines=[],vehicles=[],movements=[],readyCount=0,busy=false,notifyHandle;const streamsReady={machines:false,tanks:false,vehicles:false,movements:false};
+const tankById=id=>tanks.find(t=>t.id===id);
+const machineById=id=>machines.find(m=>m.id===id);
+const vehicleById=id=>vehicles.find(m=>m.id===id);
+const quantity=n=>Math.round(Number(n)*100)/100;
+const moneyValue=n=>Math.round(Number(n)*10000)/10000;
+function notify(msg,error){const m=$("message");m.textContent=msg;m.className="show"+(error?" error":"");clearTimeout(notifyHandle);notifyHandle=setTimeout(()=>m.className="",5500)}
+function setReady(key){if(streamsReady[key])return;streamsReady[key]=true;readyCount++;$("connection").textContent=readyCount===4?"Connected to live CheckPlant / diesel records":"Loading live data…"}
+function failed(what,e){$("connection").textContent="Connection error: "+what+" — "+e.message;notify(what+": "+e.message,true)}
+function fillSelect(id,items,label,placeholder){const el=$(id),prior=el.value;el.replaceChildren();const first=new Option(placeholder,"");el.add(first);items.forEach(i=>el.add(new Option(label(i),i.id)));if(items.some(i=>i.id===prior))el.value=prior}
+function populate(){
+ const tankLabel=t=>t.name+" · "+t.site+" ("+litres(t.stockLitres)+")";
+ ["refuel-tank","delivery-tank","transfer-from","transfer-to","dip-tank"].forEach(id=>fillSelect(id,tanks,tankLabel,"Choose tank"));
+ const machineLabel=m=>m.name+(m.branch?" · "+m.branch:"")+(m.serialNumber?" · "+m.serialNumber:"");
+ ["refuel-machine","report-machine"].forEach(id=>fillSelect(id,machines,machineLabel,id==="report-machine"?"All machines":"Choose machine"));
+ fillSelect("refuel-vehicle",vehicles,v=>v.registration+" · "+v.name+" · "+(v.site||"Unknown branch"),"Choose road vehicle");
+ const sites=[...new Set([...tanks.map(t=>t.site),...machines.map(m=>m.branch),...vehicles.map(v=>v.site)].filter(Boolean))].sort();
+ const old=$("report-site").value;
+ $("report-site").replaceChildren(new Option("All sites",""));
+ sites.forEach(s=>$("report-site").add(new Option(s,s)));
+ if(sites.includes(old))$("report-site").value=old;
+ $("site-options").replaceChildren();sites.forEach(s=>{const opt=document.createElement("option");opt.value=s;$("site-options").append(opt)});
+}
+function draw(){
+ const active=tanks.filter(t=>t.active!==false);
+ const last30=new Date();last30.setDate(last30.getDate()-30);
+ const recent=movements.filter(m=>m.type==="issue"&&m.createdAt&&m.createdAt.toDate&&m.createdAt.toDate()>=last30);
+ const low=active.filter(t=>Number(t.stockLitres)<Number(t.reorderLitres||0));
+ $("metric-stock").textContent=litres(active.reduce((a,t)=>a+Number(t.stockLitres||0),0));
+ $("metric-issued").textContent=litres(recent.reduce((a,m)=>a+Number(m.litres||0),0));
+ $("metric-cost").textContent=cash(recent.reduce((a,m)=>a+Number(m.totalCost||0),0));
+ $("metric-low").textContent=String(low.length);
+ const grid=$("tank-grid");
+ if(!active.length){grid.innerHTML='<p class="empty">No tanks yet. Select "Add tank / bowser" to begin.</p>'}
+ else{grid.innerHTML=active.map(t=>{
+ const pct=Math.min(100,Math.max(0,100*Number(t.stockLitres||0)/Math.max(1,Number(t.capacityLitres||0)))),isLow=Number(t.stockLitres||0)<Number(t.reorderLitres||0);
+ return '<div class="tank"><div class="name">'+esc(t.name)+'</div><div class="meta">'+esc(t.site)+' · '+(t.kind==="bowser"?"Mobile bowser":"Fixed tank")+'</div><div class="volume">'+esc(litres(t.stockLitres))+'</div><div class="bar'+(isLow?' low':'')+'"><span style="width:'+pct.toFixed(1)+'%"></span></div><div class="meta">Capacity '+esc(litres(t.capacityLitres))+' · Reorder at '+esc(litres(t.reorderLitres))+'</div><span class="pill'+(isLow?' low':'')+'">'+(isLow?'Reorder needed':'Stock OK')+'</span></div>'
+ }).join("")}
+ populate();drawReport();
+}
+function reportData(){
+ const mo=val("report-month"),site=val("report-site"),mid=val("report-machine");
+ return movements.filter(m=>(!mo||String(m.date||"").slice(0,7)===mo)&&(!site||m.site===site)&&(!mid||m.machineId===mid)).sort((a,b)=>String(b.date||"").localeCompare(String(a.date||""))||((b.createdAt?.toMillis?.()||0)-(a.createdAt?.toMillis?.()||0)));
+}
+function drawReport(){
+ const data=reportData(),body=$("movement-list");
+ if(!data.length)body.innerHTML='<tr><td colspan="9" class="empty">No transactions match the filters.</td></tr>';
+ else body.innerHTML=data.map(m=>'<tr><td>'+esc(m.date||"")+'</td><td>'+esc(({issue:"Refuel",delivery:"Delivery",transfer_out:"Transfer out",transfer_in:"Transfer in",adjustment:"Stock check",opening:"Opening stock"})[m.type]||m.type)+'</td><td>'+esc(m.site||"")+'</td><td>'+esc(m.tankName||"")+'</td><td>'+esc(m.vehicleName||m.machineName||m.counterparty||"—")+'</td><td>'+esc((Number(m.deltaLitres)>0?"+":"")+Number(m.deltaLitres||0).toFixed(2))+'</td><td>'+esc(m.operator||"")+'</td><td>'+esc(m.totalCost==null?"—":cash(m.totalCost))+'</td><td>'+esc(m.reference||"")+'</td></tr>').join("");
+ const machinesData={};
+ data.filter(m=>m.type==="issue").forEach(m=>{
+ const bucket=(m.assetKind==="vehicle"?"vehicle:":"plant:")+(m.assetId||m.machineId||m.vehicleId||"unknown");
+ const x=machinesData[bucket]||(machinesData[bucket]={machine:m.vehicleName||m.machineName,site:m.site,total:0,cost:0,entries:[],assetKind:m.assetKind||"plant"});
+ x.total+=Number(m.litres)||0;x.cost+=Number(m.totalCost)||0;x.entries.push(m);
+ });
+ const stats=Object.values(machinesData).sort((a,b)=>b.total-a.total);
+ $("machine-usage").innerHTML=stats.length?stats.map(x=>{
+ const entries=x.entries.filter(m=>Number.isFinite(Number(m.hours))&&m.hours!==null&&m.hours!=="" ).sort((a,b)=>String(a.date).localeCompare(String(b.date))||((a.createdAt?.toMillis?.()||0)-(b.createdAt?.toMillis?.()||0)));
+ let runLitres=0,runHours=0;
+ for(let i=1;i<entries.length;i++){const diff=Number(entries[i].hours)-Number(entries[i-1].hours);if(diff>0){runHours+=diff;runLitres+=Number(entries[i].litres)||0}}
+ return '<tr><td>'+esc(x.machine||"Unknown asset")+(x.assetKind==="vehicle"?" · Road vehicle":" · Plant")+'</td><td>'+esc(x.site||"")+'</td><td>'+esc(litres(x.total))+'</td><td>'+esc(cash(x.cost))+'</td><td>'+(x.assetKind==="vehicle"?"See Fuel Intelligence":(runHours>0?(runLitres/runHours).toFixed(2)+" L/h":"—"))+'</td></tr>'
+ }).join(""):'<tr><td colspan="5" class="empty">No machine fills this month.</td></tr>';
+}
+async function saveOperation(form,callback){
+ if(busy)return;
+ const button=form.querySelector('button[type="submit"]');
+ try{busy=true;button.disabled=true;await callback();form.reset();if(form.id==="form-refuel")switchFuelAsset();["refuel-date","delivery-date","transfer-date","dip-date"].forEach(id=>$(id).value=dateLocal());notify("Saved successfully");}
+ catch(e){notify("Not saved: "+e.message,true);console.error(e)}
+ finally{busy=false;button.disabled=false}
+}
+function requirePositive(n,label){if(!Number.isFinite(n)||n<=0)throw Error(label+" must be greater than zero.");return quantity(n)}
+function requireNonNegative(n,label){if(!Number.isFinite(n)||n<0)throw Error(label+" must be zero or greater.");return quantity(n)}
+function requireUnitCost(n){if(!Number.isFinite(n)||n<0)throw Error("Unit price must be zero or greater.");return moneyValue(n)}
+function requireTank(id){const t=tankById(id);if(!t||t.active===false)throw Error("Tank is not available.");return t}
+function recordBase(t,operator,date,type){return {type,tankId:t.id,tankName:t.name,site:t.site,operator,date,createdAt:nowStamp(),source:"checkdiesel-v1"}}
+function validateDate(d){if(!/^\d{4}-\d{2}-\d{2}$/.test(d))throw Error("Select a valid date.")}
+function checkCapacity(stock,cap){if(stock>Number(cap)+0.005)throw Error("Tank capacity exceeded.");if(stock<-.005)throw Error("Insufficient stock in tank.")}
+async function setup(e){
+ e.preventDefault();await saveOperation(e.currentTarget,async()=>{
+ const name=val("setup-name"),site=val("setup-site"),kind=val("setup-kind"),capacity=requirePositive(num("setup-capacity"),"Capacity"),opening=requireNonNegative(num("setup-opening"),"Opening stock"),reorder=requireNonNegative(num("setup-reorder"),"Reorder level"),cost=requireUnitCost(num("setup-cost")),operator=val("setup-operator");
+ if(!name||!site||!operator)throw Error("Complete all mandatory fields.");
+ if(opening>capacity||reorder>capacity)throw Error("Opening/reorder quantities cannot exceed capacity.");
+ if(tanks.some(t=>t.name.toLowerCase()===name.toLowerCase()&&t.site.toLowerCase()===site.toLowerCase()))throw Error("A tank with this name already exists at this site.");
+ const ref=db.collection("dieselTanks").doc(),movement=db.collection("dieselMovements").doc();
+ await db.runTransaction(async tx=>{
+ tx.set(ref,{name,site,kind,capacityLitres:capacity,stockLitres:opening,reorderLitres:reorder,averageCostPerLitre:moneyValue(cost),active:true,createdAt:nowStamp(),updatedAt:nowStamp()});
+ tx.set(movement,{type:"opening",tankId:ref.id,tankName:name,site,operator,date:dateLocal(),createdAt:nowStamp(),deltaLitres:opening,litres:opening,unitCost:cost,totalCost:moneyValue(opening*cost),reference:"Opening stock",source:"checkdiesel-v1"});
+ });
+ })}
+async function deliver(e){
+ e.preventDefault();await saveOperation(e.currentTarget,async()=>{
+ const t=requireTank(val("delivery-tank")),amount=requirePositive(num("delivery-litres"),"Delivered litres"),price=requireUnitCost(num("delivery-price")),operator=val("delivery-operator"),supplier=val("delivery-supplier"),reference=val("delivery-ref"),date=val("delivery-date");
+ validateDate(date);if(!operator||!supplier||!reference)throw Error("Receiver, supplier and delivery reference are required.");
+ const ref=db.collection("dieselTanks").doc(t.id),mov=db.collection("dieselMovements").doc();
+ await db.runTransaction(async tx=>{
+ const snap=await tx.get(ref);if(!snap.exists)throw Error("Tank not found.");
+ const state=snap.data(),old=Number(state.stockLitres)||0,updated=quantity(old+amount);checkCapacity(updated,state.capacityLitres);
+ const avg=moneyValue((old*(Number(state.averageCostPerLitre)||0)+amount*price)/updated);
+ tx.update(ref,{stockLitres:updated,averageCostPerLitre:avg,updatedAt:nowStamp()});
+ tx.set(mov,{...recordBase(t,operator,date,"delivery"),deltaLitres:amount,litres:amount,unitCost:price,totalCost:moneyValue(amount*price),counterparty:supplier,reference,stockAfterLitres:updated});
+ });
+ })}
+async function refuel(e){
+ e.preventDefault();await saveOperation(e.currentTarget,async()=>{
+ const t=requireTank(val("refuel-tank")),kind=val("refuel-kind"),m=kind==="vehicle"?vehicleById(val("refuel-vehicle")):machineById(val("refuel-machine")),amount=requirePositive(num("refuel-litres"),"Litres"),operator=val("refuel-operator"),date=val("refuel-date"),reference=val("refuel-note"),raw=$("refuel-hours").value,hrs=raw===""?null:requireNonNegative(Number(raw),"Meter reading");
+ validateDate(date);if(!m||!operator)throw Error("Choose an asset and enter the operator.");
+ const homeSite=kind==="vehicle"?m.site:m.branch;
+ if(homeSite&&homeSite!==t.site&&!confirm("Asset home branch differs from the tank site. Record this site refuel anyway?"))throw Error("Refuelling cancelled before saving.");
+ const ref=db.collection("dieselTanks").doc(t.id),mov=db.collection("dieselMovements").doc();
+ await db.runTransaction(async tx=>{
+ const snap=await tx.get(ref);if(!snap.exists)throw Error("Tank not found.");
+ const stock=Number(snap.data().stockLitres)||0,next=quantity(stock-amount);checkCapacity(next,snap.data().capacityLitres);
+ const unitCost=Number(snap.data().averageCostPerLitre)||0;
+ tx.update(ref,{stockLitres:next,updatedAt:nowStamp()});
+ tx.set(mov,{...recordBase(t,operator,date,"issue"),deltaLitres:-amount,litres:amount,unitCost,totalCost:moneyValue(amount*unitCost),assetKind:kind,assetId:m.id,machineId:kind==="plant"?m.id:null,machineName:kind==="plant"?m.name:null,vehicleId:kind==="vehicle"?m.id:null,vehicleName:kind==="vehicle"?m.name:null,assetBranch:homeSite||"",hours:kind==="plant"?hrs:null,reading:kind==="vehicle"?hrs:null,readingUnit:kind==="vehicle"?(m.odometerUnit||"mi"):"hours",reference,stockAfterLitres:next});
+ });
+ })}
+async function transfer(e){
+ e.preventDefault();await saveOperation(e.currentTarget,async()=>{
+ const from=requireTank(val("transfer-from")),to=requireTank(val("transfer-to")),amount=requirePositive(num("transfer-litres"),"Litres"),operator=val("transfer-operator"),date=val("transfer-date"),reference=val("transfer-ref");
+ validateDate(date);if(!operator)throw Error("Transfer operator required.");if(from.id===to.id)throw Error("Select two different tanks.");
+ const a=db.collection("dieselTanks").doc(from.id),b=db.collection("dieselTanks").doc(to.id),out=db.collection("dieselMovements").doc(),incoming=db.collection("dieselMovements").doc(),transferId=out.id;
+ await db.runTransaction(async tx=>{
+ const sa=await tx.get(a),sb=await tx.get(b);if(!sa.exists||!sb.exists)throw Error("Tank missing.");
+ const s1=sa.data(),s2=sb.data(),remain=quantity(Number(s1.stockLitres)-amount),next=quantity(Number(s2.stockLitres)+amount);
+ checkCapacity(remain,s1.capacityLitres);checkCapacity(next,s2.capacityLitres);
+ const cost=Number(s1.averageCostPerLitre)||0,avg=moneyValue(((Number(s2.stockLitres)||0)*(Number(s2.averageCostPerLitre)||0)+amount*cost)/next);
+ tx.update(a,{stockLitres:remain,updatedAt:nowStamp()});tx.update(b,{stockLitres:next,averageCostPerLitre:avg,updatedAt:nowStamp()});
+ tx.set(out,{...recordBase(from,operator,date,"transfer_out"),litres:amount,deltaLitres:-amount,unitCost:cost,totalCost:moneyValue(amount*cost),counterparty:to.name,reference,transferId,stockAfterLitres:remain});
+ tx.set(incoming,{...recordBase(to,operator,date,"transfer_in"),litres:amount,deltaLitres:amount,unitCost:cost,totalCost:moneyValue(amount*cost),counterparty:from.name,reference,transferId,stockAfterLitres:next});
+ });
+ })}
+async function dip(e){
+ e.preventDefault();await saveOperation(e.currentTarget,async()=>{
+ const t=requireTank(val("dip-tank")),measured=requireNonNegative(num("dip-stock"),"Measured stock"),operator=val("dip-operator"),date=val("dip-date"),reference=val("dip-note");
+ validateDate(date);if(!operator||!reference)throw Error("Enter the checker and reason.");
+ const ref=db.collection("dieselTanks").doc(t.id),mov=db.collection("dieselMovements").doc();
+ await db.runTransaction(async tx=>{
+ const snap=await tx.get(ref);if(!snap.exists)throw Error("Tank not found.");
+ const state=snap.data();checkCapacity(measured,state.capacityLitres);
+ const before=Number(state.stockLitres)||0,change=quantity(measured-before),unitCost=Number(state.averageCostPerLitre)||0;
+ tx.update(ref,{stockLitres:measured,updatedAt:nowStamp(),lastDipAt:nowStamp(),lastDipBy:operator});
+ tx.set(mov,{...recordBase(t,operator,date,"adjustment"),litres:Math.abs(change),deltaLitres:change,unitCost,totalCost:moneyValue(change*unitCost),reference,stockBeforeLitres:before,stockAfterLitres:measured,measuredLitres:measured});
+ });
+ })}
+function csvValue(x){return '"'+String(x??"").replace(/"/g,'""')+'"'}
+function exportCsv(){
+ const cols=["date","type","site","tankName","machineName","counterparty","deltaLitres","litres","unitCost","totalCost","hours","operator","reference","stockAfterLitres"];
+ const rows=[cols.join(",")].concat(reportData().map(m=>cols.map(c=>csvValue(m[c])).join(",")));
+ const blob=new Blob(["\uFEFF"+rows.join("\r\n")],{type:"text/csv;charset=utf-8"}),link=document.createElement("a"),url=URL.createObjectURL(blob);
+ link.href=url;link.download="CheckDiesel_"+(val("report-month")||"all-dates")+".csv";link.click();setTimeout(()=>URL.revokeObjectURL(url),2000);
+}
+function listen(){
+ db.collection("machines").orderBy("name").onSnapshot(s=>{machines=s.docs.map(d=>({id:d.id,...d.data()}));setReady("machines");populate();drawReport()},e=>failed("CheckPlant machines",e));
+ db.collection("dieselVehicles").onSnapshot(s=>{vehicles=s.docs.map(d=>({id:d.id,...d.data()}));setReady("vehicles");populate();},e=>failed("Road vehicles",e));
+ db.collection("dieselTanks").onSnapshot(s=>{tanks=s.docs.map(d=>({id:d.id,...d.data()}));setReady("tanks");draw()},e=>failed("Diesel tanks",e));
+ db.collection("dieselMovements").onSnapshot(s=>{movements=s.docs.map(d=>({id:d.id,...d.data()}));setReady("movements");draw()},e=>failed("Fuel movements",e));
+}
+document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>{
+ document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===b));
+ document.querySelectorAll(".panel").forEach(x=>x.classList.toggle("active",x.id==="panel-"+b.dataset.panel));
+ if(b.dataset.panel==="history")drawReport();
+}));
+function switchFuelAsset(){const isFleet=val("refuel-kind")==="vehicle";$("refuel-plant-row").hidden=isFleet;$("refuel-vehicle-row").hidden=!isFleet;$("refuel-machine").disabled=isFleet;$("refuel-vehicle").disabled=!isFleet;$("refuel-machine").required=!isFleet;$("refuel-vehicle").required=isFleet;const v=vehicleById(val("refuel-vehicle"));
+ $("refuel-reading-label").textContent=isFleet?"Odometer ("+(v?.odometerUnit==="km"?"km":"miles")+") · optional":"Engine hours · optional";$("refuel-hours").placeholder=isFleet?"Current odometer":"Current engine hours";$("refuel-hours").value="";}
+$("refuel-kind").addEventListener("change",switchFuelAsset);
+$("refuel-vehicle").addEventListener("change",switchFuelAsset);
+switchFuelAsset();
+[["form-refuel",refuel],["form-delivery",deliver],["form-transfer",transfer],["form-dip",dip],["form-setup",setup]].forEach(a=>$(a[0]).addEventListener("submit",a[1]));
+["report-month","report-site","report-machine"].forEach(id=>$(id).addEventListener("change",drawReport));
+$("export-csv").addEventListener("click",exportCsv);
+["refuel-date","delivery-date","transfer-date","dip-date"].forEach(id=>$(id).value=dateLocal());
+$("report-month").value=dateLocal().slice(0,7);
+listen();
+</script>
+</body>
+</html>
