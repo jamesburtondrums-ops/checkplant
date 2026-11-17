@@ -31,7 +31,27 @@
       const defects = await Promise.all(selected.map(id => tx.get(database.collection('defects').doc(id))));
       if (defects.some(s => !s.exists || s.data().machineId !== group.row.machineId)) throw Error('Select only defects belonging to this machine.');
       const patch = { defectRefIds: selected, defectRefId: selected[0] || null, defectId: defects[0] ? defects[0].data().defectId || null : null, defectItemName: defects[0] ? defects[0].data().itemName || '' : '', defectLinksUpdatedAt: firestore.Timestamp.now() };
+      // Re-read completion status inside the transaction so a job completed while
+      // this dialog was open is handled correctly, and failed writes stay atomic.
+      const finished = group.refs.some((ref, i) => ref.collection !== 'liveJobs' || rows[i].status === 'completed');
+      const recordIndex = group.refs.findIndex(ref => ref.collection === 'records');
+      const job = rows[recordIndex >= 0 ? recordIndex : 0];
+      let resolvedCount = 0;
+      if (finished) defects.forEach((snapshot, i) => {
+        if (snapshot.data().status === 'resolved') return;
+        tx.update(database.collection('defects').doc(selected[i]), {
+          status: 'resolved', resolvedDate: new Date().toISOString().slice(0, 10),
+          resolvedAt: patch.defectLinksUpdatedAt, updatedAt: patch.defectLinksUpdatedAt,
+          resolvedBy: job.signName || job.technician || job.engineerName || 'Completed job',
+          resolutionNotes: job.notes || job.finalNotes || 'Resolved by linking to completed job ' + (job.recordId || job.jobId || job.jobCardId || group.refs[0].id),
+          resolutionRecordId: recordIndex >= 0 ? group.refs[recordIndex].id : (job.linkedRecordId || null),
+          resolutionJobId: job.recordId || job.jobId || job.jobCardId || group.refs[0].id,
+          resolutionSource: 'completed_job_link'
+        });
+        resolvedCount++;
+      });
       group.refs.forEach(r => tx.update(database.collection(r.collection).doc(r.id), patch));
+      return resolvedCount;
     });
   }
   if (typeof module !== 'undefined' && module.exports) { module.exports = { ids, jobsFrom, persist }; return; }
@@ -54,7 +74,7 @@
   function open(group) {
     openGroup = group;
     const r = group.row, relevant = data.defects.filter(d => d.machineId === r.machineId), missing = group.defectIds.filter(id => !relevant.some(d => d.id === id));
-    dialog.innerHTML = '<h2 style="margin-top:0">' + h(r.jobCardId || r.recordId || r.jobId || r.id) + '</h2><p><strong>' + h(r.machineName || 'Asset') + '</strong> · ' + h(group.finished ? 'Finished' : r.status || 'Unfinished') + '</p><p style="white-space:pre-wrap">' + h(r.jobDescription || '') + '</p><p style="white-space:pre-wrap">' + h(r.notes || r.finalNotes || 'No completion notes recorded.') + '</p><h3>Assign machine defects</h3><p>Select all defects related to this job. Saving links keeps the current job and defect statuses.</p><div id="jdChoices">' + (relevant.map(d => '<label style="display:flex;align-items:flex-start;gap:10px;border-bottom:1px solid #eee;padding:12px 0;color:inherit;font-size:.9rem"><input style="width:auto;margin-top:3px" type="checkbox" value="' + h(d.id) + '" ' + (group.defectIds.includes(d.id) ? 'checked' : '') + '><span><strong>' + h(d.defectId || d.id) + '</strong> · ' + h(d.status || 'Unknown status') + ' · ' + h(d.dateRaised || '') + '<br>' + h(d.itemName || d.inspectionItemName || 'Defect') + '<br>' + h(d.lastObservedCondition || d.notes || '') + '</span></label>').join('') || '<p>No defects recorded for this machine.</p>') + missing.map(id => '<label><input style="width:auto" type="checkbox" value="' + h(id) + '" checked disabled> Unavailable defect: ' + h(id) + ' (link preserved)</label>').join('') + '</div><p id="jdSaveMessage" role="status"></p><div style="display:flex;gap:10px"><button class="btn btn-primary" id="jdSave" ' + (!r.machineId ? 'disabled' : '') + '>Save defect links</button><button class="btn btn-secondary" id="jdClose">Close</button></div>';
+    dialog.innerHTML = '<h2 style="margin-top:0">' + h(r.jobCardId || r.recordId || r.jobId || r.id) + '</h2><p><strong>' + h(r.machineName || 'Asset') + '</strong> · ' + h(group.finished ? 'Finished' : r.status || 'Unfinished') + '</p><p style="white-space:pre-wrap">' + h(r.jobDescription || '') + '</p><p style="white-space:pre-wrap">' + h(r.notes || r.finalNotes || 'No completion notes recorded.') + '</p><h3>Assign machine defects</h3><p>Select all defects related to this job. Saving links to a finished job automatically resolves the selected defects. Links to unfinished jobs keep defects open.</p><div id="jdChoices">' + (relevant.map(d => '<label style="display:flex;align-items:flex-start;gap:10px;border-bottom:1px solid #eee;padding:12px 0;color:inherit;font-size:.9rem"><input style="width:auto;margin-top:3px" type="checkbox" value="' + h(d.id) + '" ' + (group.defectIds.includes(d.id) ? 'checked' : '') + '><span><strong>' + h(d.defectId || d.id) + '</strong> · ' + h(d.status || 'Unknown status') + ' · ' + h(d.dateRaised || '') + '<br>' + h(d.itemName || d.inspectionItemName || 'Defect') + '<br>' + h(d.lastObservedCondition || d.notes || '') + '</span></label>').join('') || '<p>No defects recorded for this machine.</p>') + missing.map(id => '<label><input style="width:auto" type="checkbox" value="' + h(id) + '" checked disabled> Unavailable defect: ' + h(id) + ' (link preserved)</label>').join('') + '</div><p id="jdSaveMessage" role="status"></p><div style="display:flex;gap:10px"><button class="btn btn-primary" id="jdSave" ' + (!r.machineId ? 'disabled' : '') + '>Save defect links</button><button class="btn btn-secondary" id="jdClose">Close</button></div>';
     document.getElementById('jdClose').onclick = () => dialog.close();
     document.getElementById('jdSave').onclick = async () => {
       const button = document.getElementById('jdSave'), feedback = document.getElementById('jdSaveMessage');
@@ -63,8 +83,8 @@
         const selected = [...dialog.querySelectorAll('input:checked')].map(el => el.value);
         // Missing historical links must remain untouched until their defect can be loaded.
         if (missing.length) throw Error('Some linked defects are unavailable. Restore access to those defects before editing links.');
-        await persist(database, openGroup, selected, firebase.firestore);
-        feedback.textContent = 'Defect links saved.';
+        const resolvedCount = await persist(database, openGroup, selected, firebase.firestore);
+        feedback.textContent = 'Defect links saved.' + (resolvedCount ? ' ' + resolvedCount + ' defect(s) automatically resolved.' : '');
         openGroup = { ...openGroup, defectIds: selected };
       } catch (error) { feedback.textContent = 'Not saved: ' + error.message; }
       finally { button.disabled = false; }
