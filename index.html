@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CheckPlant — KCM Waste Management</title>
+<link rel="stylesheet" href="asset-status.css?v=20261117">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -279,6 +280,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focu
 <h1 style="color:var(--navy)">Back Office</h1>
 <div class="tabs">
 <button class="active" data-tab="daily" onclick="switchOfficeTab('daily')">Daily Checks</button>
+<button data-tab="assetstatus" onclick="switchOfficeTab('assetstatus')">Asset Status</button>
 <button data-tab="machines" onclick="switchOfficeTab('machines')">Machines</button>
 <button data-tab="categories" onclick="switchOfficeTab('categories')">Check Categories</button>
 <button data-tab="defects" onclick="switchOfficeTab('defects')">Outstanding Defects</button>
@@ -293,6 +295,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focu
 <div class="card"><div class="section-title">📋 Daily Checks — Today</div>
 <p class="progress-note">Shows every machine with a Service, Check, or Defect Resolution logged today (resets at midnight). Live — no refresh needed.</p></div>
 <div id="dailyChecksWrap"></div></div>
+<div id="office-assetstatus" class="office-tab" style="display:none"><div id="assetStatusBoard"></div><p class="progress-note">For another screen, pop out the display, move the window to that screen, then choose Full screen. The pop-out keeps its own live connection, so you can continue using CheckPlant in this tab.</p></div>
 <div id="office-machines" class="office-tab" style="display:none"><div class="card"><div class="section-title">Add New Machine</div>
 <div class="row"><label class="asset-field">Machine name<input type="text" id="newMachineName" placeholder="e.g. JCB 3CX"></label>
 <label class="asset-field">Serial number / asset number<input type="text" id="newMachineSerial" placeholder="Unique number, if known"></label>
@@ -979,9 +982,9 @@ if(resp2.ok){if(!silent)toast('Sent via fallback');}else if(!silent)toast('Sync 
 function testSheetsWebhook(){const url=document.getElementById('sheetsWebhookUrl').value.trim();if(!url){toast('Enter URL first');return;}
 settings.sheetsWebhookUrl=url;localStorage.setItem('cpsettings',JSON.stringify(settings));
 pushRecordToSheets({type:'check',subject:'Test row',technician:'Test',date:todayISO(),items:[{name:'Sample',status:'Pass'}],notes:'Test.',signName:'Test',signDate:todayISO(),hoursReading:0},false);}
-function switchOfficeTab(tab){document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+function switchOfficeTab(tab){if(tab==='assetstatus'&&!backOfficeUnlocked){requestBackOffice();return;}document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
 document.querySelectorAll('.office-tab').forEach(el=>el.style.display='none');document.getElementById('office-'+tab).style.display='block';
-if(tab==='daily')renderDailyChecks();if(tab==='machines')renderMachineList();if(tab==='categories')renderCategoryList();if(tab==='defects')renderDefectsTable();
+if(tab==='assetstatus')AssetStatus.open({db,canAccess:()=>backOfficeUnlocked});if(tab==='daily')renderDailyChecks();if(tab==='machines')renderMachineList();if(tab==='categories')renderCategoryList();if(tab==='defects')renderDefectsTable();
 if(tab==='calendar')renderCalendar();if(tab==='vor')renderVORRegister();if(tab==='engineeractivity')renderEngineerActivityOverview();if(tab==='records'){renderRecordsTable();ensureFullRecordsLoaded();}if(tab==='sheets')renderSheetsStatus();if(tab==='security')renderEngineerAdmin();}
 function populateNewMachineCategorySelect(){const sel=document.getElementById('newMachineCategory');if(!sel)return;const cv=sel.value;sel.innerHTML='<option value="">Choose category</option>';
 Object.entries(categories).forEach(([k,c])=>{const o=document.createElement('option');o.value=k;o.textContent=c.emoji+' '+c.label;sel.appendChild(o);});sel.value=cv;}
@@ -1460,5 +1463,6 @@ document.getElementById('bookingDate').value=todayISO();
 document.getElementById('adhocDate').value=todayISO();populateAdHocCategories();
 initFirestoreListeners();renderSheetsStatus();
 </script>
+<script src="asset-status.js?v=20261117"></script>
 </body>
 </html>
