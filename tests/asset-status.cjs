@@ -3,8 +3,8 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const { buildRows, table, shell } = require('../asset-status.js');
 const machines = [
-  { id: 'b', name: 'Grab 10', outOfService: true, outOfServiceReason: 'Hydraulic failure', currentHours: 100.5 },
-  { id: 'a', name: 'Grab 2', branch: 'Rotherham', currentHours: 0 },
+  { id: 'b', name: 'Grab 10', outOfService: true, outOfServiceReason: 'Hydraulic failure', currentHours: 100.5, nextServiceDueHours: 600 },
+  { id: 'a', name: 'Grab 2', branch: 'Rotherham', currentHours: 0, lastServiceHours: 0 },
   { id: 'c', name: 'Loader', currentHours: '' },
   { id: 'd', name: '<script>alert(1)</script>', currentHours: -1 }
 ];
@@ -22,6 +22,10 @@ const rows = buildRows(machines, jobs, defects), byId = Object.fromEntries(rows.
 assert.equal(rows.length, 4); // All assets, including those with no jobs or hours.
 assert.equal(byId.a.hours, 0);
 assert.equal(byId.b.hours, 100.5);
+assert.equal(byId.b.nextServiceHours, 600);
+assert.equal(byId.a.nextServiceHours, 500);
+assert.equal(byId.c.nextServiceHours, null);
+assert.equal(buildRows([{id:'zero',nextServiceDueHours:0}],[],[])[0].nextServiceHours, 0);
 assert.equal(byId.c.hours, null);
 assert.equal(byId.d.hours, null);
 assert.equal(byId.a.status, 'In service · defects');
@@ -37,6 +41,9 @@ assert(markup.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
 assert(!markup.includes('<script>alert(1)</script>'));
 assert(markup.includes('1 paused · 2 waiting / planned'));
 assert(markup.includes('No current hours recorded'));
+assert(markup.includes('Current hours'));
+assert(markup.includes('Next service hours'));
+assert(markup.includes('No service hours recorded'));
 assert(shell(true).includes('Full screen'));
 assert(!shell(true).includes('data-as-popout'));
 const fresh = buildRows(machines, jobs.map(j => j.id === 'j1' ? { ...j, status: 'completed' } : j), defects.map(d => ({ ...d, status: 'resolved' })));

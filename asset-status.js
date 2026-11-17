@@ -2,6 +2,7 @@
 (function () {
   'use strict';
   const h = value => String(value == null ? '' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const reading = value => value != null && String(value).trim() !== '' && Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : null;
   function buildRows(machines, liveJobs, defects) {
     const jobs = new Map(), open = new Map();
     liveJobs.forEach(job => {
@@ -12,9 +13,9 @@
     defects.filter(d => d.status === 'open').forEach(d => open.set(d.machineId, (open.get(d.machineId) || 0) + 1));
     return machines.map(machine => {
       const related = jobs.get(machine.id) || [], active = related.filter(j => j.status === 'active'), outstanding = related.filter(j => j.status !== 'active');
-      const value = machine.currentHours;
-      const hours = value != null && String(value).trim() !== '' && Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : null;
-      return { machine, hours, active, outstanding, openDefects: open.get(machine.id) || 0,
+      const hours = reading(machine.currentHours), lastService = reading(machine.lastServiceHours);
+      const nextServiceHours = reading(machine.nextServiceDueHours) ?? (lastService == null ? null : lastService + 500);
+      return { machine, hours, nextServiceHours, active, outstanding, openDefects: open.get(machine.id) || 0,
         status: machine.outOfService ? 'Out of service' : open.has(machine.id) ? 'In service · defects' : 'In service',
         statusClass: machine.outOfService ? 'danger' : open.has(machine.id) ? 'warning' : 'good' };
     }).sort((a, b) => String(a.machine.name || a.machine.id).localeCompare(String(b.machine.name || b.machine.id), 'en-GB', { numeric: true, sensitivity: 'base' }));
@@ -23,13 +24,13 @@
     return jobs.map(j => [j.jobId || 'Job', j.status === 'active' ? 'In progress' : j.status, j.engineerName, j.jobCategory || j.jobType, j.plannedDate || '', j.jobDescription].filter(Boolean).join(' · ')).join('\n');
   }
   function table(rows) {
-    return '<div class="as-table-wrap"><table aria-label="Asset status list"><colgroup><col style="width:29%"><col style="width:23%"><col style="width:12%"><col style="width:17%"><col style="width:19%"></colgroup><thead><tr><th>Asset</th><th>Status</th><th class="as-hours">Hours</th><th>In progress</th><th>Outstanding</th></tr></thead><tbody>' + rows.map(row => {
+    return '<div class="as-table-wrap"><table aria-label="Asset status list"><colgroup><col style="width:25%"><col style="width:19%"><col style="width:12%"><col style="width:13%"><col style="width:14%"><col style="width:17%"></colgroup><thead><tr><th>Asset</th><th>Status</th><th class="as-hours">Current hours</th><th class="as-hours">Next service hours</th><th>In progress</th><th>Outstanding</th></tr></thead><tbody>' + rows.map(row => {
       const m = row.machine, paused = row.outstanding.filter(j => j.status === 'paused').length;
-      return '<tr><td><span class="as-name">' + h(m.name || 'Unnamed asset') + '</span><span class="as-sub">' + h(m.branch || 'No branch') + (m.serialNumber ? ' · ' + h(m.serialNumber) : '') + '</span></td><td><span class="as-badge ' + row.statusClass + '">' + h(row.status) + '</span>' + (row.openDefects ? '<span class="as-sub">' + row.openDefects + ' open defect' + (row.openDefects === 1 ? '' : 's') + '</span>' : '') + (m.outOfService && m.outOfServiceReason ? '<span class="as-sub">' + h(m.outOfServiceReason) + '</span>' : '') + '</td><td class="as-hours">' + (row.hours == null ? '<span title="No current hours recorded">—</span>' : row.hours.toLocaleString('en-GB', { maximumFractionDigits: 1 })) + '</td><td title="' + h(jobDescription(row.active)) + '">' + (row.active.length ? '<span class="as-badge blue">' + row.active.length + ' active</span><span class="as-sub">' + h([...new Set(row.active.map(j => j.engineerName || 'Unassigned'))].join(', ')) + '</span>' : '<span class="as-none">None</span>') + '</td><td title="' + h(jobDescription(row.outstanding)) + '">' + (row.outstanding.length ? '<span class="as-badge warning">' + row.outstanding.length + ' job' + (row.outstanding.length === 1 ? '' : 's') + '</span><span class="as-sub">' + (paused ? paused + ' paused' + (paused < row.outstanding.length ? ' · ' : '') : '') + (row.outstanding.length > paused ? (row.outstanding.length - paused) + ' waiting / planned' : '') + '</span>' : '<span class="as-none">None</span>') + '</td></tr>';
+      return '<tr><td><span class="as-name">' + h(m.name || 'Unnamed asset') + '</span><span class="as-sub">' + h(m.branch || 'No branch') + (m.serialNumber ? ' · ' + h(m.serialNumber) : '') + '</span></td><td><span class="as-badge ' + row.statusClass + '">' + h(row.status) + '</span>' + (row.openDefects ? '<span class="as-sub">' + row.openDefects + ' open defect' + (row.openDefects === 1 ? '' : 's') + '</span>' : '') + (m.outOfService && m.outOfServiceReason ? '<span class="as-sub">' + h(m.outOfServiceReason) + '</span>' : '') + '</td><td class="as-hours">' + (row.hours == null ? '<span title="No current hours recorded">—</span>' : row.hours.toLocaleString('en-GB', { maximumFractionDigits: 1 })) + '</td><td class="as-hours">' + (row.nextServiceHours == null ? '<span title="No service hours recorded">—</span>' : row.nextServiceHours.toLocaleString('en-GB', { maximumFractionDigits: 1 })) + '</td><td title="' + h(jobDescription(row.active)) + '">' + (row.active.length ? '<span class="as-badge blue">' + row.active.length + ' active</span><span class="as-sub">' + h([...new Set(row.active.map(j => j.engineerName || 'Unassigned'))].join(', ')) + '</span>' : '<span class="as-none">None</span>') + '</td><td title="' + h(jobDescription(row.outstanding)) + '">' + (row.outstanding.length ? '<span class="as-badge warning">' + row.outstanding.length + ' job' + (row.outstanding.length === 1 ? '' : 's') + '</span><span class="as-sub">' + (paused ? paused + ' paused' + (paused < row.outstanding.length ? ' · ' : '') : '') + (row.outstanding.length > paused ? (row.outstanding.length - paused) + ' waiting / planned' : '') + '</span>' : '<span class="as-none">None</span>') + '</td></tr>';
     }).join('') + '</tbody></table></div>';
   }
   function shell(popout) {
-    return '<div class="as-head"><div><div class="as-eyebrow">CheckPlant / KCM Waste Management</div><h2>Asset Status</h2></div><div class="as-clock"><strong data-as-time>--:--:--</strong><span data-as-date></span></div></div><div class="as-controls"><button type="button" data-as-fullscreen>Full screen</button>' + (popout ? '' : '<button type="button" data-as-popout>Pop out to another screen</button>') + '</div><p class="as-message" data-as-message role="status"></p><div class="as-stats" data-as-stats></div><div class="as-sync" data-as-sync data-state="warning" role="status"><span class="as-dot"></span><span data-as-sync-text>Loading asset status…</span></div><div class="as-grid" data-as-grid><div class="as-empty">Loading all assets…</div></div><div class="as-footer"><span data-as-count>All assets</span><span>Outstanding jobs = paused, assigned or planned · Hours = latest recorded reading</span></div>';
+    return '<div class="as-head"><div><div class="as-eyebrow">CheckPlant / KCM Waste Management</div><h2>Asset Status</h2></div><div class="as-clock"><strong data-as-time>--:--:--</strong><span data-as-date></span></div></div><div class="as-controls"><button type="button" data-as-fullscreen>Full screen</button>' + (popout ? '' : '<button type="button" data-as-popout>Pop out to another screen</button>') + '</div><p class="as-message" data-as-message role="status"></p><div class="as-stats" data-as-stats></div><div class="as-sync" data-as-sync data-state="warning" role="status"><span class="as-dot"></span><span data-as-sync-text>Loading asset status…</span></div><div class="as-grid" data-as-grid><div class="as-empty">Loading all assets…</div></div><div class="as-footer"><span data-as-count>All assets</span><span>Outstanding jobs = paused, assigned or planned · Current hours = latest reading · Next service = due meter reading</span></div>';
   }
   if (typeof module !== 'undefined' && module.exports) { module.exports = { buildRows, table, shell }; return; }
   function installDisplay(root, displayWindow) {
@@ -75,7 +76,7 @@
   let root, popup = null, access, database, started = false, subscriptions = [];
   let data = { machines: [], liveJobs: [], defects: [] }, loaded = new Set(), cached = new Set(), failed = new Set();
   const scriptURL = document.currentScript.src;
-  const cssURL = new URL('asset-status.css?v=20261117', scriptURL).href;
+  const cssURL = new URL('asset-status.css?v=20261117-hours', scriptURL).href;
   function paint(target, rows) {
     const stats = [
       [rows.length, 'Total assets', ''],
