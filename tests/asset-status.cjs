@@ -54,3 +54,37 @@ vm.runInContext('backOfficeUnlocked=true', ctx); ctx.switchOfficeTab('assetstatu
 assert.equal(opened, 1);
 assert(html.indexOf('data-tab="assetstatus"') > html.indexOf('id="screen-backoffice"'));
 console.log('PASS: all-asset coverage, VOR priority, defect status, zero/missing hours, active/paused/planned/assigned jobs, completed/cancelled exclusion, natural sorting, escaping, live changes, back-office PIN gate, pop-out controls and page syntax');
+// Exercise browser wiring with a small DOM fixture, without connecting to production.
+function fixtureRoot() {
+  const nodes = new Map();
+  const root = { dataset: {}, innerHTML: '', listeners: {},
+    classList: { add() {}, contains: () => false }, style: { removeProperty() {}, setProperty() {} },
+    hasAttribute: () => false, querySelectorAll: () => [],
+    addEventListener(name, fn) { this.listeners[name] = fn; },
+    querySelector(name) { if (!nodes.has(name)) nodes.set(name, { dataset: {}, textContent: '', innerHTML: '', addEventListener(type, fn) { this[type] = fn; } }); return nodes.get(name); }
+  };
+  return root;
+}
+let subscriptions = 0, popupHTML = '';
+const fakeRoot = fixtureRoot();
+const fakeDocument = { currentScript: { src: 'https://example.com/checkplant/asset-status.js?v=20261117' }, querySelector: () => null, getElementById: () => fakeRoot, addEventListener() {} };
+const fakeWindow = { innerWidth: 1600, innerHeight: 950, document: fakeDocument, addEventListener() {}, setInterval: () => 1,
+  open: () => ({ document: { open() {}, write(value) { popupHTML = value; }, close() {} }, focus() {} }) };
+fakeRoot.ownerDocument = { defaultView: fakeWindow };
+const fakeDb = { collection: () => ({ onSnapshot: (options, callback) => { subscriptions++; callback({ docs: [], metadata: { fromCache: false } }); return () => {}; } }) };
+const scriptContext = vm.createContext({ window: fakeWindow, document: fakeDocument, navigator: { onLine: true }, URL, Map, Set, Date, console, firebase: { app: () => ({ options: { projectId: 'test-project' } }) } });
+vm.runInContext(fs.readFileSync('asset-status.js', 'utf8'), scriptContext);
+fakeWindow.AssetStatus.open({ db: fakeDb, canAccess: () => false });
+assert.equal(subscriptions, 0);
+fakeWindow.AssetStatus.open({ db: fakeDb, canAccess: () => true });
+assert.equal(subscriptions, 3);
+assert.equal(fakeRoot.dataset.live, 'true');
+fakeRoot.querySelector('[data-as-popout]').click();
+assert(popupHTML.includes('data-asset-display'));
+assert(popupHTML.includes('firebase.initializeApp({"projectId":"test-project"})'));
+assert.equal((popupHTML.match(/<\/script>/g) || []).length, 4);
+assert(popupHTML.includes('https://example.com/checkplant/asset-status.js?v=20261117'));
+assert(!popupHTML.includes('backOfficeUnlocked'));
+fakeWindow.AssetStatus.open({ db: fakeDb, canAccess: () => true });
+assert.equal(subscriptions, 3); // Reopening does not multiply subscriptions.
+console.log('PASS: lazy listeners, locked access creates no data connections, independent pop-out bootstrap, valid script tags, live connection status and repeat-open behavior');
