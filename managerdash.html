@@ -163,6 +163,12 @@ th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;}
   <p class="progress-note" id="assignJobStatus" style="margin-top:10px"></p>
 </div>
 
+<section class="card" id="jobDefectPanel">
+<div class="section-title">Jobs &amp; Machine Defects</div>
+<p>Open any finished or unfinished job to review and assign its machine defects.</p>
+<div class="row"><div><label for="jdSearch">Find a job</label><input id="jdSearch" type="search" placeholder="Job reference, machine or engineer"></div><div><label for="jdStatus">Job status</label><select id="jdStatus"><option value="all">All jobs</option><option value="unfinished">Unfinished jobs</option><option value="finished">Finished jobs (including signed off)</option></select></div></div>
+<p id="jdMessage" role="status">Loading jobs…</p><div id="jdList" style="max-height:420px;overflow:auto"></div>
+</section>
 <div class="card">
   <div class="job-section-head"><div><div class="section-title">Live & Paused Jobs</div><div class="job-summary">Current engineering work and timers.</div></div><span class="badge" id="liveJobBoardCount">0</span></div>
   <div id="liveJobsBoard"></div>
@@ -472,6 +478,7 @@ async function completeJobOnBehalf(id){
  const record={
    id:recordRef.id,recordId:j.jobId||('CP-'+(j.jobType==='service'?'SVC':'AHJ')+'-'+recordRef.id.slice(0,8).toUpperCase()),
    type:j.jobType==='service'?'service':'adhoc',
+   liveJobId:j.id,defectRefIds:j.defectRefIds||(j.defectRefId?[j.defectRefId]:[]),defectRefId:j.defectRefId||null,defectId:j.defectId||null,
    machineId:j.machineId||'',machineName:j.machineName||'',subject:(j.machineName||'Asset')+' — '+(j.jobCategory||j.jobType||'Job'),
    serialNumber:j.serialNumber||'',branch:j.branch||'',technician:j.engineerName||'Engineer',engineerId:j.engineerId||'',
    date:j.date||todayISO(),jobCategory:j.jobCategory||(j.jobType==='service'?'Service':'Ad-Hoc Job'),
@@ -732,5 +739,6 @@ function renderResolutions(){
 document.getElementById('monthPicker').addEventListener('change', computeStats);
 bootManagerDash();
 </script>
+<script src="job-defects.js?v=20261117"></script>
 </body>
 </html>
