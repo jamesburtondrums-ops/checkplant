@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Asset Status — CheckPlant</title>
+<link rel="stylesheet" href="asset-status.css?v=20261119-standalone">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+[hidden]{display:none!important}.asset-gate{max-width:420px;margin:12vh auto;padding:30px;background:#112536;border:1px solid #294052;border-radius:16px;color:#edf5fb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}.asset-gate h1{font-size:26px;margin:0 0 12px}.asset-gate p{line-height:1.5;color:#a7bdcd}.asset-gate label{display:block;margin-bottom:8px;font-weight:700}.asset-gate input{box-sizing:border-box;width:100%;padding:14px;border:1px solid #4a6579;border-radius:8px;font-size:24px;text-align:center;letter-spacing:.4em}.asset-gate button{width:100%;padding:13px;margin-top:14px;background:#2fae4e;color:#fff;border:0;border-radius:8px;font-size:16px;font-weight:750;cursor:pointer}.asset-gate button:disabled{opacity:.6}.asset-gate a{color:#a3d8ff}.asset-gate [role=status]{color:#ffce77;min-height:24px}
+</style>
+</head>
+<body class="asset-display-body">
+<section class="asset-gate" id="assetGate">
+<h1>Asset Status</h1><p>Live asset status, current hours, next service hours and engineering jobs.</p>
+<form id="assetUnlockForm"><label for="assetPin">Back Office PIN</label><input id="assetPin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" required autocomplete="off"><button id="assetUnlockButton" type="submit">Unlock live display</button></form>
+<p id="assetGateMessage" role="status"></p><p><a href="index.html">Back to CheckPlant</a></p>
+</section>
+<main id="assetStatusBoard" hidden></main>
+<script src="asset-status.js?v=20261119-standalone"></script>
+<script>
+const firebaseConfig={apiKey:"AIzaSyD60Z04IRIvv-EaSyPzoA33fEQ3yT6wsQQ",authDomain:"checkplant-kcm.firebaseapp.com",projectId:"checkplant-kcm",storageBucket:"checkplant-kcm.firebasestorage.app",messagingSenderId:"492245064396",appId:"1:492245064396:web:c79e64b32b9856766bc069"};
+firebase.initializeApp(firebaseConfig);
+const db=firebase.firestore();
+let assetDisplayUnlocked=false,assetUnlockBusy=false;
+document.getElementById('assetUnlockForm').addEventListener('submit',async event=>{
+ event.preventDefault();if(assetUnlockBusy)return;
+ const input=document.getElementById('assetPin'),button=document.getElementById('assetUnlockButton'),message=document.getElementById('assetGateMessage');
+ const pin=input.value.trim();if(!/^\d{4}$/.test(pin)){message.textContent='Enter the 4-digit Back Office PIN.';return;}
+ assetUnlockBusy=true;button.disabled=true;message.textContent='Checking PIN…';
+ try{
+  const settings=await db.collection('settings').doc('backoffice').get({source:'server'});
+  if(!settings.exists||String(settings.data().pin||'')!==pin){message.textContent='Incorrect Back Office PIN.';input.value='';input.focus();return;}
+  assetDisplayUnlocked=true;input.value='';
+  document.getElementById('assetStatusBoard').hidden=false;
+  window.AssetStatus.open({db,canAccess:()=>assetDisplayUnlocked,wall:true});
+  document.getElementById('assetGate').hidden=true;
+ }catch(error){assetDisplayUnlocked=false;document.getElementById('assetStatusBoard').hidden=true;message.textContent='Could not open the display. Check the connection and try again.';}
+ finally{assetUnlockBusy=false;button.disabled=false;}
+});
+</script>
+</body></html>

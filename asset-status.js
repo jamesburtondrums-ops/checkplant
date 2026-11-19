@@ -133,8 +133,8 @@
       if (!options.canAccess()) return;
       access = options.canAccess; database = options.db;
       if (!root) {
-        root = document.getElementById('assetStatusBoard'); root.classList.add('asset-status'); root.innerHTML = shell(false);
-        root.querySelector('[data-as-popout]').addEventListener('click', popout);
+        root = document.getElementById('assetStatusBoard'); root.classList.add('asset-status'); if(options.wall)root.classList.add('as-wall'); root.innerHTML = shell(!!options.wall);
+        if(!options.wall)root.querySelector('[data-as-popout]').addEventListener('click', popout);
         root.addEventListener('asset-layout', render);
         installDisplay(root, window);
         window.addEventListener('online', render); window.addEventListener('offline', render);
