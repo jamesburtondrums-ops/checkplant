@@ -1,4 +1,4 @@
-import * as E from './engine.mjs?v=3';
+import * as E from './engine.mjs?v=3-super1';
 import { buzzerPresets, playBuzzer } from './buzzer-audio.mjs';
 const LIBRARY='https://burtco-say-what-library.james-burton-drums.workers.dev/library';
 const URL_SB='https://hksgzebtjqbepetxgpka.supabase.co',KEY_SB='sb_publishable_6onhpZxEFflT8mEkeP4aEg_vdtUVwpF';
@@ -6,10 +6,10 @@ const $=id=>document.getElementById(id),params=new URLSearchParams(location.sear
 const room=(params.get('session')||'SW'+crypto.randomUUID().replaceAll('-','').slice(0,10)).toUpperCase().replace(/[^A-Z0-9_-]/g,'').slice(0,24);if(!params.has('session'))history.replaceState(null,'',location.pathname+'?host=1&session='+room);
 function get(key){try{return localStorage.getItem(key)}catch{return null}}function put(key,value){try{localStorage.setItem(key,value)}catch{}}
 const storeKey='say-what-v3:'+room,device=get('say-what-device')||crypto.randomUUID();put('say-what-device',device);const hostInstance=crypto.randomUUID();
-let state=E.initialState(),slots=[],undo=null,library=[],libraryLoaded=false,channel,online=false,assigned=null,lastState=0,lastRevision=-1,hostId=null,clockOffset=0,lastBuzz=0,imageLoaded=false,imageUrl='',full=false;
-if(mode==='host'){try{const saved=JSON.parse(get(storeKey));if(saved?.state?.version===3){state=saved.state;slots=saved.slots;undo=saved.undo;state.open=false;state.buzz=null;}}catch{}}
+let state=E.initialState(),slots=[],undo=null,library=[],libraryLoaded=false,uniquePhrases=0,channel,online=false,assigned=null,lastState=0,lastRevision=-1,hostId=null,clockOffset=0,lastBuzz=0,imageLoaded=false,imageUrl='',full=false;
+if(mode==='host'){try{const saved=JSON.parse(get(storeKey));if(saved?.state?.version===3){state=saved.state;if(state.phase==='lobby')state.mainRounds??=E.DEFAULT_MAIN_ROUNDS;slots=saved.slots;undo=saved.undo;state.open=false;state.buzz=null;}}catch{}}
 const base=location.origin+location.pathname,joinUrl=base+'?play=1&session='+room,liveUrl=base+'?live=1&session='+room;
-$('room').textContent=room;$('joinLink').textContent=joinUrl;$('joinLink').href=joinUrl;for(const key of ['liveLink','liveLink2'])$(key).href=liveUrl;document.body.classList.toggle('live',mode==='live');$('controls').classList.toggle('hidden',mode!=='host');$('setup').classList.toggle('hidden',mode!=='host');$('capacity').value=state.capacity;$('qualifiers').value=state.qualifierCount;$('speed').value=state.spinSpeed;
+$('room').textContent=room;$('joinLink').textContent=joinUrl;$('joinLink').href=joinUrl;for(const key of ['liveLink','liveLink2'])$(key).href=liveUrl;document.body.classList.toggle('live',mode==='live');$('controls').classList.toggle('hidden',mode!=='host');$('setup').classList.toggle('hidden',mode!=='host');$('mainRounds').value=E.mainRoundCount(state);$('capacity').value=state.capacity;$('qualifiers').value=state.qualifierCount;$('speed').value=state.spinSpeed;
 const tvFullscreen = $('tvFullscreen');
 if (mode === 'live' && document.fullscreenEnabled) {
   tvFullscreen.hidden = false;
@@ -122,22 +122,74 @@ function buzz(p) {
   undo = null;
   publish();
 }
-async function loadLibrary(){if(mode!=='host')return;$('loadLibrary').disabled=true;try{const response=await fetch(LIBRARY,{cache:'no-store'});if(!response.ok)throw Error('Picture collection unavailable.');const pack=await response.json();library=pack.pictures||[];const unique=E.uniqueDeck(library).length;libraryLoaded=true;$('libraryStatus').className='loading-note'+(unique<11?' error-note':'');$('libraryStatus').textContent=library.length+' portal pictures · '+unique+' unique phrases'+(unique<11?' · Sync at least 11 different phrases in the upload portal.':' · 10 rounds + a fresh final picture.');}catch(e){libraryLoaded=false;$('libraryStatus').className='loading-note error-note';$('libraryStatus').textContent=e.message+' Refresh to retry.';}finally{$('loadLibrary').disabled=false;render();}}
+function questionCountFits(count) {
+  return Number.isSafeInteger(count) && count >= 1 && count < uniquePhrases;
+}
+
+function renderLibraryStatus() {
+  if (!libraryLoaded) return;
+  const count = $('mainRounds').valueAsNumber;
+  const fits = questionCountFits(count);
+  const limit = Math.max(0, uniquePhrases - 1);
+  $('mainRounds').max = Math.max(1, limit);
+  const message = fits
+    ? count + ' main questions + 1 SUPER Question.'
+    : limit ? 'Choose 1 to ' + limit + ' main questions or sync more unique phrases.' : 'Sync at least two unique phrases.';
+  $('libraryStatus').className = 'loading-note' + (fits ? '' : ' error-note');
+  $('libraryStatus').textContent = uniquePhrases + ' unique phrases · ' + message;
+}
+
+async function loadLibrary() {
+  if (mode !== 'host') return;
+  $('loadLibrary').disabled = true;
+  try {
+    const response = await fetch(LIBRARY, {cache: 'no-store'});
+    if (!response.ok) throw Error('Picture collection unavailable.');
+    const pack = await response.json();
+    library = pack.pictures || [];
+    uniquePhrases = E.uniqueDeck(library).length;
+    libraryLoaded = true;
+  } catch (error) {
+    libraryLoaded = false;
+    $('libraryStatus').className = 'loading-note error-note';
+    $('libraryStatus').textContent = error.message + ' Refresh to retry.';
+  } finally {
+    $('loadLibrary').disabled = false;
+    render();
+  }
+}
 function activeTeam(){return state.finalists?.[state.turn]}
 function name(i){return state.teams[i]?.name||'Team'}
 function statusText(){if(state.phase==='lobby')return 'Join the game using the QR code.';if(state.phase==='qualifiers')return state.tiebreak?'Scores are tied — a fresh picture will decide it.':'First stage complete — here are your finalists!';if(state.phase==='finished'){const winners=state.winners||[];return mode==='live'&&winners.length>3?winners.length+' teams share the win!':winners.map(name).join(' & ')+(winners.length===1?' wins!':' share the win!');}if(state.revealed)return 'Answer revealed';if(state.buzz!==null)return name(state.buzz)+' — give your answer!';if(state.phase==='final'){return name(activeTeam())+(state.open?(state.tiles.length<12?' — buzz to stop the square!':' — buzz to guess!'):' — your turn is next.');}if(state.open)return 'BUZZERS OPEN — name that phrase!';if(state.imageVisible)return state.blocked.length===state.teams.length?'All teams have guessed — reveal the answer.':'Buzzers paused';return 'Get ready for the next picture…';}
 function teams(container,score){const target=$(container);target.replaceChildren();const order=state.teams.map((_,i)=>i);if(score)order.sort((a,b)=>state.teams[b].score-state.teams[a].score||a-b);for(const i of order){const t=state.teams[i],row=document.createElement('div');row.className='team'+(state.phase==='finished'&&state.winners?.includes(i)?' winner-team':'')+((state.buzz===i||state.phase==='final'&&activeTeam()===i)?' active':'');const n=document.createElement('span');n.textContent=t.name+(state.finalists?.includes(i)&&state.phase!=='round'?' ★':'');const points=document.createElement(score?'strong':'small');points.textContent=score?t.score:'JOINED';row.append(n,points);target.append(row);}}
 function updateImage(url){if(url===imageUrl)return;imageUrl=url;imageLoaded=false;const img=$('image');img.classList.add('loading');if(!url){img.removeAttribute('src');$('imageStatus').classList.add('hidden');return;}$('imageStatus').classList.remove('hidden');img.onload=()=>{$('stage').style.setProperty('--picture-ratio',img.naturalWidth/img.naturalHeight);imageLoaded=true;img.classList.remove('loading');$('imageStatus').classList.add('hidden');render();};img.onerror=()=>{imageLoaded=false;$('imageStatus').textContent='Picture failed to load. Refresh this screen.';$('imageStatus').classList.remove('hidden');};img.src=url;}
-function render(){const phone=mode==='team',lobby=state.phase==='lobby',summary=['qualifiers','finished'].includes(state.phase),done=state.phase==='finished',final=state.phase==='final';$('lobby').classList.toggle('hidden',phone||!lobby);$('game').classList.toggle('hidden',phone||lobby);$('phone').classList.toggle('hidden',!phone);teams('lobbyTeams',false);teams('scores',true);if(lobby)renderSoundTeams();$('joined').textContent=state.teams.length+' teams joined';$('start').disabled=!online||!libraryLoaded||E.uniqueDeck(library).length<11||state.teams.length<2;
-$('round').textContent=done?'Final scores':state.phase==='qualifiers'?(state.tiebreak?'Tie-break':'Your finalists'):final?(state.tiebreak?'Tie-break square final':'Square final'):'Round '+(state.round+1)+' / 10';$('points').textContent=summary?'':(final?25:10)+' points';$('buzzbar').textContent=statusText();$('stage').classList.toggle('hidden',summary);$('summary').classList.toggle('hidden',!summary);$('summary').textContent=done?statusText():(state.finalists||[]).map(i=>name(i)+' · '+state.teams[i].score+' points').join('\n');$('announcement').textContent=final?'Finalists take turns. Stop one flashing square, then guess. Scores carry forward.':state.phase==='qualifiers'?(mode==='live'?'★ marks the teams who advance.':'Cutoff ties advance together. All other teams can watch the final.'):'';
+function render(){const phone=mode==='team',lobby=state.phase==='lobby',summary=['qualifiers','finished'].includes(state.phase),done=state.phase==='finished',final=state.phase==='final';$('lobby').classList.toggle('hidden',phone||!lobby);$('game').classList.toggle('hidden',phone||lobby);$('phone').classList.toggle('hidden',!phone);teams('lobbyTeams',false);teams('scores',true);if(lobby){
+  renderSoundTeams();
+  $('lobbyQuestionCount').textContent=E.mainRoundCount(state);
+  if(mode==='host'){
+    const selected=$('mainRounds').valueAsNumber;
+    const valid=questionCountFits(selected);
+    renderLibraryStatus();
+    $('start').disabled=!online||!libraryLoaded||!valid||state.teams.length<2;
+    $('start').textContent='Start '+(valid?selected:E.mainRoundCount(state))+'-question game';
+  }
+}$('joined').textContent=state.teams.length+' teams joined';
+$('round').textContent=done?'Final scores':state.phase==='qualifiers'?(state.tiebreak?'Tie-break':'Your finalists'):final?(state.tiebreak?'Tie-break':'SUPER Question'):'Round '+(state.round+1)+' / '+E.mainRoundCount(state);$('points').textContent=summary?'':(final?25:10)+' points';$('buzzbar').textContent=statusText();$('stage').classList.toggle('hidden',summary);$('summary').classList.toggle('hidden',!summary);$('summary').textContent=done?statusText():(state.finalists||[]).map(i=>name(i)+' · '+state.teams[i].score+' points').join('\n');$('announcement').textContent=final?'Finalists take turns. Stop one flashing square, then guess. Scores carry forward.':state.phase==='qualifiers'?(mode==='live'?'★ marks the teams who advance.':'Only the qualifying teams play the SUPER Question.'):'';
 const url=mode==='host'&&['round','final'].includes(state.phase)?current()?.image||'':state.image||'';if(!phone)updateImage(url);$('cover').classList.toggle('hidden',!!state.imageVisible||final);$('tiles').classList.toggle('hidden',!final||state.revealed);[...$('tiles').children].forEach((tile,i)=>tile.classList.toggle('gone',state.revealed||state.tiles.includes(i)));$('answer').classList.toggle('hidden',!state.revealed||summary);$('answer').textContent=state.revealed?(mode==='host'?current()?.answer||'':state.answer||''):'';
-if(mode==='host'){const guessing=state.buzz!==null;$('controlTitle').textContent=final?'Square final':summary?'Next stage':'Picture round';$('revealImage').classList.toggle('hidden',summary);$('revealImage').textContent=final?(state.open?'Square is flashing…':'Start flashing square'):'Reveal image + open buzzers';$('revealImage').disabled=!online||!imageLoaded||state.revealed||guessing||(final?state.open:state.imageVisible);$('pause').disabled=summary||!state.imageVisible||guessing||state.revealed||!online||!imageLoaded;$('pause').textContent=state.open?'Pause buzzers':final?'Resume flashing square':'Reopen buzzers';$('correct').disabled=$('wrong').disabled=!guessing;$('reveal').disabled=summary||state.revealed;$('next').disabled=!online||done||(!state.revealed&&state.phase!=='qualifiers');$('next').textContent=done?'Game complete':state.phase==='qualifiers'?(state.tiebreak?'Start tie-break →':'Start square final →'):final?'Show final scores →':state.round===9?'Choose finalists →':'Next round →';$('undo').disabled=!undo;const d=$('privateAnswer').closest('details');$('privateAnswer').textContent=d.open?current()?.answer||'':'';$('hostHelp').textContent=final?'Only the active finalist can stop the square. Wrong automatically starts the next team’s turn. If every square is gone, each team gets one final guess.':summary?'The top teams qualify by score. A tie at the cutoff includes every tied team. Final scores include the 10-round stage.':'Reveal the whole picture to open buzzers. A wrong answer locks that team out for this picture. Correct answers score 10.';$('connections').replaceChildren();for(let i=0;i<state.teams.length;i++){const p=document.createElement('p');p.className='note';p.textContent=name(i)+' · '+(Date.now()-(slots[i]?.seen||0)<9000?'online':'reconnecting');$('connections').append(p);}}
+if(mode==='host'){const guessing=state.buzz!==null;$('controlTitle').textContent=final?'SUPER Question':summary?'Next stage':'Picture round';$('revealImage').classList.toggle('hidden',summary);$('revealImage').textContent=final?(state.open?'Square is flashing…':'Start flashing square'):'Reveal image + open buzzers';$('revealImage').disabled=!online||!imageLoaded||state.revealed||guessing||(final?state.open:state.imageVisible);$('pause').disabled=summary||!state.imageVisible||guessing||state.revealed||!online||!imageLoaded;$('pause').textContent=state.open?'Pause buzzers':final?'Resume flashing square':'Reopen buzzers';$('correct').disabled=$('wrong').disabled=!guessing;$('reveal').disabled=summary||state.revealed;$('next').disabled=!online||done||(!state.revealed&&state.phase!=='qualifiers');$('next').textContent=done?'Game complete':state.phase==='qualifiers'?(state.tiebreak?'Start tie-break →':'Start SUPER Question →'):final?'Show final scores →':state.round===E.mainRoundCount(state)-1?'Choose finalists →':'Next round →';$('undo').disabled=!undo;const d=$('privateAnswer').closest('details');$('privateAnswer').textContent=d.open?current()?.answer||'':'';$('hostHelp').textContent=final?'Only the active finalist can stop the square. Wrong automatically starts the next team’s turn. If every square is gone, each team gets one final guess.':summary?'Main question scores carry forward to the SUPER Question.':'Reveal the whole picture to open buzzers. A wrong answer locks that team out for this picture. Correct answers score 10.';$('connections').replaceChildren();for(let i=0;i<state.teams.length;i++){const p=document.createElement('p');p.className='note';p.textContent=name(i)+' · '+(Date.now()-(slots[i]?.seen||0)<9000?'online':'reconnecting');$('connections').append(p);}}
 const fresh=online&&(mode==='host'||Date.now()-lastState<7000);$('connection').className='status'+(fresh?'':' bad');$('connection').textContent=!online?'Connecting…':fresh?'LIVE · '+room:'Waiting for host…';
 if(phone){$('teamName').textContent=assigned===null?'Joining the game…':name(assigned);const spectator=final&&!state.finalists.includes(assigned),notTurn=final&&activeTeam()!==assigned;$('phoneStatus').textContent=!fresh?'Connecting to the host…':full?'This game is full or has already started. Ask the host for a new room.':assigned===null?'Waiting for a team slot…':spectator?'The finalists are playing. Watch the big screen!':notTurn?'Waiting for '+name(activeTeam())+' to take their turn.':state.blocked.includes(assigned)&&!state.revealed?'Wrong answer — sit this picture out.':statusText();$('buzzer').disabled=!fresh||assigned===null||spectator||notTurn||!state.open||state.buzz!==null||state.revealed||state.blocked.includes(assigned);$('buzzer').textContent=final?(state.tiles.length<12?'STOP':'GUESS'):'BUZZ';$('phoneScore').textContent=assigned===null?'':(state.teams[assigned]?.score||0)+' points';if(document.activeElement!==$('rename'))$('rename').value=assigned===null?'':name(assigned);}}
 for(let i=0;i<12;i++){const tile=document.createElement('div');tile.className='tile';tile.textContent='?';$('tiles').append(tile);}
 setInterval(()=>{const spinning=state.phase==='final'&&state.open&&state.buzz===null&&!state.revealed;const highlight=spinning?E.spinTile(state,Date.now()+(mode==='host'?0:clockOffset)):null;[...$('tiles').children].forEach((tile,i)=>tile.classList.toggle('highlight',i===highlight));},25);
+$('mainRounds').oninput=()=>render();
+$('mainRounds').onchange=()=>{
+  const count=$('mainRounds').valueAsNumber;
+  if(state.phase!=='lobby'||!questionCountFits(count))return;
+  state.mainRounds=count;
+  publish();
+};
 $('loadLibrary').onclick=loadLibrary;$('capacity').onchange=()=>{state.capacity=Math.max(state.teams.length,2,Math.min(32,Number($('capacity').value)||8));$('capacity').value=state.capacity;publish();};$('qualifiers').onchange=()=>{state.qualifierCount=Math.max(2,Math.min(8,Number($('qualifiers').value)||2));$('qualifiers').value=state.qualifierCount;publish();};$('speed').onchange=()=>{state.spinSpeed=Number($('speed').value);publish();};
-$('start').onclick=()=>{try{E.startGame(state,library,id());if(Audio&&get(outputKey)!=='off'&&!outputEnabled)void enableOutput();undo=null;publish();}catch(e){toast(e.message)}};
+$('start').onclick=()=>{try{const count=$('mainRounds').valueAsNumber;if(!questionCountFits(count))return;state.mainRounds=count;E.startGame(state,library,id());if(Audio&&get(outputKey)!=='off'&&!outputEnabled)void enableOutput();undo=null;publish();}catch(e){toast(e.message)}};
 $('revealImage').onclick=()=>{if(!imageLoaded)return;if(state.phase==='final')E.startSpin(state,Date.now(),id(),seed());else E.revealMain(state);publish();};$('pause').onclick=()=>{if(state.open)state.open=false;else if(state.phase==='final')E.startSpin(state,Date.now(),id(),seed());else state.open=state.imageVisible&&state.teams.some((_,i)=>!state.blocked.includes(i));publish();};
 $('correct').onclick=()=>{if(state.buzz===null)return;undo=structuredClone(state);E.correct(state);publish();};$('wrong').onclick=()=>{undo=null;E.wrong(state,Date.now(),id(),seed());publish();};$('reveal').onclick=()=>{undo=null;E.revealAnswer(state);publish();};$('next').onclick=()=>{undo=null;$('privateAnswer').closest('details').open=false;if(state.phase==='qualifiers')E.startFinal(state,id());else E.advance(state,id());publish();};$('undo').onclick=()=>{if(!undo)return;const revision=state.revision;state=undo;state.revision=revision;undo=null;publish();};$('privateAnswer').closest('details').addEventListener('toggle',()=>{$('privateAnswer').textContent=$('privateAnswer').closest('details').open?current()?.answer||'':''});
 function pressBuzz(){if($('buzzer').disabled||Date.now()-lastBuzz<400)return;lastBuzz=Date.now();send('buzz',{deviceId:device,team:assigned,roundId:state.roundId,spinId:state.spinId});navigator.vibrate?.(50);}
