@@ -399,6 +399,7 @@ const BRANCHES=["Rotherham","Shires","Sheffield"];
 const SERVICE_HOURS_LIMIT=500,SERVICE_DUE_SOON_WINDOW=100,LOLER_DUE_SOON_DAYS=30;
 let machines=[],categories={},records=[],defects=[],bookings=[],engineers=[],liveJobs=[];
 let recordsFullLoaded=false,recordsFullLoading=null;
+let serviceRecords=[],serviceHistoryLoaded=false,serviceHistoryError=false;
 const RECENT_RECORD_LIMIT=300;
 const DEFAULT_SHEETS_URL="https://script.google.com/macros/s/AKfycbypRwQyTWNeBKliniJ5hYxeLLY6UWaZS0-HD8uSWDzsg8QNpA1kIwwisiSilBWzsrOD/exec";
 let settings=JSON.parse(localStorage.getItem('cpsettings')||'{}');
@@ -603,6 +604,31 @@ async function ensureFullRecordsLoaded(){
   }).finally(()=>{recordsFullLoading=null;});
   return recordsFullLoading;
 }
+function serviceRecordDateMs(record){
+  const date=Date.parse(record.date||record.signDate||'');
+  if(Number.isFinite(date))return date;
+  const timestamp=record.completedAt||record.createdAt;
+  if(timestamp&&typeof timestamp.toMillis==='function')return timestamp.toMillis();
+  if(timestamp&&typeof timestamp.toDate==='function')return timestamp.toDate().getTime();
+  return 0;
+}
+function serviceHistoryForMachine(machineId){
+  const source=serviceHistoryLoaded?serviceRecords:Array.from(new Map([...records.filter(r=>r.type==='service'),...serviceRecords].map(r=>[r.id,r])).values());
+  return source.filter(r=>r.type==='service'&&r.machineId===machineId).sort((a,b)=>serviceRecordDateMs(b)-serviceRecordDateMs(a)||String(b.id||'').localeCompare(String(a.id||'')));
+}
+function serviceHistoryEmptyText(){
+  return serviceHistoryError?'Service history unavailable — refresh to retry.':serviceHistoryLoaded?'No service recorded yet.':'Loading service history…';
+}
+function refreshServiceHistoryViews(){
+  renderHomeMachineList();renderOverdueAlerts();
+  const profile=document.getElementById('screen-machine-profile');
+  if(currentProfileMachineId&&profile&&profile.classList.contains('active'))openMachineProfile(currentProfileMachineId,true);
+}
+function applyServiceHistorySnapshot(snapshot){
+  serviceRecords=snapshot.docs.map(doc=>({...doc.data(),id:doc.id}));
+  serviceHistoryLoaded=!snapshot.metadata.fromCache;serviceHistoryError=false;
+  refreshServiceHistoryViews();
+}
 function initFirestoreListeners(){
 setConn(true,"Connecting...");
 loadPinSetting();
@@ -618,6 +644,8 @@ db.collection('categories').onSnapshot(async s=>{
   renderCategoryGrid();renderCategoryList();populateNewMachineCategorySelect();
 },e=>setConn(false,"Cat error: "+e.message));
 db.collection('records').orderBy('createdAt','desc').limit(RECENT_RECORD_LIMIT).onSnapshot(applyRecentRecordsSnapshot,e=>setConn(false,"Rec error: "+e.message));
+// Services have their own uncapped subscription: daily checks must not hide old services.
+db.collection('records').where('type','==','service').onSnapshot({includeMetadataChanges:true},applyServiceHistorySnapshot,e=>{serviceHistoryError=true;refreshServiceHistoryViews();console.error('Service history load failed',e);});
 db.collection('defects').orderBy('dateRaised','desc').onSnapshot(s=>{defects=s.docs.map(d=>({id:d.id,...d.data()})).filter(d=>!isFireExtinguisherItem(d.itemName||d.inspectionItemName));renderDefectsTable();renderOutstandingDefectsList();},e=>setConn(false,"Def error: "+e.message));
 db.collection('bookings').orderBy('date').onSnapshot(s=>{bookings=s.docs.map(d=>({id:d.id,...d.data()}));renderCalendar();renderHomeUpcomingBookings();},e=>setConn(false,"Book error: "+e.message));
 }
@@ -634,11 +662,11 @@ function escapeAttr(s){return escapeHtml(s).replace(/'/g,"&#39;");}
 function todayISO(){return new Date().toISOString().slice(0,10);}
 function daysBetween(a,b){return Math.round((new Date(b)-new Date(a))/86400000);}
 function latestServiceRecordForMachine(machineId){
-  return records.find(r=>r.type==='service'&&r.machineId===machineId)||null;
+  return serviceHistoryForMachine(machineId)[0]||null;
 }
 function effectiveServiceBaseline(m){
   const rec=latestServiceRecordForMachine(m.id);
-  const recHours=rec&&Number.isFinite(Number(rec.hoursReading))?Number(rec.hoursReading):null;
+  const recHours=rec&&rec.hoursReading!=null&&String(rec.hoursReading).trim()!==''&&Number.isFinite(Number(rec.hoursReading))?Number(rec.hoursReading):null;
   const stored=Number(m.lastServiceHours)||0;
   const last=recHours!=null?Math.max(stored,recHours):stored;
   const next=recHours!=null&&recHours>=stored?recHours+SERVICE_HOURS_LIMIT:(m.nextServiceDueHours!=null?Number(m.nextServiceDueHours):last+SERVICE_HOURS_LIMIT);
@@ -661,19 +689,19 @@ function machineHoursStatus(m){const svc=effectiveServiceBaseline(m),s=Math.max(
 function machineNextServiceDue(m){return effectiveServiceBaseline(m).next;}
 function renderHomeMachineList(){const w=document.getElementById('homeMachineList');if(!w)return;w.innerHTML='';if(!machines.length){w.innerHTML='<p class="progress-note">No machines yet.</p>';return;}
 const visible=machines.filter(m=>assetMatchesSearch(m,'homeAssetSearch'));if(!visible.length){w.innerHTML='<p class="empty-state">No matching machines.</p>';return;}
-visible.forEach(m=>{const ls=records.find(r=>r.type==='service'&&r.machineId===m.id);const st=machineHoursStatus(m);const row=document.createElement('div');row.className='machine-list-item';row.onclick=()=>openMachineProfile(m.id);row.tabIndex=0;row.setAttribute('role','button');row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openMachineProfile(m.id);}};
-row.innerHTML='<div><div class="mname">'+escapeHtml(m.name)+(m.serialNumber?' <span style="color:var(--grey);font-weight:400">(S/N: '+escapeHtml(m.serialNumber)+')</span>':'')+'</div><div class="mlast">'+(ls?'Last serviced '+ls.date+' by '+escapeHtml(ls.signName||'-'):'No service yet')+'</div><div class="mmeta">'+escapeHtml(m.branch||'No branch')+' · '+(categories[m.categoryKey]?categories[m.categoryKey].label:'Uncategorised')+' · '+(m.currentHours||0)+' hrs · next due '+machineNextServiceDue(m)+' hrs</div></div><span class="badge '+st.cls+'">'+st.label+'</span>';
+visible.forEach(m=>{const ls=latestServiceRecordForMachine(m.id);const st=machineHoursStatus(m);const row=document.createElement('div');row.className='machine-list-item';row.onclick=()=>openMachineProfile(m.id);row.tabIndex=0;row.setAttribute('role','button');row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openMachineProfile(m.id);}};
+row.innerHTML='<div><div class="mname">'+escapeHtml(m.name)+(m.serialNumber?' <span style="color:var(--grey);font-weight:400">(S/N: '+escapeHtml(m.serialNumber)+')</span>':'')+'</div><div class="mlast">'+(ls?'Last serviced '+escapeHtml(ls.date||ls.signDate||'Date not recorded')+' by '+escapeHtml(ls.signName||ls.technician||'-'):serviceHistoryEmptyText())+'</div><div class="mmeta">'+escapeHtml(m.branch||'No branch')+' · '+(categories[m.categoryKey]?categories[m.categoryKey].label:'Uncategorised')+' · '+(m.currentHours||0)+' hrs · next due '+machineNextServiceDue(m)+' hrs</div></div><span class="badge '+st.cls+'">'+st.label+'</span>';
 w.appendChild(row);});}
 function renderHomeUpcomingBookings(){const w=document.getElementById('homeUpcomingBookings');if(!w)return;const t=todayISO();const up=bookings.filter(b=>b.date>=t).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,6);
 if(!up.length){w.innerHTML='<p class="progress-note">No upcoming bookings.</p>';return;}
 w.innerHTML=up.map(b=>'<div class="alert-row"><span>'+escapeHtml(b.machineName)+'</span><span>'+b.date+(b.note?' — '+escapeHtml(b.note):'')+'</span></div>').join('');}
-function openMachineProfile(id){currentProfileMachineId=id;const m=machines.find(x=>x.id===id);if(!m)return;
+function openMachineProfile(id,refreshOnly=false){currentProfileMachineId=id;const m=machines.find(x=>x.id===id);if(!m)return;
 document.getElementById('profileMachineName').textContent=m.name+(m.serialNumber?' (S/N: '+m.serialNumber+')':'');
 document.getElementById('profileItemCount').textContent=machineChecklistItems(m).length+' items · '+(m.currentHours||0)+' hrs · '+(m.branch||'No branch');
 const st=machineHoursStatus(m),svc=effectiveServiceBaseline(m),since=Math.max(0,(Number(m.currentHours)||0)-svc.last);
 document.getElementById('profileStatusCard').innerHTML='<span class="badge '+st.cls+'">'+st.label+'</span><p class="progress-note">'+since+' hrs since last service · Next service due at <strong>'+machineNextServiceDue(m)+' hrs</strong> · Serial: '+escapeHtml(m.serialNumber||'-')+'</p>';
-const mr=records.filter(r=>r.type==='service'&&r.machineId===id);const lc=document.getElementById('lastServiceCard');
-if(!mr.length){lc.innerHTML='<div class="empty-state">No service recorded yet.</div>';}else{const last=mr[0];
+const mr=serviceHistoryForMachine(id);const lc=document.getElementById('lastServiceCard');
+if(!mr.length){lc.innerHTML='<div class="empty-state">'+serviceHistoryEmptyText()+'</div>';}else{const last=mr[0];
 lc.innerHTML='<div><strong>Date:</strong> '+last.date+' <strong>Tech:</strong> '+escapeHtml(last.signName||'-')+' <strong>Hours:</strong> '+(last.hoursReading!=null?last.hoursReading:'-')+'</div>'+
 '<button class="btn btn-secondary btn-sm" onclick="reprintRecord(\'' +last.id+ '\')">View PDF</button>';}
 const lolc=document.getElementById('profileLolerCard');
@@ -684,7 +712,7 @@ lolc.innerHTML='<span class="badge '+cls+'">'+lbl+'</span><p class="progress-not
 const hl=document.getElementById('serviceHistoryList');
 if(mr.length<=1){hl.innerHTML='<div class="empty-state">No earlier services.</div>';}else{hl.innerHTML='';mr.slice(1).forEach(r=>{const d=document.createElement('div');d.className='history-item';
 d.innerHTML='<div>'+r.date+' <button class="btn btn-secondary btn-sm" onclick="reprintRecord(\''+r.id+'\')">PDF</button></div>';hl.appendChild(d);});}
-showScreen('machine-profile');}
+if(!refreshOnly)showScreen('machine-profile');}
 function startServiceFromProfile(){const id=currentProfileMachineId;if(!currentEngineer){requestEngineerSignIn();toast('Engineer sign-in required for Service Mode');return;}showScreen('service-select');document.getElementById('serviceMachineSelect').value=id;onServiceMachineChosen();}
 function populateServiceMachineSelect(){const sel=document.getElementById('serviceMachineSelect');if(!sel)return;const cv=sel.value;sel.innerHTML='<option value="">-- Choose machine --</option>';
 machines.forEach(m=>{const o=document.createElement('option');o.value=m.id;o.textContent=m.name+(m.serialNumber?' (S/N: '+m.serialNumber+')':'')+' ('+(m.branch||'no branch')+')';sel.appendChild(o);});sel.value=cv;
@@ -701,7 +729,7 @@ document.getElementById('svcHours').value=currentServiceMachine.currentHours||''
 document.getElementById('svcSignName').value=currentEngineer?currentEngineer.name:'';document.getElementById('svcSignName').readOnly=!!currentEngineer;document.getElementById('svcSignDate').value=todayISO();
 document.getElementById('lolerCertDate').value='';document.getElementById('lolerNextDue').value='';document.getElementById('lolerExaminer').value='';
 pendingLolerStatus='pass';document.querySelectorAll('#svcLolerPanel .check-box').forEach(b=>b.classList.remove('active'));
-const ls=records.find(r=>r.type==='service'&&r.machineId===id);const since=(currentServiceMachine.currentHours||0)-(currentServiceMachine.lastServiceHours||0);
+const ls=latestServiceRecordForMachine(id);const since=(currentServiceMachine.currentHours||0)-(currentServiceMachine.lastServiceHours||0);
 document.getElementById('lastServiceHint').innerHTML='<p class="progress-note">'+(ls?'Last serviced '+ls.date:'No previous service')+'. Hours since reset: '+since+' (resets to 0 now). Next service due will be set to current hours + 500.</p>';
 renderServiceItems();const ck=currentServiceMachine.categoryKey;const la=ck&&categories[ck]?categories[ck].lolerApplies:true;
 document.getElementById('svcLolerPanel').style.display='block';if(!la){document.querySelector('#svcLolerPanel .check-box[data-loler="na"]').click();}
@@ -1184,7 +1212,7 @@ let h='<table><thead><tr><th>ID</th><th>Type</th><th>Subject</th><th>Branch</th>
 filtered.forEach(r=>{const pl=r.type==='service'?'Service':r.type==='check'?'Check':r.type==='adhoc'?'Ad-Hoc':'Defect';
 h+='<tr><td style="font-weight:700">'+escapeHtml(r.recordId||r.id)+'</td><td><span class="pill '+r.type+'">'+pl+'</span></td><td>'+escapeHtml(r.subject)+'</td><td>'+escapeHtml(r.branch||'-')+'</td><td>'+escapeHtml(r.signName)+'</td><td>'+r.date+'</td><td>'+(r.hoursReading!=null?r.hoursReading:'-')+'</td><td style="max-width:220px;white-space:normal">'+escapeHtml(r.notes||'-')+'</td><td><button class="btn btn-secondary btn-sm" onclick="reprintRecord(\''+r.id+'\')">PDF</button></td></tr>';});
 h+='</tbody></table>';w.innerHTML=h;}
-function reprintRecord(id){const r=records.find(x=>x.id===id);if(r)generatePDF(r);}
+function reprintRecord(id){const r=serviceRecords.find(x=>x.id===id)||records.find(x=>x.id===id);if(r)generatePDF(r);}
 function csvRow(r){const items=r.items.map(i=>i.name+':'+i.status).join(' | ');
 return [r.type,r.subject,r.branch||'',r.signName,r.date,r.hoursReading!=null?r.hoursReading:'',(r.notes||'').replace(/,/g,';'),items].map(v=>String(v).replace(/,/g,';')).join(',');}
 function exportRecordsCSV(){if(!records.length){toast('No records');return;}let csv='Type,Subject,Branch,By,Date,Hours,Notes,Items\n';
