@@ -22,7 +22,156 @@ body.live{background-color:#1c0e32}body.live main{padding:18px 24px}body.live he
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;scroll-behavior:auto!important}}
 
 </style>
-<style>.stage>img{width:100%;height:100%;object-fit:contain;display:block;background:#171020}.stage .cover{position:absolute;inset:0;display:grid;place-content:center;text-align:center;background:radial-gradient(ellipse at 40% 30%,#77336f,#27143f);z-index:2}.cover strong{font:clamp(28px,5vw,70px) 'Bungee',sans-serif;color:#ffe49a}.cover span{font-size:18px;color:#e6cced;margin:15px}.tile.highlight{background:#fff09c!important;color:#432543;box-shadow:inset 0 0 0 6px #fff9,0 0 30px #ffd76b;font-size:clamp(30px,4vw,70px);text-shadow:none}.team.active{outline:3px solid #75f0dc;outline-offset:1px}.stage .tiles{z-index:1;gap:0}.summary-card{font:28px Georgia;text-align:center;padding:25px;white-space:pre-line;line-height:1.6}.loading-note{font-size:13px;color:#a2ffe7;margin:12px 0}.error-note{color:#ffb7b7}.private{font-size:12px}.rules{font-size:14px;color:#e0cde9;line-height:1.8}.rules strong{color:#ffe6a5}#announcement{font-size:15px;color:#a2ffeb;margin-bottom:10px}body.live .private,body.live .hostonly{display:none!important}body.live #game .summary-card{font-size:48px}#newGame{margin-top:12px}.winner{font-size:clamp(40px,6vw,90px);font-family:'Shrikhand',Georgia,serif;color:#ffe49a;margin:20px 0}input[type=number]{width:100%}.stage{position:relative}#image{opacity:1}#image.loading{opacity:0}.spinner-label{position:absolute;bottom:12px;left:12px;background:#27143fe6;color:white;padding:8px;border-radius:8px;z-index:3}#portalLink{display:block;margin:15px 0;color:#a2ffe7}.phoneNotice{border:1px solid #b99aff55;padding:14px;border-radius:10px;margin:15px 0}#phone .note{line-height:1.6}.busy{opacity:.6}body.live .stage img{height:100%;width:100%}</style><main><header><div class="brand"><b>BURTCO</b><span>PUB GAMES · SAY WHAT?</span></div><div id="connection" class="status bad">Connecting…</div></header>
-<section id="lobby"><div class="layout"><div class="stack"><div class="public-lobby card"><div class="eyebrow">THE PICTURE-PERFECT PUB GAME</div><h1>Say What?</h1><p class="subtitle">Ten pictures. Quick buzzers.<br>Then a final with a twist.</p><div class="rules"><strong>First stage:</strong> 10 random pictures, 10 points for a correct phrase.<br><strong>Square final:</strong> the top teams take turns stopping the flashing square. Buzz to uncover it, then guess for 25 points. A wrong answer passes the turn.<br>Scores carry forward. Ties at the qualifying cutoff advance together.</div></div><div id="setup" class="card hostonly"><h2>Get the room ready</h2><div class="settings"><label>Maximum teams<input id="capacity" type="number" min="2" max="32" value="8"></label><label>Teams through to the final<input id="qualifiers" type="number" min="2" max="8" value="2"></label><label>Square highlight speed<select id="speed"><option value="80">Very fast · 80 ms</option><option value="120" selected>Fast · 120 ms</option><option value="200">Steady · 200 ms</option><option value="350">Gentle · 350 ms</option></select></label></div><p id="libraryStatus" class="loading-note">Loading portal pictures…</p><div class="actions"><button id="loadLibrary" class="secondary">Refresh picture collection</button><button id="start" disabled>Start 10-round game</button></div><a id="portalLink" href="https://burtco-picture-portal.burtonio.chatgpt.site/" target="_blank" rel="noopener">Open picture upload portal ↗</a><div class="actions"><a id="liveLink" class="button secondary" target="_blank" rel="noopener">Open TV screen ↗</a><button id="copyLink" class="secondary">Copy player link</button></div></div><div class="card"><div id="joined" class="eyebrow">0 teams joined</div><div id="lobbyTeams" class="teams"></div></div></div><div class="card"><div class="eyebrow">SCAN TO JOIN THE GAME</div><div id="qr" class="qr"></div><div id="room" class="room"></div><a id="joinLink" class="joinlink"></a><p class="note">One phone per team. Keep this page open and watch the TV for each picture.</p></div></div></section>
+<style>.stage>img{width:100%;height:100%;object-fit:contain;display:block;background:#171020}.stage .cover{position:absolute;inset:0;display:grid;place-content:center;text-align:center;background:radial-gradient(ellipse at 40% 30%,#77336f,#27143f);z-index:2}.cover strong{font:clamp(28px,5vw,70px) 'Bungee',sans-serif;color:#ffe49a}.cover span{font-size:18px;color:#e6cced;margin:15px}.tile.highlight{background:#fff09c!important;color:#432543;box-shadow:inset 0 0 0 6px #fff9,0 0 30px #ffd76b;font-size:clamp(30px,4vw,70px);text-shadow:none}.team.active{outline:3px solid #75f0dc;outline-offset:1px}.stage .tiles{z-index:1;gap:0}.summary-card{font:28px Georgia;text-align:center;padding:25px;white-space:pre-line;line-height:1.6}.loading-note{font-size:13px;color:#a2ffe7;margin:12px 0}.error-note{color:#ffb7b7}.private{font-size:12px}.rules{font-size:14px;color:#e0cde9;line-height:1.8}.rules strong{color:#ffe6a5}#announcement{font-size:15px;color:#a2ffeb;margin-bottom:10px}body.live .private,body.live .hostonly{display:none!important}body.live #game .summary-card{font-size:48px}#newGame{margin-top:12px}.winner{font-size:clamp(40px,6vw,90px);font-family:'Shrikhand',Georgia,serif;color:#ffe49a;margin:20px 0}input[type=number]{width:100%}.stage{position:relative}#image{opacity:1}#image.loading{opacity:0}.spinner-label{position:absolute;bottom:12px;left:12px;background:#27143fe6;color:white;padding:8px;border-radius:8px;z-index:3}#portalLink{display:block;margin:15px 0;color:#a2ffe7}.phoneNotice{border:1px solid #b99aff55;padding:14px;border-radius:10px;margin:15px 0}#phone .note{line-height:1.6}.busy{opacity:.6}body.live .stage img{height:100%;width:100%}</style>
+<style id="tv-layout">
+/* Match the square grid to the contained picture on both screens. */
+@supports (width: 1cqw) {
+  .stage { container-type: size; }
+  .stage .tiles {
+    inset: 50% auto auto 50%;
+    transform: translate(-50%, -50%);
+    width: min(100cqw, 100cqh * var(--picture-ratio, 1.777778));
+    height: min(100cqh, 100cqw / var(--picture-ratio, 1.777778));
+  }
+}
+
+#tvFullscreen { display: none; }
+body.live #tvFullscreen:not([hidden]) { display: inline-block; }
+body.live main {
+  --safe-x: clamp(16px, 3vw, 128px);
+  --safe-y: clamp(12px, 3vh, 72px);
+  --tv-gap: clamp(7px, 1.25vmin, 28px);
+  --tv-text: clamp(13px, 2.35vmin, 54px);
+  height: 100vh;
+  height: 100dvh;
+  padding: var(--safe-y) var(--safe-x);
+  gap: var(--tv-gap);
+}
+body.live header { flex: none; margin: 0; padding: 0 0 var(--tv-gap); }
+body.live header .brand b { font-size: clamp(20px, 3vmin, 72px); }
+body.live header .brand span { font-size: clamp(11px, 1.5vmin, 34px); }
+body.live .tv-tools { display: flex; align-items: center; gap: var(--tv-gap); }
+body.live .status, body.live #tvFullscreen {
+  font-size: clamp(11px, 1.72vmin, 40px);
+  padding: .4em .75em;
+}
+body.live #lobby { flex: 1; min-height: 0; }
+body.live #lobby > .layout {
+  height: 100%;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: var(--tv-gap);
+}
+body.live #lobby .stack { gap: var(--tv-gap); grid-auto-rows: max-content; }
+body.live #lobby .card {
+  margin: 0;
+  padding: clamp(10px, 2vmin, 48px);
+  min-width: 0;
+}
+body.live #lobby h1 {
+  font-size: clamp(42px, 8.5vmin, 200px);
+  margin: .15em 0 .2em;
+  padding-right: .15em;
+}
+body.live #lobby h1::after, body.live #lobby .subtitle br { display: none; }
+body.live #lobby .subtitle {
+  margin: 0 0 .4em;
+  font-size: var(--tv-text);
+}
+body.live #lobby .rules { font-size: clamp(12px, 1.85vmin, 42px); line-height: 1.4; }
+body.live #lobby .eyebrow { font-size: clamp(11px, 1.7vmin, 40px); }
+body.live #lobby .qr-card {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: var(--tv-gap);
+  text-align: center;
+}
+body.live #lobby .qr-card > .eyebrow { margin: 0; }
+body.live #lobby .qr {
+  max-width: min(100%, 32vw, 47vh);
+  border-width: 0;
+  padding: clamp(6px, 1vmin, 24px);
+}
+body.live .qr canvas { width: 100%; }
+body.live .room {
+  font-size: clamp(16px, 3vmin, 72px);
+  letter-spacing: .08em;
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+body.live .joinlink, body.live .note {
+  font-size: clamp(11px, 1.65vmin, 38px);
+  margin: 0;
+  line-height: 1.3;
+}
+body.live #game, body.live .playarea { gap: var(--tv-gap); }
+body.live .topline, body.live .buzzbar, body.live .answer, body.live #announcement { margin: 0; }
+body.live #announcement:empty { display: none; }
+body.live #announcement { font-size: clamp(12px, 1.9vmin, 44px); }
+body.live .round, body.live .value { font-size: clamp(15px, 2.65vmin, 62px); }
+body.live .value { padding: .25em .55em; transform: none; }
+body.live .value:empty { display: none; }
+body.live .stage { border-width: clamp(5px, 1vmin, 24px); background: #171020; }
+body.live .cover strong { font-size: clamp(24px, 5.5vmin, 132px); }
+body.live .cover span { font-size: var(--tv-text); }
+body.live .tile { font-size: clamp(24px, 5vmin, 120px); }
+body.live .buzzbar, body.live .answer {
+  font-size: clamp(17px, 3.1vmin, 72px);
+  padding: .32em .6em;
+  min-height: 0;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+body.live .teams {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(4px, .75vmin, 18px);
+  overflow: visible;
+}
+body.live #lobbyTeams:not(:empty) { margin-top: var(--tv-gap); }
+body.live .team {
+  min-width: 0;
+  padding: .25em .4em;
+  gap: .3em;
+  font-size: var(--tv-text);
+  line-height: 1.12;
+}
+body.live .team span { min-width: 0; overflow-wrap: anywhere; }
+body.live .team strong { font-size: 1.2em; }
+body.live .team.winner-team { outline: 3px solid var(--gold); }
+body.live #lobbyTeams .team small { display: none; }
+body.live #game .summary-card { display: none; }
+body.live #game:has(#summary:not(.hidden)) .playarea { justify-content: center; }
+
+@media (min-width: 1100px) {
+  body.live #scores:has(.team:nth-child(5)) {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1000px) {
+  body.live #lobbyTeams:has(.team:nth-child(17)) {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+@media (max-width: 1099px) {
+  body.live #scores:has(.team:nth-child(9)) {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+body.live #scores:has(.team:nth-child(17)) .team,
+body.live #lobbyTeams:has(.team:nth-child(17)) .team {
+  font-size: clamp(11px, 1.95vmin, 44px);
+}
+
+@media (orientation: portrait), (max-height: 520px) {
+  body.live main { height: auto; min-height: 100dvh; }
+  body.live #lobby > .layout { height: auto; grid-template-columns: minmax(0, 1fr); }
+  body.live #lobby .qr { max-width: min(70vw, 47vh); }
+  body.live .stage { flex: none; aspect-ratio: 16 / 9; }
+  body.live #scores { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+</style>
+<main><header><div class="brand"><b>BURTCO</b><span>PUB GAMES · SAY WHAT?</span></div><div class="tv-tools"><div id="connection" class="status bad">Connecting…</div><button id="tvFullscreen" class="secondary" type="button" hidden>Full screen</button></div></header>
+<section id="lobby"><div class="layout"><div class="stack"><div class="public-lobby card"><div class="eyebrow">THE PICTURE-PERFECT PUB GAME</div><h1>Say What?</h1><p class="subtitle">Ten pictures. Quick buzzers.<br> Then a final with a twist.</p><div class="rules"><strong>First stage:</strong> 10 random pictures, 10 points for a correct phrase.<br><strong>Square final:</strong> the top teams take turns stopping the flashing square. Buzz to uncover it, then guess for 25 points. A wrong answer passes the turn.<br>Scores carry forward. Ties at the qualifying cutoff advance together.</div></div><div id="setup" class="card hostonly"><h2>Get the room ready</h2><div class="settings"><label>Maximum teams<input id="capacity" type="number" min="2" max="32" value="8"></label><label>Teams through to the final<input id="qualifiers" type="number" min="2" max="8" value="2"></label><label>Square highlight speed<select id="speed"><option value="80">Very fast · 80 ms</option><option value="120" selected>Fast · 120 ms</option><option value="200">Steady · 200 ms</option><option value="350">Gentle · 350 ms</option></select></label></div><p id="libraryStatus" class="loading-note">Loading portal pictures…</p><div class="actions"><button id="loadLibrary" class="secondary">Refresh picture collection</button><button id="start" disabled>Start 10-round game</button></div><a id="portalLink" href="https://burtco-picture-portal.burtonio.chatgpt.site/" target="_blank" rel="noopener">Open picture upload portal ↗</a><div class="actions"><a id="liveLink" class="button secondary" target="_blank" rel="noopener">Open TV screen ↗</a><button id="copyLink" class="secondary">Copy player link</button></div></div><div class="card"><div id="joined" class="eyebrow">0 teams joined</div><div id="lobbyTeams" class="teams"></div></div></div><div class="card qr-card"><div class="eyebrow">SCAN TO JOIN THE GAME</div><div id="qr" class="qr"></div><div id="room" class="room"></div><a id="joinLink" class="joinlink"></a><p class="note">One phone per team. Keep this page open and watch the TV for each picture.</p></div></div></section>
 <section id="game" class="hidden"><div id="announcement"></div><div class="layout"><div class="playarea"><div class="topline"><span id="round" class="round"></span><span id="points" class="value"></span></div><div id="stage" class="stage"><img id="image" alt="Picture clue"><div id="tiles" class="tiles hidden"></div><div id="cover" class="cover"><strong>Ready, steady…</strong><span>The host will reveal the picture.</span></div><span id="imageStatus" class="spinner-label hidden">Loading picture…</span></div><div id="summary" class="card summary-card hidden"></div><div id="buzzbar" class="buzzbar"></div><div id="answer" class="answer hidden"></div><div id="scores" class="teams"></div></div><aside id="controls" class="card hostonly"><div class="eyebrow">HOST CONTROLS</div><h2 id="controlTitle">Picture round</h2><div class="actions"><button id="revealImage">Reveal image + open buzzers</button><button id="pause" class="secondary">Pause buzzers</button><button id="correct" class="correct">Correct ✓</button><button id="wrong" class="danger">Wrong → pass turn</button><button id="reveal" class="secondary">Reveal answer / no points</button><button id="next">Next round →</button><button id="undo" class="secondary">Undo last award</button></div><details class="private"><summary>Private answer (host only)</summary><p id="privateAnswer"></p></details><p class="note" id="hostHelp"></p><div class="actions"><a id="liveLink2" class="button secondary" target="_blank" rel="noopener">TV screen ↗</a><button id="fullscreen" class="secondary">Fullscreen</button></div><div id="connections"></div><button id="newGame" class="secondary">New game / new room</button></aside></div></section>
-<section id="phone" class="hidden"><div class="eyebrow">YOUR TEAM BUZZER</div><h1 id="teamName">Joining the game…</h1><p id="phoneScore"></p><div id="phoneStatus" class="phoneNotice" role="status" aria-live="polite"></div><button id="buzzer" disabled>BUZZ</button><div class="card"><label>Team name<input id="rename" maxlength="24" autocomplete="off"></label><button id="saveName" class="secondary">Save name</button><p class="note">First stage: buzz when you know the phrase.<br>Final: wait for your turn, then buzz to stop the flashing square.</p></div></section><footer>BURTCO PUB GAMES · Say What? · 10 rounds + square final · v3.0</footer><div id="notice" class="hidden" role="status"></div></main><script type="module" src="./game.js?v=3"></script></html>
+<section id="phone" class="hidden"><div class="eyebrow">YOUR TEAM BUZZER</div><h1 id="teamName">Joining the game…</h1><p id="phoneScore"></p><div id="phoneStatus" class="phoneNotice" role="status" aria-live="polite"></div><button id="buzzer" disabled>BUZZ</button><div class="card"><label>Team name<input id="rename" maxlength="24" autocomplete="off"></label><button id="saveName" class="secondary">Save name</button><p class="note">First stage: buzz when you know the phrase.<br>Final: wait for your turn, then buzz to stop the flashing square.</p></div></section><footer>BURTCO PUB GAMES · Say What? · 10 rounds + square final · v3.0</footer><div id="notice" class="hidden" role="status"></div></main><script type="module" src="./game.js?v=3-tv1"></script></html>
