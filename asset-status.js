@@ -37,7 +37,7 @@
   function tvLayout(assetCount, jobCount, width, height, mode) {
     // Fire TV/Silk can report a 960px viewport even on a 1080p television.
     const font = width >= 1600 ? 18 : width >= 1100 ? 16 : 14;
-    const jobColumns = width >= 1600 ? 3 : 2;
+    const jobColumns = width >= 900 ? 3 : 2;
     const available = Math.max(100, height - 145);
     const rowsPerColumn = Math.max(1, Math.floor(available / (font * 1.15 + 4)));
     const maxColumns = width >= 1600 ? 4 : width >= 780 ? 3 : 2;
@@ -51,13 +51,30 @@
       return '<tr class="as-service-' + row.serviceAlert.state + '" title="' + h(row.serviceAlert.label) + '"><td><span class="as-name" title="' + h(m.name) + '">' + h(m.name || 'Unnamed asset') + '</span><span class="as-sub">' + h(m.branch || 'No branch') + (m.serialNumber ? ' · ' + h(m.serialNumber) : '') + '</span></td><td><span class="as-badge ' + row.statusClass + '">' + h(row.status) + '</span>' + (jobSummary ? '<span class="as-sub">' + jobSummary + '</span>' : '') + '</td><td class="as-hours"><span class="as-hour-value">' + (row.serviceAlert.field === 'current' ? '<span class="as-check-hours">Check hours</span>' : row.hours == null ? '<span title="No current hours recorded">—</span>' : row.hours.toLocaleString('en-GB', { maximumFractionDigits: 1 })) + '</span></td><td class="as-hours"><span class="as-hour-value">' + (row.serviceAlert.state === 'invalid' && row.serviceAlert.field !== 'current' ? '<span class="as-check-hours" title="No service hours recorded or inconsistent meter readings">Check hours</span>' : row.nextServiceHours.toLocaleString('en-GB', { maximumFractionDigits: 1 })) + '</span></td></tr>';
     }).join('') + '</tbody></table></div>';
   }
-  function jobList(rows, jobs) {
+  function noteTime(value) {
+    if (!value) return 0;
+    if (typeof value.toMillis === 'function') return value.toMillis();
+    if (typeof value.toDate === 'function') return value.toDate().getTime();
+    if (typeof value.seconds === 'number') return value.seconds * 1000;
+    const ms = Date.parse(value); return Number.isFinite(ms) ? ms : 0;
+  }
+  function progressNotesHTML(job, expanded) {
+    const notes = (Array.isArray(job.progressNotes) ? job.progressNotes : []).map((note,index) => ({ note: typeof note === 'string' ? {text:note} : note || {}, index })).filter(entry => String(entry.note.text || '').trim()).sort((a,b) => noteTime(b.note.at) - noteTime(a.note.at) || b.index - a.index);
+    function entryHTML(entry) {
+      const note = entry.note, time = noteTime(note.at);
+      const stamp = time ? new Date(time).toLocaleString('en-GB', { timeZone: 'Europe/London', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }) : '';
+      return '<div class="as-progress-entry"><div class="as-progress-text">' + h(note.text) + '</div><div class="as-progress-by">' + h([note.by || '', stamp].filter(Boolean).join(' · ')) + '</div></div>';
+    }
+    const key = String(job.id || job.jobId || '');
+    return '<section class="as-progress"><h4>Progress notes</h4>' + (notes.length ? notes.slice(0,2).map(entryHTML).join('') + (notes.length > 2 ? '<details class="as-note-history" data-note-history="' + h(key) + '" ' + (expanded.has(key) ? 'open' : '') + '><summary>Earlier notes (' + (notes.length - 2) + ')</summary>' + notes.slice(2).map(entryHTML).join('') + '</details>' : '') : '<div class="as-no-progress">No progress notes recorded yet.</div>') + '</section>';
+  }
+  function jobList(rows, jobs, expanded = new Set()) {
     const machines = new Map(rows.map(row => [row.machine.id, row.machine]));
     const priority = { active: 0, paused: 1, assigned: 2, planned: 3 };
     return eligibleJobs(jobs).slice().sort((a,b) => priority[a.status] - priority[b.status] || String(a.machineName || '').localeCompare(String(b.machineName || ''), 'en-GB', { numeric: true })).map(job => {
       const machine = machines.get(job.machineId);
       const description = job.jobDescription || job.jobCategory || (job.jobType === 'service' ? 'Service' : 'Engineering job');
-      return '<article class="as-job ' + (job.status === 'active' ? 'active' : 'waiting') + '"><div class="as-job-head"><strong>' + h(machine ? machine.name : job.machineName || 'Unassigned asset') + '</strong><span class="as-badge ' + (job.status === 'active' ? 'blue' : 'warning') + '">' + jobStates[job.status] + '</span></div><div class="as-job-title" title="' + h(description) + '">' + h(description) + '</div><div class="as-job-meta">' + h([job.jobId || job.id, job.engineerName || 'Unassigned engineer', job.plannedDate || ''].filter(Boolean).join(' · ')) + '</div></article>';
+      return '<article class="as-job ' + (job.status === 'active' ? 'active' : 'waiting') + '"><div class="as-job-head"><strong>' + h(machine ? machine.name : job.machineName || 'Unassigned asset') + '</strong><span class="as-badge ' + (job.status === 'active' ? 'blue' : 'warning') + '">' + jobStates[job.status] + '</span></div><div class="as-job-title" title="' + h(description) + '">' + h(description) + '</div><div class="as-job-meta">' + h([job.jobId || job.id, job.jobCategory || '', job.engineerName || 'Unassigned engineer', job.plannedDate || job.date || ''].filter(Boolean).join(' · ')) + '</div>' + ((job.notes || job.finalNotes) ? '<div class="as-work-notes"><h4>Work notes</h4>' + h(job.finalNotes || job.notes) + '</div>' : '') + progressNotesHTML(job, expanded) + '</article>';
     }).join('') || '<div class="as-empty">No current or outstanding jobs.</div>';
   }
   function shell(popout) {
@@ -97,6 +114,7 @@
     };
     displayWindow.document.addEventListener('fullscreenchange', onFullscreen);
     root.addEventListener('asset-painted', fit);
+    root.addEventListener('toggle', fit, true);
     function fit() {
       function fitHourValues() {
         root.querySelectorAll('.as-hour-value').forEach(value => {
@@ -136,7 +154,7 @@
   let root, popup = null, access, database, started = false, subscriptions = [];
   let data = { machines: [], liveJobs: [] }, loaded = new Set(), cached = new Set(), failed = new Set();
   const scriptURL = document.currentScript.src;
-  const cssURL = new URL('asset-status.css?v=20261119-hoursfit', scriptURL).href;
+  const cssURL = new URL('asset-status.css?v=20261119-progressnotes', scriptURL).href;
   function paint(target, rows) {
     const stats = [
       [rows.length, 'Total assets', ''],
@@ -154,7 +172,8 @@
     const size = Math.ceil(rows.length / columns), tables = [];
     for (let start = 0; start < rows.length; start += size) tables.push(table(rows.slice(start, start + size)));
     grid.innerHTML = rows.length ? tables.join('') : '<div class="as-empty">' + (loaded.size === 2 ? 'No assets recorded.' : 'Loading all assets…') + '</div>';
-    target.querySelector('[data-as-jobs]').innerHTML = jobList(rows, data.liveJobs);
+    const expandedNotes = new Set(Array.from(target.querySelectorAll('[data-note-history][open]')).map(detail => detail.getAttribute('data-note-history')));
+    target.querySelector('[data-as-jobs]').innerHTML = jobList(rows, data.liveJobs, expandedNotes);
     target.querySelector('[data-as-count]').textContent = 'Showing all ' + rows.length + ' assets · No pagination';
     const live = loaded.size === 2 && !cached.size && !failed.size && navigator.onLine;
     target.dataset.live = String(live);

@@ -159,3 +159,16 @@ const mistyped={id:'mistyped',currentHours:100000,lastServiceHours:9500,nextServ
 assert.equal(buildRows([mistyped],[])[0].serviceAlert.state,'invalid');
 assert.equal(mistyped.currentHours,100000);
 console.log('PASS: extra-zero magnitude mismatch flagged for review, normal overdue hours stay red, saved readings unchanged');
+
+const noteJob={id:'notejob',machineId:'a',status:'active',jobDescription:'Replace hydraulic hose',progressNotes:[{text:'Parts ordered',by:'Alex',at:'2026-11-18T10:00:00Z'},{text:'Awaiting delivery',by:'Manager',at:'2026-11-19T09:00:00Z'},{text:'Hose fitted <tested>',by:'Alex',at:'2026-11-19T15:00:00Z'}]};
+const withNotes=jobList(rows,[noteJob]);
+assert(withNotes.includes('Replace hydraulic hose'));
+assert(withNotes.includes('Hose fitted &lt;tested&gt;'));
+assert(withNotes.indexOf('Hose fitted')<withNotes.indexOf('Awaiting delivery'));
+assert(withNotes.includes('Earlier notes (1)'));
+assert(withNotes.includes('Parts ordered'));
+assert(withNotes.includes('Alex'));
+assert(withNotes.includes('19 Nov'));
+assert(jobList(rows,[noteJob],new Set(['notejob'])).includes('data-note-history="notejob" open'));
+assert(jobList(rows,[{...noteJob,progressNotes:[]}]).includes('No progress notes recorded yet.'));
+console.log('PASS: full job description, newest progress first, author/time, earlier note history, escaping, empty notes and expanded-history preservation');
