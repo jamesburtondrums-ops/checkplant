@@ -1,4 +1,5 @@
 import * as E from './engine.mjs?v=3';
+import { buzzerPresets, playBuzzer } from './buzzer-audio.mjs';
 const LIBRARY='https://burtco-say-what-library.james-burton-drums.workers.dev/library';
 const URL_SB='https://hksgzebtjqbepetxgpka.supabase.co',KEY_SB='sb_publishable_6onhpZxEFflT8mEkeP4aEg_vdtUVwpF';
 const $=id=>document.getElementById(id),params=new URLSearchParams(location.search),mode=params.has('play')?'team':params.has('live')?'live':'host';
@@ -25,6 +26,86 @@ if (mode === 'live' && document.fullscreenEnabled) {
   });
 }
 
+const Audio = window.AudioContext || window.webkitAudioContext;
+const soundToggle = $('soundToggle');
+const soundPanel = $('buzzerSounds');
+const soundTeam = $('soundTeam');
+const teamSound = $('teamSound');
+const soundKey = storeKey + ':buzzer-sounds';
+const outputKey = 'say-what-sound-output:' + mode;
+let outputEnabled = false;
+let audioContext;
+let selectedSounds;
+try { selectedSounds = JSON.parse(get(soundKey)) || {}; } catch { selectedSounds = {}; }
+
+function soundFor(team) {
+  return buzzerPresets[selectedSounds[team]] ? Number(selectedSounds[team]) : team;
+}
+
+async function unlockAudio() {
+  if (!Audio) return false;
+  try {
+    audioContext ||= new Audio();
+    if (audioContext.state !== 'running') await audioContext.resume();
+    return audioContext.state === 'running';
+  } catch {
+    return false;
+  }
+}
+
+async function enableOutput() {
+  outputEnabled = await unlockAudio();
+  updateSoundToggle();
+  if (!outputEnabled) toast('Buzzer audio is blocked on this device.');
+}
+
+function updateSoundToggle() {
+  soundToggle.textContent = outputEnabled ? 'Buzzer sound on' : 'Enable buzzer sound';
+  soundToggle.setAttribute('aria-pressed', String(outputEnabled));
+}
+
+function renderSoundTeams() {
+  if (mode !== 'host' || !Audio) return;
+  soundPanel.hidden = !state.teams.length;
+  const currentTeam = soundTeam.value;
+  while (soundTeam.options.length > state.teams.length) soundTeam.remove(soundTeam.options.length - 1);
+  state.teams.forEach((team, index) => {
+    const option = soundTeam.options[index];
+    if (!option) soundTeam.add(new Option(team.name, index));
+    else if (option.text !== team.name) option.text = team.name;
+  });
+  if (currentTeam && soundTeam.options[Number(currentTeam)]) soundTeam.value = currentTeam;
+  if (soundTeam.options.length) teamSound.value = soundFor(Number(soundTeam.value));
+}
+
+if (Audio && mode !== 'team') {
+  soundToggle.hidden = false;
+  updateSoundToggle();
+  soundToggle.onclick = async () => {
+    if (outputEnabled) {
+      outputEnabled = false;
+      updateSoundToggle();
+    } else {
+      await enableOutput();
+    }
+    put(outputKey, outputEnabled ? 'on' : 'off');
+  };
+}
+if (Audio && mode === 'host') {
+  buzzerPresets.forEach((sound, index) => teamSound.add(new Option(sound.name, index)));
+  soundTeam.onchange = () => { teamSound.value = soundFor(Number(soundTeam.value)); };
+  teamSound.onchange = () => {
+    const team = Number(soundTeam.value);
+    const preset = Number(teamSound.value);
+    selectedSounds[team] = preset;
+    put(soundKey, JSON.stringify(selectedSounds));
+  };
+  $('previewSound').onclick = async () => {
+    if (await unlockAudio()) playBuzzer(audioContext, soundFor(Number(soundTeam.value)));
+    else toast('Buzzer audio is blocked on this device.');
+  };
+}
+
 function id(){return crypto.randomUUID()}function seed(){return crypto.getRandomValues(new Uint32Array(1))[0]}
 function toast(text){$('notice').textContent=text;$('notice').classList.remove('hidden');clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('notice').classList.add('hidden'),5000)}
 function current(){return state.deck?.[state.cursor]}
@@ -33,14 +114,21 @@ function persist(){put(storeKey,JSON.stringify({state,slots,undo}));}
 function publish(){if(mode!=='host')return;state.revision++;persist();send('state',{...E.publicSnapshot(state,Date.now()),hostId:hostInstance});render();}
 function validTeam(p){return p&&Number.isInteger(p.team)&&slots[p.team]?.device===p.deviceId;}
 function join(p){if(typeof p?.deviceId!=='string'||p.deviceId.length>80)return;let i=slots.findIndex(t=>t?.device===p.deviceId),isNew=i<0;if(isNew){if(state.phase!=='lobby'||slots.length>=state.capacity){send('assignment',{deviceId:p.deviceId,team:-1,reason:state.phase!=='lobby'?'This game has already started.':'This game is full.'});return;}i=slots.length;slots.push({device:p.deviceId,seen:Date.now()});state.teams.push({name:'Team '+(i+1),score:0});}slots[i].seen=Date.now();send('assignment',{deviceId:p.deviceId,team:i});if(isNew)publish();}
-function buzz(p){if(!validTeam(p))return;if(E.acceptBuzz(state,p.team,p.roundId,p.spinId,Date.now())){undo=null;publish();}}
+function buzz(p) {
+  if (!validTeam(p) || !E.acceptBuzz(state, p.team, p.roundId, p.spinId, Date.now())) return;
+  const preset = soundFor(p.team);
+  if (outputEnabled) playBuzzer(audioContext, preset);
+  send('buzzer-sound', { hostId: hostInstance, preset });
+  undo = null;
+  publish();
+}
 async function loadLibrary(){if(mode!=='host')return;$('loadLibrary').disabled=true;try{const response=await fetch(LIBRARY,{cache:'no-store'});if(!response.ok)throw Error('Picture collection unavailable.');const pack=await response.json();library=pack.pictures||[];const unique=E.uniqueDeck(library).length;libraryLoaded=true;$('libraryStatus').className='loading-note'+(unique<11?' error-note':'');$('libraryStatus').textContent=library.length+' portal pictures · '+unique+' unique phrases'+(unique<11?' · Sync at least 11 different phrases in the upload portal.':' · 10 rounds + a fresh final picture.');}catch(e){libraryLoaded=false;$('libraryStatus').className='loading-note error-note';$('libraryStatus').textContent=e.message+' Refresh to retry.';}finally{$('loadLibrary').disabled=false;render();}}
 function activeTeam(){return state.finalists?.[state.turn]}
 function name(i){return state.teams[i]?.name||'Team'}
 function statusText(){if(state.phase==='lobby')return 'Join the game using the QR code.';if(state.phase==='qualifiers')return state.tiebreak?'Scores are tied — a fresh picture will decide it.':'First stage complete — here are your finalists!';if(state.phase==='finished'){const winners=state.winners||[];return mode==='live'&&winners.length>3?winners.length+' teams share the win!':winners.map(name).join(' & ')+(winners.length===1?' wins!':' share the win!');}if(state.revealed)return 'Answer revealed';if(state.buzz!==null)return name(state.buzz)+' — give your answer!';if(state.phase==='final'){return name(activeTeam())+(state.open?(state.tiles.length<12?' — buzz to stop the square!':' — buzz to guess!'):' — your turn is next.');}if(state.open)return 'BUZZERS OPEN — name that phrase!';if(state.imageVisible)return state.blocked.length===state.teams.length?'All teams have guessed — reveal the answer.':'Buzzers paused';return 'Get ready for the next picture…';}
 function teams(container,score){const target=$(container);target.replaceChildren();const order=state.teams.map((_,i)=>i);if(score)order.sort((a,b)=>state.teams[b].score-state.teams[a].score||a-b);for(const i of order){const t=state.teams[i],row=document.createElement('div');row.className='team'+(state.phase==='finished'&&state.winners?.includes(i)?' winner-team':'')+((state.buzz===i||state.phase==='final'&&activeTeam()===i)?' active':'');const n=document.createElement('span');n.textContent=t.name+(state.finalists?.includes(i)&&state.phase!=='round'?' ★':'');const points=document.createElement(score?'strong':'small');points.textContent=score?t.score:'JOINED';row.append(n,points);target.append(row);}}
 function updateImage(url){if(url===imageUrl)return;imageUrl=url;imageLoaded=false;const img=$('image');img.classList.add('loading');if(!url){img.removeAttribute('src');$('imageStatus').classList.add('hidden');return;}$('imageStatus').classList.remove('hidden');img.onload=()=>{$('stage').style.setProperty('--picture-ratio',img.naturalWidth/img.naturalHeight);imageLoaded=true;img.classList.remove('loading');$('imageStatus').classList.add('hidden');render();};img.onerror=()=>{imageLoaded=false;$('imageStatus').textContent='Picture failed to load. Refresh this screen.';$('imageStatus').classList.remove('hidden');};img.src=url;}
-function render(){const phone=mode==='team',lobby=state.phase==='lobby',summary=['qualifiers','finished'].includes(state.phase),done=state.phase==='finished',final=state.phase==='final';$('lobby').classList.toggle('hidden',phone||!lobby);$('game').classList.toggle('hidden',phone||lobby);$('phone').classList.toggle('hidden',!phone);teams('lobbyTeams',false);teams('scores',true);$('joined').textContent=state.teams.length+' teams joined';$('start').disabled=!online||!libraryLoaded||E.uniqueDeck(library).length<11||state.teams.length<2;
+function render(){const phone=mode==='team',lobby=state.phase==='lobby',summary=['qualifiers','finished'].includes(state.phase),done=state.phase==='finished',final=state.phase==='final';$('lobby').classList.toggle('hidden',phone||!lobby);$('game').classList.toggle('hidden',phone||lobby);$('phone').classList.toggle('hidden',!phone);teams('lobbyTeams',false);teams('scores',true);if(lobby)renderSoundTeams();$('joined').textContent=state.teams.length+' teams joined';$('start').disabled=!online||!libraryLoaded||E.uniqueDeck(library).length<11||state.teams.length<2;
 $('round').textContent=done?'Final scores':state.phase==='qualifiers'?(state.tiebreak?'Tie-break':'Your finalists'):final?(state.tiebreak?'Tie-break square final':'Square final'):'Round '+(state.round+1)+' / 10';$('points').textContent=summary?'':(final?25:10)+' points';$('buzzbar').textContent=statusText();$('stage').classList.toggle('hidden',summary);$('summary').classList.toggle('hidden',!summary);$('summary').textContent=done?statusText():(state.finalists||[]).map(i=>name(i)+' · '+state.teams[i].score+' points').join('\n');$('announcement').textContent=final?'Finalists take turns. Stop one flashing square, then guess. Scores carry forward.':state.phase==='qualifiers'?(mode==='live'?'★ marks the teams who advance.':'Cutoff ties advance together. All other teams can watch the final.'):'';
 const url=mode==='host'&&['round','final'].includes(state.phase)?current()?.image||'':state.image||'';if(!phone)updateImage(url);$('cover').classList.toggle('hidden',!!state.imageVisible||final);$('tiles').classList.toggle('hidden',!final||state.revealed);[...$('tiles').children].forEach((tile,i)=>tile.classList.toggle('gone',state.revealed||state.tiles.includes(i)));$('answer').classList.toggle('hidden',!state.revealed||summary);$('answer').textContent=state.revealed?(mode==='host'?current()?.answer||'':state.answer||''):'';
 if(mode==='host'){const guessing=state.buzz!==null;$('controlTitle').textContent=final?'Square final':summary?'Next stage':'Picture round';$('revealImage').classList.toggle('hidden',summary);$('revealImage').textContent=final?(state.open?'Square is flashing…':'Start flashing square'):'Reveal image + open buzzers';$('revealImage').disabled=!online||!imageLoaded||state.revealed||guessing||(final?state.open:state.imageVisible);$('pause').disabled=summary||!state.imageVisible||guessing||state.revealed||!online||!imageLoaded;$('pause').textContent=state.open?'Pause buzzers':final?'Resume flashing square':'Reopen buzzers';$('correct').disabled=$('wrong').disabled=!guessing;$('reveal').disabled=summary||state.revealed;$('next').disabled=!online||done||(!state.revealed&&state.phase!=='qualifiers');$('next').textContent=done?'Game complete':state.phase==='qualifiers'?(state.tiebreak?'Start tie-break →':'Start square final →'):final?'Show final scores →':state.round===9?'Choose finalists →':'Next round →';$('undo').disabled=!undo;const d=$('privateAnswer').closest('details');$('privateAnswer').textContent=d.open?current()?.answer||'':'';$('hostHelp').textContent=final?'Only the active finalist can stop the square. Wrong automatically starts the next team’s turn. If every square is gone, each team gets one final guess.':summary?'The top teams qualify by score. A tie at the cutoff includes every tied team. Final scores include the 10-round stage.':'Reveal the whole picture to open buzzers. A wrong answer locks that team out for this picture. Correct answers score 10.';$('connections').replaceChildren();for(let i=0;i<state.teams.length;i++){const p=document.createElement('p');p.className='note';p.textContent=name(i)+' · '+(Date.now()-(slots[i]?.seen||0)<9000?'online':'reconnecting');$('connections').append(p);}}
@@ -49,14 +137,14 @@ if(phone){$('teamName').textContent=assigned===null?'Joining the game…':name(a
 for(let i=0;i<12;i++){const tile=document.createElement('div');tile.className='tile';tile.textContent='?';$('tiles').append(tile);}
 setInterval(()=>{const spinning=state.phase==='final'&&state.open&&state.buzz===null&&!state.revealed;const highlight=spinning?E.spinTile(state,Date.now()+(mode==='host'?0:clockOffset)):null;[...$('tiles').children].forEach((tile,i)=>tile.classList.toggle('highlight',i===highlight));},25);
 $('loadLibrary').onclick=loadLibrary;$('capacity').onchange=()=>{state.capacity=Math.max(state.teams.length,2,Math.min(32,Number($('capacity').value)||8));$('capacity').value=state.capacity;publish();};$('qualifiers').onchange=()=>{state.qualifierCount=Math.max(2,Math.min(8,Number($('qualifiers').value)||2));$('qualifiers').value=state.qualifierCount;publish();};$('speed').onchange=()=>{state.spinSpeed=Number($('speed').value);publish();};
-$('start').onclick=()=>{try{E.startGame(state,library,id());undo=null;publish();}catch(e){toast(e.message)}};
+$('start').onclick=()=>{try{E.startGame(state,library,id());if(Audio&&get(outputKey)!=='off'&&!outputEnabled)void enableOutput();undo=null;publish();}catch(e){toast(e.message)}};
 $('revealImage').onclick=()=>{if(!imageLoaded)return;if(state.phase==='final')E.startSpin(state,Date.now(),id(),seed());else E.revealMain(state);publish();};$('pause').onclick=()=>{if(state.open)state.open=false;else if(state.phase==='final')E.startSpin(state,Date.now(),id(),seed());else state.open=state.imageVisible&&state.teams.some((_,i)=>!state.blocked.includes(i));publish();};
 $('correct').onclick=()=>{if(state.buzz===null)return;undo=structuredClone(state);E.correct(state);publish();};$('wrong').onclick=()=>{undo=null;E.wrong(state,Date.now(),id(),seed());publish();};$('reveal').onclick=()=>{undo=null;E.revealAnswer(state);publish();};$('next').onclick=()=>{undo=null;$('privateAnswer').closest('details').open=false;if(state.phase==='qualifiers')E.startFinal(state,id());else E.advance(state,id());publish();};$('undo').onclick=()=>{if(!undo)return;const revision=state.revision;state=undo;state.revision=revision;undo=null;publish();};$('privateAnswer').closest('details').addEventListener('toggle',()=>{$('privateAnswer').textContent=$('privateAnswer').closest('details').open?current()?.answer||'':''});
 function pressBuzz(){if($('buzzer').disabled||Date.now()-lastBuzz<400)return;lastBuzz=Date.now();send('buzz',{deviceId:device,team:assigned,roundId:state.roundId,spinId:state.spinId});navigator.vibrate?.(50);}
 $('buzzer').onpointerdown=e=>{e.preventDefault();pressBuzz()};$('buzzer').onkeydown=e=>{if(['Enter',' '].includes(e.key)){e.preventDefault();pressBuzz()}};$('saveName').onclick=()=>{if(assigned!==null)send('rename',{deviceId:device,team:assigned,name:$('rename').value});};$('copyLink').onclick=async()=>{try{await navigator.clipboard.writeText(joinUrl);toast('Player link copied.')}catch{toast(joinUrl)}};$('fullscreen').onclick=()=>document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();$('newGame').onclick=()=>{if(confirm('Start a new room? Current scores stay saved in this room.'))location.href=location.pathname;};
 render();loadLibrary();
 (async()=>{try{const QR=await import('https://cdn.jsdelivr.net/npm/qrcode@1.5.4/+esm');const canvas=document.createElement('canvas');$('qr').append(canvas);await QR.toCanvas(canvas,joinUrl,{width:1024,margin:2,errorCorrectionLevel:'M'});}catch{$('qr').textContent='Use the player link below.';}})();
-try{const {createClient}=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.107.0/+esm');const sb=createClient(URL_SB,KEY_SB);channel=sb.channel('say-what-v3:'+room,{config:{broadcast:{self:false}}});channel.on('broadcast',{event:'state'},({payload:p})=>{if(mode==='host'||!p||p.version!==3||!Array.isArray(p.teams))return;if(hostId!==p.hostId){hostId=p.hostId;lastRevision=-1;}if(p.revision<lastRevision)return;lastRevision=p.revision;lastState=Date.now();clockOffset=p.hostTime-Date.now();state=p;render();}).on('broadcast',{event:'join'},({payload:p})=>{if(mode==='host')join(p);}).on('broadcast',{event:'assignment'},({payload:p})=>{if(mode!=='team'||p.deviceId!==device)return;if(p.team<0){full=true;render();return;}full=false;assigned=p.team;render();}).on('broadcast',{event:'request-state'},()=>{if(mode==='host')publish();}).on('broadcast',{event:'buzz'},({payload:p})=>{if(mode==='host')buzz(p);}).on('broadcast',{event:'rename'},({payload:p})=>{if(mode!=='host'||!validTeam(p))return;state.teams[p.team].name=String(p.name||'').replace(/[<>]/g,'').trim().replace(/\s+/g,' ').slice(0,24)||'Team '+(p.team+1);publish();}).subscribe(status=>{online=status==='SUBSCRIBED';if(online){if(mode==='host')publish();else{send('request-state',{});if(mode==='team')send('join',{deviceId:device});}}render();});
+try{const {createClient}=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.107.0/+esm');const sb=createClient(URL_SB,KEY_SB);channel=sb.channel('say-what-v3:'+room,{config:{broadcast:{self:false}}});channel.on('broadcast',{event:'state'},({payload:p})=>{if(mode==='host'||!p||p.version!==3||!Array.isArray(p.teams))return;if(hostId!==p.hostId){hostId=p.hostId;lastRevision=-1;}if(p.revision<lastRevision)return;lastRevision=p.revision;lastState=Date.now();clockOffset=p.hostTime-Date.now();state=p;render();}).on('broadcast',{event:'join'},({payload:p})=>{if(mode==='host')join(p);}).on('broadcast',{event:'buzzer-sound'},({payload:p})=>{if(mode==='live'&&outputEnabled&&hostId&&p?.hostId===hostId&&Number.isInteger(p.preset))playBuzzer(audioContext,p.preset);}).on('broadcast',{event:'assignment'},({payload:p})=>{if(mode!=='team'||p.deviceId!==device)return;if(p.team<0){full=true;render();return;}full=false;assigned=p.team;render();}).on('broadcast',{event:'request-state'},()=>{if(mode==='host')publish();}).on('broadcast',{event:'buzz'},({payload:p})=>{if(mode==='host')buzz(p);}).on('broadcast',{event:'rename'},({payload:p})=>{if(mode!=='host'||!validTeam(p))return;state.teams[p.team].name=String(p.name||'').replace(/[<>]/g,'').trim().replace(/\s+/g,' ').slice(0,24)||'Team '+(p.team+1);publish();}).subscribe(status=>{online=status==='SUBSCRIBED';if(online){if(mode==='host')publish();else{send('request-state',{});if(mode==='team')send('join',{deviceId:device});}}render();});
 setInterval(()=>{if(mode==='host')publish();else if(online){if(mode==='team')send('join',{deviceId:device});send('request-state',{});}render();},2000);
 function reconnect(){if(mode==='host')return;if(mode==='team')send('join',{deviceId:device});send('request-state',{});}window.addEventListener('online',reconnect);document.addEventListener('visibilitychange',()=>{if(!document.hidden)reconnect();});
 }catch(e){$('connection').textContent='Connection failed — refresh to retry';toast('Unable to connect. Check your connection and refresh.');console.error(e);}
