@@ -54,3 +54,10 @@
 .asset-status.as-wall .as-job .as-badge{font-size:12px;padding:3px 6px}
 .asset-status.as-wall .as-job-head strong{white-space:normal;overflow:visible}
 .asset-status.as-wall h3{font-size:14px}
+
+/* Service warnings use validated meter readings; bad entries are never treated as overdue. */
+.asset-status tbody tr.as-service-overdue td{background:#55252d;color:#fff}
+.asset-status tbody tr.as-service-overdue td:first-child{border-left:4px solid #ff6969}
+.asset-status tbody tr.as-service-soon td{background:#493d20;color:#fff4d6}
+.asset-status tbody tr.as-service-soon td:first-child{border-left:4px solid #ffc75b}
+.asset-status .as-check-hours{font-size:.75em;color:#c6d1db;white-space:nowrap}

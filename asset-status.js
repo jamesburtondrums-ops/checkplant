@@ -3,6 +3,13 @@
   'use strict';
   const h = value => String(value == null ? '' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const reading = value => value != null && String(value).trim() !== '' && Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : null;
+  function serviceAlert(hours, next, last, invalid) {
+    if (invalid || hours == null || hours === 999999 || next == null || next <= 0 || next === 999999 || (last != null && (last === 999999 || next <= last || hours < last))) return { state: 'invalid', label: 'Check hours' };
+    const remaining = next - hours;
+    if (remaining <= 0) return { state: 'overdue', label: remaining === 0 ? 'Service due now' : 'Service overdue by ' + Math.abs(remaining).toLocaleString('en-GB') + ' hours' };
+    if (remaining <= 50) return { state: 'soon', label: 'Service due in ' + remaining.toLocaleString('en-GB') + ' hours' };
+    return { state: 'ok', label: 'Next service due at ' + next.toLocaleString('en-GB') + ' hours' };
+  }
   function buildRows(machines, liveJobs) {
     const jobs = new Map();
     liveJobs.forEach(job => {
@@ -13,8 +20,11 @@
     return machines.map(machine => {
       const related = jobs.get(machine.id) || [], active = related.filter(j => j.status === 'active'), outstanding = related.filter(j => j.status !== 'active');
       const hours = reading(machine.currentHours), lastService = reading(machine.lastServiceHours);
-      const nextServiceHours = reading(machine.nextServiceDueHours) ?? (lastService == null ? null : lastService + 500);
-      return { machine, hours, nextServiceHours, active, outstanding,
+      const suppliedNext = machine.nextServiceDueHours != null && String(machine.nextServiceDueHours).trim() !== '';
+      const suppliedLast = machine.lastServiceHours != null && String(machine.lastServiceHours).trim() !== '';
+      const nextServiceHours = suppliedNext ? reading(machine.nextServiceDueHours) : (lastService == null ? null : lastService + 500);
+      const alert = serviceAlert(hours, nextServiceHours, lastService, (suppliedNext && reading(machine.nextServiceDueHours) == null) || (suppliedLast && lastService == null));
+      return { machine, hours, nextServiceHours, serviceAlert: alert, active, outstanding,
         status: machine.outOfService ? 'Out of service' : 'In service',
         statusClass: machine.outOfService ? 'danger' : 'good' };
     }).sort((a, b) => String(a.machine.name || a.machine.id).localeCompare(String(b.machine.name || b.machine.id), 'en-GB', { numeric: true, sensitivity: 'base' }));
@@ -35,7 +45,7 @@
     return '<div class="as-table-wrap"><table aria-label="Asset status list"><colgroup><col style="width:39%"><col style="width:25%"><col style="width:17%"><col style="width:19%"></colgroup><thead><tr><th>Asset</th><th>Status / jobs</th><th class="as-hours">Current hours</th><th class="as-hours">Next service hours</th></tr></thead><tbody>' + rows.map(row => {
       const m = row.machine;
       const jobSummary = [row.active.length ? row.active.length + ' active' : '', row.outstanding.length ? row.outstanding.length + ' outstanding' : ''].filter(Boolean).join(' · ');
-      return '<tr><td><span class="as-name" title="' + h(m.name) + '">' + h(m.name || 'Unnamed asset') + '</span><span class="as-sub">' + h(m.branch || 'No branch') + (m.serialNumber ? ' · ' + h(m.serialNumber) : '') + '</span></td><td><span class="as-badge ' + row.statusClass + '">' + h(row.status) + '</span>' + (jobSummary ? '<span class="as-sub">' + jobSummary + '</span>' : '') + '</td><td class="as-hours">' + (row.hours == null ? '<span title="No current hours recorded">—</span>' : row.hours.toLocaleString('en-GB', { maximumFractionDigits: 1 })) + '</td><td class="as-hours">' + (row.nextServiceHours == null ? '<span title="No service hours recorded">—</span>' : row.nextServiceHours.toLocaleString('en-GB', { maximumFractionDigits: 1 })) + '</td></tr>';
+      return '<tr class="as-service-' + row.serviceAlert.state + '" title="' + h(row.serviceAlert.label) + '"><td><span class="as-name" title="' + h(m.name) + '">' + h(m.name || 'Unnamed asset') + '</span><span class="as-sub">' + h(m.branch || 'No branch') + (m.serialNumber ? ' · ' + h(m.serialNumber) : '') + '</span></td><td><span class="as-badge ' + row.statusClass + '">' + h(row.status) + '</span>' + (jobSummary ? '<span class="as-sub">' + jobSummary + '</span>' : '') + '</td><td class="as-hours">' + (row.hours == null ? '<span title="No current hours recorded">—</span>' : row.hours.toLocaleString('en-GB', { maximumFractionDigits: 1 })) + '</td><td class="as-hours">' + (row.serviceAlert.state === 'invalid' ? '<span class="as-check-hours" title="No service hours recorded or inconsistent meter readings">Check hours</span>' : row.nextServiceHours.toLocaleString('en-GB', { maximumFractionDigits: 1 })) + '</td></tr>';
     }).join('') + '</tbody></table></div>';
   }
   function jobList(rows, jobs) {
@@ -48,9 +58,9 @@
     }).join('') || '<div class="as-empty">No current or outstanding jobs.</div>';
   }
   function shell(popout) {
-    return '<div class="as-canvas" data-as-canvas><div class="as-head"><div><div class="as-eyebrow">CheckPlant / KCM Waste Management</div><h2>Asset Status</h2></div><div class="as-clock"><strong data-as-time>--:--:--</strong><span data-as-date></span></div></div><div class="as-controls"><button type="button" data-as-mode="assets" aria-pressed="true">Assets</button><button type="button" data-as-mode="jobs" aria-pressed="false">Jobs</button><button type="button" data-as-fullscreen>Full screen</button>' + (popout ? '' : '<button type="button" data-as-popout>Pop out to another screen</button>') + '</div><p class="as-message" data-as-message role="status"></p><div class="as-stats" data-as-stats></div><div class="as-sync" data-as-sync data-state="warning" role="status"><span class="as-dot"></span><span data-as-sync-text>Loading asset status…</span></div><div class="as-content"><section class="as-assets-panel"><h3>All assets</h3><div class="as-grid" data-as-grid><div class="as-empty">Loading all assets…</div></div></section><aside class="as-jobs-panel"><h3>Current &amp; outstanding jobs</h3><div data-as-jobs></div></aside></div><div class="as-footer"><span data-as-count>All assets</span><span>Live jobs: in progress, paused, assigned and planned · Next service = due meter reading</span></div></div>';
+    return '<div class="as-canvas" data-as-canvas><div class="as-head"><div><div class="as-eyebrow">CheckPlant / KCM Waste Management</div><h2>Asset Status</h2></div><div class="as-clock"><strong data-as-time>--:--:--</strong><span data-as-date></span></div></div><div class="as-controls"><button type="button" data-as-mode="assets" aria-pressed="true">Assets</button><button type="button" data-as-mode="jobs" aria-pressed="false">Jobs</button><button type="button" data-as-fullscreen>Full screen</button>' + (popout ? '' : '<button type="button" data-as-popout>Pop out to another screen</button>') + '</div><p class="as-message" data-as-message role="status"></p><div class="as-stats" data-as-stats></div><div class="as-sync" data-as-sync data-state="warning" role="status"><span class="as-dot"></span><span data-as-sync-text>Loading asset status…</span></div><div class="as-content"><section class="as-assets-panel"><h3>All assets</h3><div class="as-grid" data-as-grid><div class="as-empty">Loading all assets…</div></div></section><aside class="as-jobs-panel"><h3>Current &amp; outstanding jobs</h3><div data-as-jobs></div></aside></div><div class="as-footer"><span data-as-count>All assets</span><span>Live jobs: in progress, paused, assigned and planned · Amber: due within 50 hours · Red: due / overdue · Check hours: invalid reading</span></div></div>';
   }
-  if (typeof module !== 'undefined' && module.exports) { module.exports = { buildRows, table, shell, jobList, eligibleJobs, tvLayout }; return; }
+  if (typeof module !== 'undefined' && module.exports) { module.exports = { buildRows, table, shell, jobList, eligibleJobs, tvLayout, serviceAlert }; return; }
   function installDisplay(root, displayWindow) {
     let timer;
     const full = root.querySelector('[data-as-fullscreen]');
@@ -113,7 +123,7 @@
   let root, popup = null, access, database, started = false, subscriptions = [];
   let data = { machines: [], liveJobs: [] }, loaded = new Set(), cached = new Set(), failed = new Set();
   const scriptURL = document.currentScript.src;
-  const cssURL = new URL('asset-status.css?v=20261119-firetv', scriptURL).href;
+  const cssURL = new URL('asset-status.css?v=20261119-servicealerts', scriptURL).href;
   function paint(target, rows) {
     const stats = [
       [rows.length, 'Total assets', ''],

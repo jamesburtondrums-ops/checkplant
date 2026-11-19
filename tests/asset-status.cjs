@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
-const { buildRows, table, shell, jobList, tvLayout } = require('../asset-status.js');
+const { buildRows, table, shell, jobList, tvLayout, serviceAlert } = require('../asset-status.js');
 const machines = [
   { id: 'b', name: 'Grab 10', outOfService: true, outOfServiceReason: 'Hydraulic failure', currentHours: 100.5, nextServiceDueHours: 600 },
   { id: 'a', name: 'Grab 2', branch: 'Rotherham', currentHours: 0, lastServiceHours: 0 },
@@ -136,3 +136,17 @@ assert(tvLayout(40,5,1920,1080,'assets').font>=18);
 assert(shell(true).includes('data-as-mode="assets"'));
 assert(shell(true).includes('data-as-mode="jobs"'));
 console.log('PASS: Fire TV 960px viewport gets multiple asset columns without width expansion; separate remote-selectable Assets and Jobs views');
+
+assert.equal(serviceAlert(450,500,0,false).state,'soon');
+assert.equal(serviceAlert(499,500,0,false).state,'soon');
+assert.equal(serviceAlert(449,500,0,false).state,'ok');
+assert.equal(serviceAlert(500,500,0,false).state,'overdue');
+assert.equal(serviceAlert(650,500,0,false).state,'overdue');
+assert.equal(serviceAlert(10000,500,0,false).state,'overdue'); // Do not suppress genuine long-overdue services.
+for(const args of [[100,0,0,false],[100,999999,0,false],[999999,1000,500,false],[100,500,600,false],[100,500,200,false],[null,500,0,false],[450,500,0,true]]) assert.equal(serviceAlert(...args).state,'invalid');
+const alertRows=buildRows([{id:'due',currentHours:450,lastServiceHours:0,nextServiceDueHours:500},{id:'late',currentHours:550,lastServiceHours:0,nextServiceDueHours:500},{id:'bad',currentHours:550,lastServiceHours:0,nextServiceDueHours:'typo'}],[]);
+assert.equal(alertRows.find(r=>r.machine.id==='bad').serviceAlert.state,'invalid');
+assert(table(alertRows).includes('as-service-overdue'));
+assert(table(alertRows).includes('as-service-soon'));
+assert(table(alertRows).includes('Check hours'));
+console.log('PASS: amber within 50 hours, red due/overdue, no arbitrary overdue cutoff, invalid and placeholder readings excluded');
