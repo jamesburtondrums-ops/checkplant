@@ -61,3 +61,11 @@
 .asset-status tbody tr.as-service-soon td{background:#493d20;color:#fff4d6}
 .asset-status tbody tr.as-service-soon td:first-child{border-left:4px solid #ffc75b}
 .asset-status .as-check-hours{font-size:.75em;color:#c6d1db;white-space:nowrap}
+
+/* Reserve room for long hour readings and fit each complete value inside its own cell. */
+.asset-status .as-hour-value{display:block;width:100%;white-space:nowrap;font-family:Arial,sans-serif;letter-spacing:0}
+.asset-status td.as-hours{overflow:hidden;padding-left:4px;padding-right:4px;font-weight:650}
+.asset-status th.as-hours{white-space:normal;overflow-wrap:normal;line-height:1.15}
+.asset-status.as-wall td.as-hours{font-size:.85em;padding-left:3px;padding-right:3px}
+.asset-status.as-wall th.as-hours{font-size:.65em;padding-left:3px;padding-right:3px}
+.asset-status .as-check-hours{font-size:.8em}

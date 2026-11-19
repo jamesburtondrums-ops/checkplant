@@ -119,7 +119,7 @@ const source=fs.readFileSync('asset-status.js','utf8');
 const fitCode=source.slice(source.indexOf('    function fit() {'),source.indexOf('    function tick()'));
 for(const [width,height,contentHeight] of [[1920,1080,1700],[1280,720,1400],[3840,2160,1800]]){
  const style={};const canvas={style,scrollHeight:contentHeight};
- const fitRoot={clientWidth:width,style:{},classList:{contains:()=>true},querySelector:()=>canvas};
+ const fitRoot={clientWidth:width,style:{},querySelectorAll:()=>[],classList:{contains:()=>true},querySelector:()=>canvas};
  const fitting=vm.createContext({root:fitRoot,displayWindow:{innerHeight:height}});
  vm.runInContext(fitCode,fitting);fitting.fit();
  const scale=Number(style.transform.match(/scale\(([^)]+)\)/)[1]);

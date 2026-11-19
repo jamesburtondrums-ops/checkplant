@@ -45,10 +45,10 @@
     return { columns, jobColumns, font };
   }
   function table(rows) {
-    return '<div class="as-table-wrap"><table aria-label="Asset status list"><colgroup><col style="width:39%"><col style="width:25%"><col style="width:17%"><col style="width:19%"></colgroup><thead><tr><th>Asset</th><th>Status / jobs</th><th class="as-hours">Current hours</th><th class="as-hours">Next service hours</th></tr></thead><tbody>' + rows.map(row => {
+    return '<div class="as-table-wrap"><table aria-label="Asset status list"><colgroup><col style="width:37%"><col style="width:21%"><col style="width:20%"><col style="width:22%"></colgroup><thead><tr><th>Asset</th><th>Status / jobs</th><th class="as-hours">Current hours</th><th class="as-hours">Next service hours</th></tr></thead><tbody>' + rows.map(row => {
       const m = row.machine;
       const jobSummary = [row.active.length ? row.active.length + ' active' : '', row.outstanding.length ? row.outstanding.length + ' outstanding' : ''].filter(Boolean).join(' · ');
-      return '<tr class="as-service-' + row.serviceAlert.state + '" title="' + h(row.serviceAlert.label) + '"><td><span class="as-name" title="' + h(m.name) + '">' + h(m.name || 'Unnamed asset') + '</span><span class="as-sub">' + h(m.branch || 'No branch') + (m.serialNumber ? ' · ' + h(m.serialNumber) : '') + '</span></td><td><span class="as-badge ' + row.statusClass + '">' + h(row.status) + '</span>' + (jobSummary ? '<span class="as-sub">' + jobSummary + '</span>' : '') + '</td><td class="as-hours">' + (row.serviceAlert.field === 'current' ? '<span class="as-check-hours">Check hours</span>' : row.hours == null ? '<span title="No current hours recorded">—</span>' : row.hours.toLocaleString('en-GB', { maximumFractionDigits: 1 })) + '</td><td class="as-hours">' + (row.serviceAlert.state === 'invalid' && row.serviceAlert.field !== 'current' ? '<span class="as-check-hours" title="No service hours recorded or inconsistent meter readings">Check hours</span>' : row.nextServiceHours.toLocaleString('en-GB', { maximumFractionDigits: 1 })) + '</td></tr>';
+      return '<tr class="as-service-' + row.serviceAlert.state + '" title="' + h(row.serviceAlert.label) + '"><td><span class="as-name" title="' + h(m.name) + '">' + h(m.name || 'Unnamed asset') + '</span><span class="as-sub">' + h(m.branch || 'No branch') + (m.serialNumber ? ' · ' + h(m.serialNumber) : '') + '</span></td><td><span class="as-badge ' + row.statusClass + '">' + h(row.status) + '</span>' + (jobSummary ? '<span class="as-sub">' + jobSummary + '</span>' : '') + '</td><td class="as-hours"><span class="as-hour-value">' + (row.serviceAlert.field === 'current' ? '<span class="as-check-hours">Check hours</span>' : row.hours == null ? '<span title="No current hours recorded">—</span>' : row.hours.toLocaleString('en-GB', { maximumFractionDigits: 1 })) + '</span></td><td class="as-hours"><span class="as-hour-value">' + (row.serviceAlert.state === 'invalid' && row.serviceAlert.field !== 'current' ? '<span class="as-check-hours" title="No service hours recorded or inconsistent meter readings">Check hours</span>' : row.nextServiceHours.toLocaleString('en-GB', { maximumFractionDigits: 1 })) + '</span></td></tr>';
     }).join('') + '</tbody></table></div>';
   }
   function jobList(rows, jobs) {
@@ -98,14 +98,24 @@
     displayWindow.document.addEventListener('fullscreenchange', onFullscreen);
     root.addEventListener('asset-painted', fit);
     function fit() {
+      function fitHourValues() {
+        root.querySelectorAll('.as-hour-value').forEach(value => {
+          value.style.fontSize = '';
+          if (!value.clientWidth || value.scrollWidth <= value.clientWidth) return;
+          const base = parseFloat(displayWindow.getComputedStyle(value).fontSize);
+          const size = Math.floor(base * value.clientWidth / value.scrollWidth * 10) / 10;
+          if (size > 0) value.style.fontSize = size + 'px';
+        });
+      }
       const canvas = root.querySelector('[data-as-canvas]');
       if (!canvas || !canvas.style) return;
-      if (!root.classList.contains('as-wall')) { canvas.style.removeProperty('width'); canvas.style.removeProperty('transform'); root.style.removeProperty('height'); return; }
+      if (!root.classList.contains('as-wall')) { canvas.style.removeProperty('width'); canvas.style.removeProperty('transform'); root.style.removeProperty('height'); fitHourValues(); return; }
       root.style.height = displayWindow.innerHeight + 'px';
       const width = Math.max(1, root.clientWidth * .95), height = Math.max(1, displayWindow.innerHeight * .95);
       // Keep the real viewport width: expanding it before scaling made Silk render tiny text.
       canvas.style.width = width + 'px';
       canvas.style.transform = 'none';
+      fitHourValues();
       const scale = Math.min(1, height / Math.max(1, canvas.scrollHeight));
       canvas.style.transform = 'scale(' + scale + ')';
     }
@@ -126,7 +136,7 @@
   let root, popup = null, access, database, started = false, subscriptions = [];
   let data = { machines: [], liveJobs: [] }, loaded = new Set(), cached = new Set(), failed = new Set();
   const scriptURL = document.currentScript.src;
-  const cssURL = new URL('asset-status.css?v=20261119-servicealerts', scriptURL).href;
+  const cssURL = new URL('asset-status.css?v=20261119-hoursfit', scriptURL).href;
   function paint(target, rows) {
     const stats = [
       [rows.length, 'Total assets', ''],
