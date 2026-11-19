@@ -21,6 +21,16 @@
   }
   const jobStates = { active: 'In progress', paused: 'Paused', assigned: 'Assigned', planned: 'Planned' };
   function eligibleJobs(jobs) { return jobs.filter(job => Object.hasOwn(jobStates, job.status)); }
+  function tvLayout(assetCount, jobCount, width, height, mode) {
+    // Fire TV/Silk can report a 960px viewport even on a 1080p television.
+    const font = width >= 1600 ? 18 : width >= 1100 ? 16 : 14;
+    const jobColumns = width >= 1600 ? 3 : 2;
+    const available = Math.max(100, height - 145);
+    const rowsPerColumn = Math.max(1, Math.floor(available / (font * 1.15 + 4)));
+    const maxColumns = width >= 1600 ? 4 : width >= 780 ? 3 : 2;
+    const columns = Math.min(maxColumns, Math.max(assetCount > 1 ? 2 : 1, Math.ceil(assetCount / rowsPerColumn)));
+    return { columns, jobColumns, font };
+  }
   function table(rows) {
     return '<div class="as-table-wrap"><table aria-label="Asset status list"><colgroup><col style="width:39%"><col style="width:25%"><col style="width:17%"><col style="width:19%"></colgroup><thead><tr><th>Asset</th><th>Status / jobs</th><th class="as-hours">Current hours</th><th class="as-hours">Next service hours</th></tr></thead><tbody>' + rows.map(row => {
       const m = row.machine;
@@ -38,17 +48,31 @@
     }).join('') || '<div class="as-empty">No current or outstanding jobs.</div>';
   }
   function shell(popout) {
-    return '<div class="as-canvas" data-as-canvas><div class="as-head"><div><div class="as-eyebrow">CheckPlant / KCM Waste Management</div><h2>Asset Status</h2></div><div class="as-clock"><strong data-as-time>--:--:--</strong><span data-as-date></span></div></div><div class="as-controls"><button type="button" data-as-fullscreen>Full screen</button>' + (popout ? '' : '<button type="button" data-as-popout>Pop out to another screen</button>') + '</div><p class="as-message" data-as-message role="status"></p><div class="as-stats" data-as-stats></div><div class="as-sync" data-as-sync data-state="warning" role="status"><span class="as-dot"></span><span data-as-sync-text>Loading asset status…</span></div><div class="as-content"><section class="as-assets-panel"><h3>All assets</h3><div class="as-grid" data-as-grid><div class="as-empty">Loading all assets…</div></div></section><aside class="as-jobs-panel"><h3>Current &amp; outstanding jobs</h3><div data-as-jobs></div></aside></div><div class="as-footer"><span data-as-count>All assets</span><span>Live jobs: in progress, paused, assigned and planned · Next service = due meter reading</span></div></div>';
+    return '<div class="as-canvas" data-as-canvas><div class="as-head"><div><div class="as-eyebrow">CheckPlant / KCM Waste Management</div><h2>Asset Status</h2></div><div class="as-clock"><strong data-as-time>--:--:--</strong><span data-as-date></span></div></div><div class="as-controls"><button type="button" data-as-mode="assets" aria-pressed="true">Assets</button><button type="button" data-as-mode="jobs" aria-pressed="false">Jobs</button><button type="button" data-as-fullscreen>Full screen</button>' + (popout ? '' : '<button type="button" data-as-popout>Pop out to another screen</button>') + '</div><p class="as-message" data-as-message role="status"></p><div class="as-stats" data-as-stats></div><div class="as-sync" data-as-sync data-state="warning" role="status"><span class="as-dot"></span><span data-as-sync-text>Loading asset status…</span></div><div class="as-content"><section class="as-assets-panel"><h3>All assets</h3><div class="as-grid" data-as-grid><div class="as-empty">Loading all assets…</div></div></section><aside class="as-jobs-panel"><h3>Current &amp; outstanding jobs</h3><div data-as-jobs></div></aside></div><div class="as-footer"><span data-as-count>All assets</span><span>Live jobs: in progress, paused, assigned and planned · Next service = due meter reading</span></div></div>';
   }
-  if (typeof module !== 'undefined' && module.exports) { module.exports = { buildRows, table, shell, jobList, eligibleJobs }; return; }
+  if (typeof module !== 'undefined' && module.exports) { module.exports = { buildRows, table, shell, jobList, eligibleJobs, tvLayout }; return; }
   function installDisplay(root, displayWindow) {
     let timer;
     const full = root.querySelector('[data-as-fullscreen]');
+    let mode = 'assets';
+    try { if (displayWindow.localStorage.getItem('checkplantAssetDisplayMode') === 'jobs') mode = 'jobs'; } catch (_) {}
+    root.dataset.mode = mode;
+    function setMode(next) {
+      root.dataset.mode = next;
+      root.querySelectorAll('[data-as-mode]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.asMode === next)));
+      try { displayWindow.localStorage.setItem('checkplantAssetDisplayMode', next); } catch (_) {}
+      root.dispatchEvent(new displayWindow.Event('asset-layout')); fit();
+    }
+    root.querySelectorAll('[data-as-mode]').forEach(button => {
+      button.setAttribute('aria-pressed', String(button.dataset.asMode === mode));
+      button.addEventListener('click', () => setMode(button.dataset.asMode));
+    });
     full.addEventListener('click', async () => {
       try {
         if (displayWindow.document.fullscreenElement) await displayWindow.document.exitFullscreen();
-        else if (root.requestFullscreen) await root.requestFullscreen();
-        else throw Error('Full screen is unavailable in this browser. Use the pop-out view and your browser full-screen control.');
+        else if (root.requestFullscreen && displayWindow.document.fullscreenEnabled !== false) await root.requestFullscreen();
+        else if (root.webkitRequestFullscreen) root.webkitRequestFullscreen();
+        else { root.classList.add('as-wall');root.dataset.wallDisplay='true';root.dispatchEvent(new displayWindow.Event('asset-layout'));root.querySelector('[data-as-message]').textContent='TV layout is already fitted to this screen. Browser full screen is optional.'; }
       } catch (error) { root.querySelector('[data-as-message]').textContent = error.message; }
     });
     const onFullscreen = () => {
@@ -63,17 +87,13 @@
     function fit() {
       const canvas = root.querySelector('[data-as-canvas]');
       if (!canvas || !canvas.style) return;
-      if (!root.classList.contains('as-wall')) { canvas.style.removeProperty('width'); canvas.style.removeProperty('transform'); return; }
-      const width = Math.max(1, root.clientWidth - 40), height = Math.max(1, displayWindow.innerHeight - 32);
-      let scale = 1;
-      // Measure the real asset and job content, then fit the entire board without pagination.
-      for (let pass = 0; pass < 4; pass++) {
-        canvas.style.width = (width / scale) + 'px';
-        const next = Math.min(scale, height / Math.max(1, canvas.scrollHeight));
-        if (Math.abs(next - scale) < .001) break;
-        scale = next;
-      }
-      canvas.style.width = (width / scale) + 'px';
+      if (!root.classList.contains('as-wall')) { canvas.style.removeProperty('width'); canvas.style.removeProperty('transform'); root.style.removeProperty('height'); return; }
+      root.style.height = displayWindow.innerHeight + 'px';
+      const width = Math.max(1, root.clientWidth * .95), height = Math.max(1, displayWindow.innerHeight * .95);
+      // Keep the real viewport width: expanding it before scaling made Silk render tiny text.
+      canvas.style.width = width + 'px';
+      canvas.style.transform = 'none';
+      const scale = Math.min(1, height / Math.max(1, canvas.scrollHeight));
       canvas.style.transform = 'scale(' + scale + ')';
     }
     function tick() {
@@ -93,7 +113,7 @@
   let root, popup = null, access, database, started = false, subscriptions = [];
   let data = { machines: [], liveJobs: [] }, loaded = new Set(), cached = new Set(), failed = new Set();
   const scriptURL = document.currentScript.src;
-  const cssURL = new URL('asset-status.css?v=20261119-jobs', scriptURL).href;
+  const cssURL = new URL('asset-status.css?v=20261119-firetv', scriptURL).href;
   function paint(target, rows) {
     const stats = [
       [rows.length, 'Total assets', ''],
@@ -102,10 +122,15 @@
       [eligibleJobs(data.liveJobs).filter(j=>j.status!=='active').length, 'Outstanding jobs', 'warning']
     ];
     const wall = target.classList.contains('as-wall'), view = target.ownerDocument.defaultView;
-    const twoColumns = wall && view.innerWidth >= 1250 && rows.length > 1;
-    const half = Math.ceil(rows.length / 2);
-    target.querySelector('[data-as-grid]').innerHTML = rows.length ? twoColumns ? table(rows.slice(0, half)) + table(rows.slice(half)) : table(rows) : '<div class="as-empty">' + (loaded.size === 2 ? 'No assets recorded.' : 'Loading all assets…') + '</div>';
-    target.querySelector('[data-as-stats]').innerHTML = stats.map(([value, label, cls]) => '<div class="as-stat ' + cls + '"><strong>' + value + '</strong><span>' + label + '</span></div>').join('');
+    const plan = tvLayout(rows.length, eligibleJobs(data.liveJobs).length, view.innerWidth, view.innerHeight, target.dataset.mode);
+    const columns = wall ? plan.columns : 1;
+    const grid = target.querySelector('[data-as-grid]');
+    grid.style.gridTemplateColumns = 'repeat(' + columns + ', minmax(0, 1fr))';
+    target.style.setProperty('--as-tv-font', plan.font + 'px');
+    target.querySelector('[data-as-jobs]').style.gridTemplateColumns = wall ? 'repeat(' + plan.jobColumns + ', minmax(0, 1fr))' : '';
+    const size = Math.ceil(rows.length / columns), tables = [];
+    for (let start = 0; start < rows.length; start += size) tables.push(table(rows.slice(start, start + size)));
+    grid.innerHTML = rows.length ? tables.join('') : '<div class="as-empty">' + (loaded.size === 2 ? 'No assets recorded.' : 'Loading all assets…') + '</div>';
     target.querySelector('[data-as-jobs]').innerHTML = jobList(rows, data.liveJobs);
     target.querySelector('[data-as-count]').textContent = 'Showing all ' + rows.length + ' assets · No pagination';
     const live = loaded.size === 2 && !cached.size && !failed.size && navigator.onLine;

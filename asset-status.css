@@ -2,3 +2,55 @@
 .asset-status *{box-sizing:border-box}.asset-status .as-head{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:12px}.asset-status .as-eyebrow{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--as-muted);font-weight:750}.asset-status h2{font-size:28px;line-height:1.1;margin:5px 0 0;color:#fff}.asset-status h3{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#adc6d9;margin:0 0 10px}.asset-status .as-clock{text-align:right;font-size:12px;color:var(--as-muted);white-space:nowrap}.asset-status .as-clock strong{display:block;color:#fff;font-size:24px;font-variant-numeric:tabular-nums}.asset-status .as-controls{display:flex;gap:8px;margin:0 0 12px;flex-wrap:wrap}.asset-status button{border:1px solid #4a6579;background:#1c3549;color:#fff;border-radius:8px;font-weight:700;font-size:13px;padding:8px 13px;cursor:pointer}.asset-status button:hover{background:#2c4961}.asset-status button:focus-visible{outline:3px solid #8ccaff;outline-offset:2px}.asset-status .as-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:12px}.asset-status .as-stat{background:var(--as-panel);border:1px solid var(--as-border);border-radius:9px;padding:10px 14px}.asset-status .as-stat strong{display:block;font-size:25px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums;margin-bottom:3px}.asset-status .as-stat span{font-size:10px;color:var(--as-muted);text-transform:uppercase;letter-spacing:.04em;font-weight:700}.asset-status .danger strong{color:#ffa3a3}.asset-status .warning strong{color:#ffce77}.asset-status .blue strong{color:#8dcfff}.asset-status .as-sync{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--as-muted);margin:0 0 12px;min-height:16px}.asset-status .as-dot{width:7px;height:7px;border-radius:50%;background:#44dc9a;flex-shrink:0}.asset-status .as-sync[data-state=warning]{color:#ffce77}.asset-status .as-sync[data-state=warning] .as-dot{background:#ffce77}.asset-status .as-content{display:grid;grid-template-columns:minmax(0,2fr) minmax(280px,1fr);gap:20px;align-items:start}.asset-status .as-assets-panel,.asset-status .as-jobs-panel{min-width:0}.asset-status .as-jobs-panel{border-left:1px solid var(--as-border);padding-left:18px}.asset-status .as-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}.asset-status .as-table-wrap{min-width:0}.asset-status table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:14px;line-height:1.2;color:#edf5fb}.asset-status th{font-size:10px;color:var(--as-muted);font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:8px 6px;text-align:left;border-bottom:1px solid #486074}.asset-status td{padding:7px 6px;border-bottom:1px solid #223a4b;vertical-align:middle;text-align:left;overflow-wrap:anywhere}.asset-status tbody tr:nth-child(even){background:#102231}.asset-status tbody tr:hover{background:#1a3345}.asset-status td.as-hours{text-align:right;font-variant-numeric:tabular-nums;font-weight:750;white-space:nowrap}.asset-status th.as-hours{text-align:right}.asset-status .as-name{display:block;font-weight:750;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.asset-status .as-sub{display:block;font-size:10px;color:var(--as-muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.asset-status .as-badge{display:inline-block;font-size:10px;font-weight:750;border:1px solid transparent;border-radius:5px;padding:2px 5px;white-space:nowrap}.asset-status .as-badge.good{color:#8cf1c2;background:#163d35;border-color:#2a6954}.asset-status .as-badge.danger{color:#ffb4b4;background:#482c34;border-color:#89505b}.asset-status .as-badge.warning{color:#ffda93;background:#463c26;border-color:#7d6941}.asset-status .as-badge.blue{color:#a3d8ff;background:#173d59;border-color:#3d7097}.asset-status .as-job{padding:10px 12px;margin-bottom:8px;background:#112536;border:1px solid #294052;border-left:3px solid #ffce77;border-radius:7px;break-inside:avoid}.asset-status .as-job.active{border-left-color:#8dcfff}.asset-status .as-job-head{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;color:#fff}.asset-status .as-job-title{font-size:12px;line-height:1.35;margin-top:5px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere}.asset-status .as-job-meta{font-size:10px;color:var(--as-muted);margin-top:5px;overflow-wrap:anywhere}.asset-status .as-footer{margin-top:12px;display:flex;justify-content:space-between;gap:12px;font-size:10px;color:var(--as-muted)}.asset-status .as-message{color:#ffce77;font-size:12px;margin:8px 0;white-space:pre-wrap}.asset-status .as-message:empty{display:none}.asset-status .as-empty{padding:24px 10px;color:var(--as-muted);text-align:center;font-size:12px}.asset-status.as-wall{border-radius:0;border:0;height:100vh;height:100dvh;min-height:0;width:100%;padding:0;overflow:hidden}.asset-status.as-wall .as-canvas{position:absolute;left:20px;top:16px;width:calc(100% - 40px);transform-origin:top left}.asset-status:fullscreen{background:var(--as-bg)}.asset-status.as-wall .as-controls{position:absolute;right:0;top:2px;opacity:.08;transition:opacity .2s}.asset-status.as-wall .as-controls:hover,.asset-status.as-wall .as-controls:focus-within{opacity:1}.asset-status.as-wall .as-clock{padding-right:0}.asset-display-body{margin:0!important;background:#091724!important;min-height:100vh}.asset-display-body .asset-status{min-height:0}
 @media(min-width:1250px){.asset-status.as-wall .as-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:850px){.asset-status:not(.as-wall) .as-content{grid-template-columns:minmax(0,1fr)}.asset-status:not(.as-wall) .as-jobs-panel{border-left:0;border-top:1px solid var(--as-border);padding:15px 0 0}.asset-status .as-stat{padding:8px}.asset-status .as-stat span{font-size:9px}.asset-status .as-content{grid-template-columns:minmax(0,2fr) minmax(220px,1fr);gap:12px}.asset-status .as-jobs-panel{padding-left:12px}}
+/* TV layout is active immediately after unlock; no Fullscreen API is required. */
+.asset-status.as-wall .as-canvas{left:2.5%;top:2.5%;width:95%;transform-origin:top left}
+.asset-status.as-wall .as-content{display:flex;flex-direction:column;gap:10px}
+.asset-status.as-wall .as-assets-panel,.asset-status.as-wall .as-jobs-panel{width:100%}
+.asset-status.as-wall .as-jobs-panel{border-left:0;border-top:1px solid var(--as-border);padding:8px 0 0}
+.asset-status.as-wall [data-as-jobs]{display:grid;gap:6px;align-items:start}
+.asset-status.as-wall .as-grid{gap:18px}
+.asset-status.as-wall table{font-size:var(--as-tv-font,16px);line-height:1.1}
+.asset-status.as-wall td{padding:2px 4px}
+.asset-status.as-wall th{font-size:.75em;padding:4px;letter-spacing:0}
+.asset-status.as-wall .as-sub{display:none}
+.asset-status.as-wall .as-badge{font-size:.8em;padding:0 3px;line-height:1.15}
+.asset-status.as-wall .as-name{font-weight:650}
+.asset-status.as-wall .as-head{margin-bottom:6px;min-height:34px}
+.asset-status.as-wall h2{font-size:23px;margin:2px 0 0}
+.asset-status.as-wall .as-eyebrow{font-size:9px}
+.asset-status.as-wall .as-clock strong{font-size:22px}
+.asset-status.as-wall .as-clock{font-size:10px}
+.asset-status.as-wall .as-stats{gap:8px;margin-bottom:6px}
+.asset-status.as-wall .as-stat{display:flex;align-items:center;gap:10px;padding:4px 10px}
+.asset-status.as-wall .as-stat strong{font-size:20px;margin:0}
+.asset-status.as-wall .as-stat span{font-size:11px}
+.asset-status.as-wall .as-sync{font-size:10px;min-height:12px;margin-bottom:6px}
+.asset-status.as-wall h3{font-size:11px;margin-bottom:5px}
+.asset-status.as-wall .as-job{padding:5px 7px;margin:0}
+.asset-status.as-wall .as-job-head{font-size:12px}
+.asset-status.as-wall .as-job-head strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.asset-status.as-wall .as-job-title{font-size:12px;margin-top:3px;-webkit-line-clamp:1}
+.asset-status.as-wall .as-job-meta{font-size:10px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.asset-status.as-wall .as-footer{margin-top:6px;font-size:9px}
+.asset-status.as-wall .as-controls{right:170px;top:0;opacity:.2}
+.asset-status.as-wall .as-controls:focus-within,.asset-status.as-wall .as-controls:hover{opacity:1}
+.asset-status.as-wall button{font-size:12px;padding:7px 10px}
+
+/* Assets and jobs each get the entire display, selected using the TV remote. */
+.asset-status .as-content{display:block}
+.asset-status[data-mode="assets"] .as-jobs-panel{display:none}
+.asset-status[data-mode="jobs"] .as-assets-panel{display:none}
+.asset-status .as-jobs-panel,.asset-status.as-wall .as-jobs-panel{border:0;padding:0}
+.asset-status [data-as-jobs]{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.asset-status .as-controls button[aria-pressed="true"]{background:#26774f;border-color:#7fe0b1;color:#fff}
+.asset-status.as-wall .as-controls{position:static;opacity:1;margin:0 0 8px;gap:8px}
+.asset-status.as-wall button{font-size:14px;padding:7px 18px;min-height:32px}
+.asset-status button:focus-visible{outline:4px solid #ffda75;outline-offset:2px}
+.asset-status.as-wall [data-as-jobs]{gap:12px}
+.asset-status.as-wall .as-job{padding:12px 14px}
+.asset-status.as-wall .as-job-head{font-size:var(--as-tv-font,16px)}
+.asset-status.as-wall .as-job-title{font-size:var(--as-tv-font,16px);line-height:1.3;display:block;-webkit-line-clamp:unset;margin-top:8px}
+.asset-status.as-wall .as-job-meta{font-size:13px;line-height:1.3;white-space:normal;margin-top:8px}
+.asset-status.as-wall .as-job .as-badge{font-size:12px;padding:3px 6px}
+.asset-status.as-wall .as-job-head strong{white-space:normal;overflow:visible}
+.asset-status.as-wall h3{font-size:14px}

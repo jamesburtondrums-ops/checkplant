@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Asset Status — CheckPlant</title>
-<link rel="stylesheet" href="asset-status.css?v=20261119-jobs">
+<link rel="stylesheet" href="asset-status.css?v=20261119-firetv">
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <style>
@@ -12,12 +12,12 @@
 </head>
 <body class="asset-display-body">
 <section class="asset-gate" id="assetGate">
-<h1>Asset Status</h1><p>Live asset status, current hours, next service hours and engineering jobs.</p>
+<h1>Asset Status</h1><p>Choose Assets or Jobs after unlocking. Each live view is fitted to your TV screen.</p>
 <form id="assetUnlockForm"><label for="assetPin">Back Office PIN</label><input id="assetPin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" required autocomplete="off"><button id="assetUnlockButton" type="submit">Unlock live display</button></form>
 <p id="assetGateMessage" role="status"></p><p><a href="index.html">Back to CheckPlant</a></p>
 </section>
 <main id="assetStatusBoard" hidden></main>
-<script src="asset-status.js?v=20261119-jobs"></script>
+<script src="asset-status.js?v=20261119-firetv"></script>
 <script>
 const firebaseConfig={apiKey:"AIzaSyD60Z04IRIvv-EaSyPzoA33fEQ3yT6wsQQ",authDomain:"checkplant-kcm.firebaseapp.com",projectId:"checkplant-kcm",storageBucket:"checkplant-kcm.firebasestorage.app",messagingSenderId:"492245064396",appId:"1:492245064396:web:c79e64b32b9856766bc069"};
 firebase.initializeApp(firebaseConfig);

@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
-const { buildRows, table, shell, jobList } = require('../asset-status.js');
+const { buildRows, table, shell, jobList, tvLayout } = require('../asset-status.js');
 const machines = [
   { id: 'b', name: 'Grab 10', outOfService: true, outOfServiceReason: 'Hydraulic failure', currentHours: 100.5, nextServiceDueHours: 600 },
   { id: 'a', name: 'Grab 2', branch: 'Rotherham', currentHours: 0, lastServiceHours: 0 },
@@ -78,14 +78,16 @@ function fixtureRoot() {
     classList: { add() {}, contains: () => false }, style: { removeProperty() {}, setProperty() {} },
     hasAttribute: () => false, querySelectorAll: () => [], dispatchEvent(event) { this.listeners[event.type]?.(event); },
     addEventListener(name, fn) { this.listeners[name] = fn; },
-    querySelector(name) { if (!nodes.has(name)) nodes.set(name, { dataset: {}, textContent: '', innerHTML: '', addEventListener(type, fn) { this[type] = fn; } }); return nodes.get(name); }
+    querySelector(name) { if (!nodes.has(name)) nodes.set(name, { dataset: {}, style: {removeProperty(){}}, textContent: '', innerHTML: '', addEventListener(type, fn) { this[type] = fn; } }); return nodes.get(name); }
   };
+  const buttons=['assets','jobs'].map(mode=>{const button=root.querySelector('[data-as-mode='+mode+']');button.dataset.asMode=mode;button.setAttribute=(name,value)=>button[name]=value;return button;});
+  root.querySelectorAll=selector=>selector==='[data-as-mode]'?buttons:[];
   return root;
 }
 let subscriptions = 0, popupHTML = '';
 const fakeRoot = fixtureRoot();
 const fakeDocument = { currentScript: { src: 'https://example.com/checkplant/asset-status.js?v=20261117' }, querySelector: () => null, getElementById: () => fakeRoot, addEventListener() {} };
-const fakeWindow = { innerWidth: 1600, innerHeight: 950, document: fakeDocument, addEventListener() {}, setInterval: () => 1,
+const fakeWindow = { Event, innerWidth: 1600, innerHeight: 950, document: fakeDocument, addEventListener() {}, setInterval: () => 1,
   open: () => ({ document: { open() {}, write(value) { popupHTML = value; }, close() {} }, focus() {} }) };
 fakeRoot.ownerDocument = { defaultView: fakeWindow };
 const fakeDb = { collection: () => ({ onSnapshot: (options, callback) => { subscriptions++; callback({ docs: [], metadata: { fromCache: false } }); return () => {}; } }) };
@@ -96,6 +98,13 @@ assert.equal(subscriptions, 0);
 fakeWindow.AssetStatus.open({ db: fakeDb, canAccess: () => true });
 assert.equal(subscriptions, 2);
 assert.equal(fakeRoot.dataset.live, 'true');
+assert.equal(fakeRoot.dataset.mode,'assets');
+fakeRoot.querySelector('[data-as-mode=jobs]').click();
+assert.equal(fakeRoot.dataset.mode,'jobs');
+assert.equal(fakeRoot.querySelector('[data-as-mode=jobs]')['aria-pressed'],'true');
+fakeRoot.querySelector('[data-as-mode=assets]').click();
+assert.equal(fakeRoot.dataset.mode,'assets');
+assert.equal(subscriptions,2);
 fakeRoot.querySelector('[data-as-popout]').click();
 assert(popupHTML.includes('data-asset-display'));
 assert(popupHTML.includes('firebase.initializeApp({"projectId":"test-project"})'));
@@ -110,13 +119,20 @@ const source=fs.readFileSync('asset-status.js','utf8');
 const fitCode=source.slice(source.indexOf('    function fit() {'),source.indexOf('    function tick()'));
 for(const [width,height,contentHeight] of [[1920,1080,1700],[1280,720,1400],[3840,2160,1800]]){
  const style={};const canvas={style,scrollHeight:contentHeight};
- const fitRoot={clientWidth:width,classList:{contains:()=>true},querySelector:()=>canvas};
+ const fitRoot={clientWidth:width,style:{},classList:{contains:()=>true},querySelector:()=>canvas};
  const fitting=vm.createContext({root:fitRoot,displayWindow:{innerHeight:height}});
  vm.runInContext(fitCode,fitting);fitting.fit();
  const scale=Number(style.transform.match(/scale\(([^)]+)\)/)[1]);
- assert(contentHeight*scale<=height-32+.01);
- assert(Math.abs(Number.parseFloat(style.width)*scale-(width-40))<.01);
+ assert(contentHeight*scale<=height*.95+.01);
+ assert.equal(Number.parseFloat(style.width),width*.95);
+ assert(Number.parseFloat(style.width)*scale<=width*.95+.01);
 }
 assert(source.includes("root.dataset.wallDisplay === 'true'"));
 assert(!source.includes('defects: []'));
 console.log('PASS: complete asset/job board fits 720p, 1080p and 4K viewport bounds; standalone remains in wall mode after exiting fullscreen; no defect subscription');
+
+assert.equal(tvLayout(55,5,960,540,'assets').columns,3);
+assert(tvLayout(40,5,1920,1080,'assets').font>=18);
+assert(shell(true).includes('data-as-mode="assets"'));
+assert(shell(true).includes('data-as-mode="jobs"'));
+console.log('PASS: Fire TV 960px viewport gets multiple asset columns without width expansion; separate remote-selectable Assets and Jobs views');
