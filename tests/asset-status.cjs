@@ -150,3 +150,12 @@ assert(table(alertRows).includes('as-service-overdue'));
 assert(table(alertRows).includes('as-service-soon'));
 assert(table(alertRows).includes('Check hours'));
 console.log('PASS: amber within 50 hours, red due/overdue, no arbitrary overdue cutoff, invalid and placeholder readings excluded');
+
+assert.equal(serviceAlert(100000,10000,9500,false).state,'invalid');
+assert.equal(serviceAlert(100000,10000,null,false).state,'invalid');
+assert.equal(serviceAlert(10001,10000,9500,false).state,'overdue');
+assert.equal(serviceAlert(12000,10000,9500,false).state,'overdue');
+const mistyped={id:'mistyped',currentHours:100000,lastServiceHours:9500,nextServiceDueHours:10000};
+assert.equal(buildRows([mistyped],[])[0].serviceAlert.state,'invalid');
+assert.equal(mistyped.currentHours,100000);
+console.log('PASS: extra-zero magnitude mismatch flagged for review, normal overdue hours stay red, saved readings unchanged');
