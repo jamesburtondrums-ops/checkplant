@@ -90,13 +90,13 @@ const fakeDocument = { currentScript: { src: 'https://example.com/checkplant/ass
 const fakeWindow = { Event, innerWidth: 1600, innerHeight: 950, document: fakeDocument, addEventListener() {}, setInterval: () => 1,
   open: () => ({ document: { open() {}, write(value) { popupHTML = value; }, close() {} }, focus() {} }) };
 fakeRoot.ownerDocument = { defaultView: fakeWindow };
-const fakeDb = { collection: () => ({ onSnapshot: (options, callback) => { subscriptions++; callback({ docs: [], metadata: { fromCache: false } }); return () => {}; } }) };
+const fakeDb = { collection: () => ({ where(){return this;}, onSnapshot: (options, callback) => { subscriptions++; callback({ docs: [], metadata: { fromCache: false } }); return () => {}; } }) };
 const scriptContext = vm.createContext({ window: fakeWindow, document: fakeDocument, navigator: { onLine: true }, URL, Map, Set, Date, Event, console, firebase: { app: () => ({ options: { projectId: 'test-project' } }) } });
 vm.runInContext(fs.readFileSync('asset-status.js', 'utf8'), scriptContext);
 fakeWindow.AssetStatus.open({ db: fakeDb, canAccess: () => false });
 assert.equal(subscriptions, 0);
 fakeWindow.AssetStatus.open({ db: fakeDb, canAccess: () => true });
-assert.equal(subscriptions, 2);
+assert.equal(subscriptions, 3);
 assert.equal(fakeRoot.dataset.live, 'true');
 assert.equal(fakeRoot.dataset.mode,'assets');
 fakeRoot.querySelector('[data-as-mode=jobs]').click();
@@ -104,7 +104,7 @@ assert.equal(fakeRoot.dataset.mode,'jobs');
 assert.equal(fakeRoot.querySelector('[data-as-mode=jobs]')['aria-pressed'],'true');
 fakeRoot.querySelector('[data-as-mode=assets]').click();
 assert.equal(fakeRoot.dataset.mode,'assets');
-assert.equal(subscriptions,2);
+assert.equal(subscriptions,3);
 fakeRoot.querySelector('[data-as-popout]').click();
 assert(popupHTML.includes('data-asset-display'));
 assert(popupHTML.includes('firebase.initializeApp({"projectId":"test-project"})'));
@@ -112,20 +112,19 @@ assert.equal((popupHTML.match(/<\/script>/g) || []).length, 4);
 assert(popupHTML.includes('https://example.com/checkplant/asset-status.js?v=20261117'));
 assert(!popupHTML.includes('backOfficeUnlocked'));
 fakeWindow.AssetStatus.open({ db: fakeDb, canAccess: () => true });
-assert.equal(subscriptions, 2); // Reopening does not multiply subscriptions.
+assert.equal(subscriptions, 3); // Reopening does not multiply subscriptions.
 console.log('PASS: lazy listeners, locked access creates no data connections, independent pop-out bootstrap, valid script tags, live connection status and repeat-open behavior');
 // A tall asset/job board must scale as a whole rather than clipping or paging rows.
 const source=fs.readFileSync('asset-status.js','utf8');
 const fitCode=source.slice(source.indexOf('    function fit() {'),source.indexOf('    function tick()'));
 for(const [width,height,contentHeight] of [[1920,1080,1700],[1280,720,1400],[3840,2160,1800]]){
  const style={};const canvas={style,scrollHeight:contentHeight};
- const fitRoot={clientWidth:width,style:{},querySelectorAll:()=>[],classList:{contains:()=>true},querySelector:()=>canvas};
- const fitting=vm.createContext({root:fitRoot,displayWindow:{innerHeight:height}});
+ const fitRoot={clientWidth:width,dataset:{},style:{},querySelectorAll:()=>[],classList:{contains:()=>true},querySelector:()=>canvas};
+ const fitting=vm.createContext({root:fitRoot,displayWindow:{innerHeight:height},lastFitKey:''});
  vm.runInContext(fitCode,fitting);fitting.fit();
  const scale=Number(style.transform.match(/scale\(([^)]+)\)/)[1]);
  assert(contentHeight*scale<=height*.95+.01);
- assert.equal(Number.parseFloat(style.width),width*.95);
- assert(Number.parseFloat(style.width)*scale<=width*.95+.01);
+ assert(Math.abs(Number.parseFloat(style.width)*scale-width*.95)<.01);
 }
 assert(source.includes("root.dataset.wallDisplay === 'true'"));
 assert(!source.includes('defects: []'));
@@ -135,7 +134,7 @@ assert.equal(tvLayout(55,5,960,540,'assets').columns,3);
 assert(tvLayout(40,5,1920,1080,'assets').font>=18);
 assert(shell(true).includes('data-as-mode="assets"'));
 assert(shell(true).includes('data-as-mode="jobs"'));
-console.log('PASS: Fire TV 960px viewport gets multiple asset columns without width expansion; separate remote-selectable Assets and Jobs views');
+console.log('PASS: Fire TV 960px viewport gets explicit multiple asset columns; separate remote-selectable Assets and Jobs views');
 
 assert.equal(serviceAlert(450,500,0,false).state,'soon');
 assert.equal(serviceAlert(499,500,0,false).state,'soon');
@@ -172,3 +171,16 @@ assert(withNotes.includes('19 Nov'));
 assert(jobList(rows,[noteJob],new Set(['notejob'])).includes('data-note-history="notejob" open'));
 assert(jobList(rows,[{...noteJob,progressNotes:[]}]).includes('No progress notes recorded yet.'));
 console.log('PASS: full job description, newest progress first, author/time, earlier note history, escaping, empty notes and expanded-history preservation');
+
+const serviced={id:'grab1',name:'Grab 1',currentHours:15340,lastServiceHours:14000,nextServiceDueHours:14500};
+const serviceRows=[{id:'old',type:'service',machineId:'grab1',date:'2026-10-01',hoursReading:14000},{id:'latest',type:'service',machineId:'grab1',date:'2026-11-18',hoursReading:15000},{id:'backdated',type:'service',machineId:'grab1',date:'2026-09-01',hoursReading:13000,createdAt:'2026-11-19T00:00:00Z'}];
+const corrected=buildRows([serviced],[],serviceRows)[0];
+assert.equal(corrected.nextServiceHours,15500);
+assert.equal(corrected.serviceAlert.state,'ok');
+assert.equal(buildRows([serviced],[],[{...serviceRows[1],hoursReading:999999}])[0].nextServiceHours,14500);
+assert.equal(buildRows([{...serviced,lastServiceHours:999999}],[],serviceRows)[0].nextServiceHours,15500);
+assert.equal(serviced.nextServiceDueHours,14500); // Read-only display reconciliation.
+assert(source.includes("database.collection('records').where('type', '==', 'service')"));
+console.log('PASS: latest service record updates next-service hours across all assets, backdated entries do not regress service baseline, invalid readings excluded, asset data unchanged');
+
+assert.equal(buildRows([{...serviced,currentHours:17000,lastServiceHours:16000}],[],serviceRows)[0].nextServiceHours,15500);

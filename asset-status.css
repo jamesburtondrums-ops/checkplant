@@ -81,3 +81,11 @@
 .asset-status .as-note-history summary:focus-visible{outline:3px solid #ffda75;outline-offset:2px}
 .asset-status.as-wall .as-progress-text,.asset-status.as-wall .as-work-notes{font-size:var(--as-tv-font,16px)}
 .asset-status.as-wall .as-progress-by{font-size:12px}
+
+/* Balance jobs as compact independent cards instead of leaving empty grid-row space. */
+.asset-status [data-as-jobs],.asset-status.as-wall [data-as-jobs]{display:block;column-count:2;column-gap:10px}
+.asset-status .as-job,.asset-status.as-wall .as-job{display:inline-block;width:100%;break-inside:avoid;-webkit-column-break-inside:avoid;margin:0 0 8px;padding:8px 10px;vertical-align:top}
+.asset-status .as-job-title,.asset-status.as-wall .as-job-title{margin-top:5px}
+.asset-status .as-job-meta,.asset-status.as-wall .as-job-meta{margin-top:5px}
+.asset-status .as-progress,.asset-status .as-work-notes{margin-top:6px;padding-top:6px}
+.asset-status .as-progress-entry{margin-top:5px}

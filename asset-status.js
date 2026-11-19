@@ -13,8 +13,14 @@
     if (remaining <= 50) return { state: 'soon', label: 'Service due in ' + remaining.toLocaleString('en-GB') + ' hours' };
     return { state: 'ok', label: 'Next service due at ' + next.toLocaleString('en-GB') + ' hours' };
   }
-  function buildRows(machines, liveJobs) {
-    const jobs = new Map();
+  function buildRows(machines, liveJobs, services = []) {
+    const jobs = new Map(), latestServices = new Map();
+    function serviceDate(record) { return Date.parse(record.date || record.signDate || '') || noteTime(record.completedAt) || noteTime(record.createdAt); }
+    services.forEach(record => {
+      if (record.type !== 'service' || !record.machineId) return;
+      const previous = latestServices.get(record.machineId);
+      if (!previous || serviceDate(record) > serviceDate(previous) || (serviceDate(record) === serviceDate(previous) && noteTime(record.completedAt || record.createdAt) >= noteTime(previous.completedAt || previous.createdAt))) latestServices.set(record.machineId, record);
+    });
     liveJobs.forEach(job => {
       if (!['active','paused','assigned','planned'].includes(job.status)) return;
       if (!jobs.has(job.machineId)) jobs.set(job.machineId, []);
@@ -22,11 +28,14 @@
     });
     return machines.map(machine => {
       const related = jobs.get(machine.id) || [], active = related.filter(j => j.status === 'active'), outstanding = related.filter(j => j.status !== 'active');
-      const hours = reading(machine.currentHours), lastService = reading(machine.lastServiceHours);
+      const hours = reading(machine.currentHours), storedLast = reading(machine.lastServiceHours);
+      const record = latestServices.get(machine.id), recordedLast = record ? reading(record.hoursReading) : null;
+      const useRecord = recordedLast != null && recordedLast !== 999999;
+      const lastService = useRecord ? recordedLast : storedLast;
       const suppliedNext = machine.nextServiceDueHours != null && String(machine.nextServiceDueHours).trim() !== '';
       const suppliedLast = machine.lastServiceHours != null && String(machine.lastServiceHours).trim() !== '';
-      const nextServiceHours = suppliedNext ? reading(machine.nextServiceDueHours) : (lastService == null ? null : lastService + 500);
-      const alert = serviceAlert(hours, nextServiceHours, lastService, (suppliedNext && reading(machine.nextServiceDueHours) == null) || (suppliedLast && lastService == null));
+      const nextServiceHours = useRecord ? recordedLast + 500 : suppliedNext ? reading(machine.nextServiceDueHours) : (lastService == null ? null : lastService + 500);
+      const alert = serviceAlert(hours, nextServiceHours, lastService, !useRecord && ((suppliedNext && reading(machine.nextServiceDueHours) == null) || (suppliedLast && lastService == null)));
       return { machine, hours, nextServiceHours, serviceAlert: alert, active, outstanding,
         status: machine.outOfService ? 'Out of service' : 'In service',
         statusClass: machine.outOfService ? 'danger' : 'good' };
@@ -82,7 +91,7 @@
   }
   if (typeof module !== 'undefined' && module.exports) { module.exports = { buildRows, table, shell, jobList, eligibleJobs, tvLayout, serviceAlert }; return; }
   function installDisplay(root, displayWindow) {
-    let timer;
+    let timer, lastFitKey = '';
     const full = root.querySelector('[data-as-fullscreen]');
     let mode = 'assets';
     try { if (displayWindow.localStorage.getItem('checkplantAssetDisplayMode') === 'jobs') mode = 'jobs'; } catch (_) {}
@@ -114,7 +123,7 @@
     };
     displayWindow.document.addEventListener('fullscreenchange', onFullscreen);
     root.addEventListener('asset-painted', fit);
-    root.addEventListener('toggle', fit, true);
+    root.addEventListener('toggle', () => { lastFitKey = ''; fit(); }, true);
     function fit() {
       function fitHourValues() {
         root.querySelectorAll('.as-hour-value').forEach(value => {
@@ -127,15 +136,30 @@
       }
       const canvas = root.querySelector('[data-as-canvas]');
       if (!canvas || !canvas.style) return;
-      if (!root.classList.contains('as-wall')) { canvas.style.removeProperty('width'); canvas.style.removeProperty('transform'); root.style.removeProperty('height'); fitHourValues(); return; }
+      if (!root.classList.contains('as-wall')) { canvas.style.removeProperty('width'); canvas.style.removeProperty('transform'); root.style.removeProperty('height'); lastFitKey = ''; fitHourValues(); return; }
       root.style.height = displayWindow.innerHeight + 'px';
       const width = Math.max(1, root.clientWidth * .95), height = Math.max(1, displayWindow.innerHeight * .95);
-      // Keep the real viewport width: expanding it before scaling made Silk render tiny text.
-      canvas.style.width = width + 'px';
+      const key = [width, height, root.dataset.mode, root.dataset.layoutRevision].join('|');
+      if (key === lastFitKey) return;
       canvas.style.transform = 'none';
+      function measure(scale) {
+        canvas.style.width = (width / scale) + 'px';
+        return canvas.scrollHeight * scale;
+      }
+      let scale = 1;
+      if (measure(1) > height) {
+        let low = .01, high = 1;
+        // Find the largest readable scale that fits, while preserving the full screen width.
+        for (let pass = 0; pass < 12; pass++) {
+          const middle = (low + high) / 2;
+          if (measure(middle) <= height) low = middle; else high = middle;
+        }
+        scale = low;
+      }
+      canvas.style.width = (width / scale) + 'px';
       fitHourValues();
-      const scale = Math.min(1, height / Math.max(1, canvas.scrollHeight));
       canvas.style.transform = 'scale(' + scale + ')';
+      lastFitKey = key;
     }
     function tick() {
       const date = new Date();
@@ -152,10 +176,11 @@
   }
   const standalone = document.querySelector('[data-asset-display]');
   let root, popup = null, access, database, started = false, subscriptions = [];
-  let data = { machines: [], liveJobs: [] }, loaded = new Set(), cached = new Set(), failed = new Set();
+  let data = { machines: [], liveJobs: [], services: [] }, loaded = new Set(), cached = new Set(), failed = new Set();
   const scriptURL = document.currentScript.src;
-  const cssURL = new URL('asset-status.css?v=20261119-progressnotes', scriptURL).href;
+  const cssURL = new URL('asset-status.css?v=20261119-jobs-width', scriptURL).href;
   function paint(target, rows) {
+    target.dataset.layoutRevision = String((Number(target.dataset.layoutRevision) || 0) + 1);
     const stats = [
       [rows.length, 'Total assets', ''],
       [rows.filter(r => r.machine.outOfService).length, 'Out of service', 'danger'],
@@ -168,21 +193,21 @@
     const grid = target.querySelector('[data-as-grid]');
     grid.style.gridTemplateColumns = 'repeat(' + columns + ', minmax(0, 1fr))';
     target.style.setProperty('--as-tv-font', plan.font + 'px');
-    target.querySelector('[data-as-jobs]').style.gridTemplateColumns = wall ? 'repeat(' + plan.jobColumns + ', minmax(0, 1fr))' : '';
+    target.querySelector('[data-as-jobs]').style.columnCount = String(wall ? plan.jobColumns : 2);
     const size = Math.ceil(rows.length / columns), tables = [];
     for (let start = 0; start < rows.length; start += size) tables.push(table(rows.slice(start, start + size)));
-    grid.innerHTML = rows.length ? tables.join('') : '<div class="as-empty">' + (loaded.size === 2 ? 'No assets recorded.' : 'Loading all assets…') + '</div>';
+    grid.innerHTML = rows.length ? tables.join('') : '<div class="as-empty">' + (loaded.size === 3 ? 'No assets recorded.' : 'Loading all assets…') + '</div>';
     const expandedNotes = new Set(Array.from(target.querySelectorAll('[data-note-history][open]')).map(detail => detail.getAttribute('data-note-history')));
     target.querySelector('[data-as-jobs]').innerHTML = jobList(rows, data.liveJobs, expandedNotes);
     target.querySelector('[data-as-count]').textContent = 'Showing all ' + rows.length + ' assets · No pagination';
-    const live = loaded.size === 2 && !cached.size && !failed.size && navigator.onLine;
+    const live = loaded.size === 3 && !cached.size && !failed.size && navigator.onLine;
     target.dataset.live = String(live);
-    target.dataset.connection = failed.size ? 'Updates unavailable for ' + [...failed].join(', ') + ' — showing last received data. Reopen Asset Status to retry.' : !navigator.onLine ? 'Offline — showing last received data' : loaded.size < 2 ? 'Loading assets and engineering jobs…' : cached.size ? 'Cached data — waiting for a live connection' : 'Live updates · All assets and engineering jobs synced';
+    target.dataset.connection = failed.size ? 'Updates unavailable for ' + [...failed].join(', ') + ' — showing last received data. Reopen Asset Status to retry.' : !navigator.onLine ? 'Offline — showing last received data' : loaded.size < 3 ? 'Loading assets, jobs and service history…' : cached.size ? 'Cached data — waiting for a live connection' : 'Live updates · Assets, jobs and full service history synced';
   }
   function render() {
     if (!root) return;
     if (!access()) { root.innerHTML = '<p>Back Office is locked.</p>';  return; }
-    const rows = buildRows(data.machines, data.liveJobs);
+    const rows = buildRows(data.machines, data.liveJobs, data.services);
     paint(root, rows); root.dispatchEvent(new Event('asset-painted'));
   }
   function popout() {
@@ -199,11 +224,14 @@
     if (started && !failed.size) return;
     subscriptions.forEach(stop => stop()); subscriptions = [];
     started = true; loaded.clear(); cached.clear(); failed.clear();
-    Object.keys(data).forEach(name => subscriptions.push(database.collection(name).onSnapshot({ includeMetadataChanges: true }, snapshot => {
+    Object.keys(data).forEach(name => {
+      const query = name === 'services' ? database.collection('records').where('type', '==', 'service') : database.collection(name);
+      subscriptions.push(query.onSnapshot({ includeMetadataChanges: true }, snapshot => {
       data[name] = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })); loaded.add(name); failed.delete(name);
       if (snapshot.metadata.fromCache) cached.add(name); else cached.delete(name);
       render();
-    }, () => { failed.add(name); render(); })));
+    }, () => { failed.add(name); render(); }));
+    });
   }
   if (standalone) {
     root = standalone; access = () => true; database = firebase.firestore();
