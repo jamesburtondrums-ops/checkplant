@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
-const { buildRows, table, shell } = require('../asset-status.js');
+const { buildRows, table, shell, jobList } = require('../asset-status.js');
 const machines = [
   { id: 'b', name: 'Grab 10', outOfService: true, outOfServiceReason: 'Hydraulic failure', currentHours: 100.5, nextServiceDueHours: 600 },
   { id: 'a', name: 'Grab 2', branch: 'Rotherham', currentHours: 0, lastServiceHours: 0 },
@@ -28,10 +28,10 @@ assert.equal(byId.c.nextServiceHours, null);
 assert.equal(buildRows([{id:'zero',nextServiceDueHours:0}],[],[])[0].nextServiceHours, 0);
 assert.equal(byId.c.hours, null);
 assert.equal(byId.d.hours, null);
-assert.equal(byId.a.status, 'In service · defects');
+assert.equal(byId.a.status, 'In service');
 assert.equal(byId.b.status, 'Out of service');
 assert.equal(byId.c.status, 'In service');
-assert.equal(byId.a.openDefects, 1);
+assert.equal(byId.a.openDefects, undefined);
 assert.equal(byId.a.active.length, 1);
 assert.equal(byId.a.outstanding.length, 3);
 assert.equal(byId.b.active.length + byId.b.outstanding.length, 0);
@@ -39,7 +39,17 @@ assert(rows.findIndex(r => r.machine.id === 'a') < rows.findIndex(r => r.machine
 const markup = table(rows);
 assert(markup.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
 assert(!markup.includes('<script>alert(1)</script>'));
-assert(markup.includes('1 paused · 2 waiting / planned'));
+assert(markup.includes('1 active · 3 outstanding'));
+assert(!markup.toLowerCase().includes('defect'));
+const jobMarkup=jobList(rows,jobs);
+assert.equal((jobMarkup.match(/<article/g)||[]).length,5);
+assert(jobMarkup.includes('Alex'));
+assert(jobMarkup.includes('In progress'));
+assert(jobMarkup.includes('Paused'));
+assert(jobMarkup.includes('Unassigned asset'));
+assert(!jobMarkup.includes('j5'));
+assert(!jobMarkup.includes('j6'));
+assert(!shell(true).includes('Open defects'));
 assert(markup.includes('No current hours recorded'));
 assert(markup.includes('Current hours'));
 assert(markup.includes('Next service hours'));
@@ -60,13 +70,13 @@ assert.equal(askedForPin, 1); assert.equal(opened, 0);
 vm.runInContext('backOfficeUnlocked=true', ctx); ctx.switchOfficeTab('assetstatus');
 assert.equal(opened, 1);
 assert(html.indexOf('data-tab="assetstatus"') > html.indexOf('id="screen-backoffice"'));
-console.log('PASS: all-asset coverage, VOR priority, defect status, zero/missing hours, active/paused/planned/assigned jobs, completed/cancelled exclusion, natural sorting, escaping, live changes, back-office PIN gate, pop-out controls and page syntax');
+console.log('PASS: all-asset coverage, VOR priority, no defect display, actual job list, zero/missing hours, active/paused/planned/assigned jobs, completed/cancelled exclusion, natural sorting, escaping, live changes, back-office PIN gate, pop-out controls and page syntax');
 // Exercise browser wiring with a small DOM fixture, without connecting to production.
 function fixtureRoot() {
   const nodes = new Map();
   const root = { dataset: {}, innerHTML: '', listeners: {},
     classList: { add() {}, contains: () => false }, style: { removeProperty() {}, setProperty() {} },
-    hasAttribute: () => false, querySelectorAll: () => [],
+    hasAttribute: () => false, querySelectorAll: () => [], dispatchEvent(event) { this.listeners[event.type]?.(event); },
     addEventListener(name, fn) { this.listeners[name] = fn; },
     querySelector(name) { if (!nodes.has(name)) nodes.set(name, { dataset: {}, textContent: '', innerHTML: '', addEventListener(type, fn) { this[type] = fn; } }); return nodes.get(name); }
   };
@@ -79,12 +89,12 @@ const fakeWindow = { innerWidth: 1600, innerHeight: 950, document: fakeDocument,
   open: () => ({ document: { open() {}, write(value) { popupHTML = value; }, close() {} }, focus() {} }) };
 fakeRoot.ownerDocument = { defaultView: fakeWindow };
 const fakeDb = { collection: () => ({ onSnapshot: (options, callback) => { subscriptions++; callback({ docs: [], metadata: { fromCache: false } }); return () => {}; } }) };
-const scriptContext = vm.createContext({ window: fakeWindow, document: fakeDocument, navigator: { onLine: true }, URL, Map, Set, Date, console, firebase: { app: () => ({ options: { projectId: 'test-project' } }) } });
+const scriptContext = vm.createContext({ window: fakeWindow, document: fakeDocument, navigator: { onLine: true }, URL, Map, Set, Date, Event, console, firebase: { app: () => ({ options: { projectId: 'test-project' } }) } });
 vm.runInContext(fs.readFileSync('asset-status.js', 'utf8'), scriptContext);
 fakeWindow.AssetStatus.open({ db: fakeDb, canAccess: () => false });
 assert.equal(subscriptions, 0);
 fakeWindow.AssetStatus.open({ db: fakeDb, canAccess: () => true });
-assert.equal(subscriptions, 3);
+assert.equal(subscriptions, 2);
 assert.equal(fakeRoot.dataset.live, 'true');
 fakeRoot.querySelector('[data-as-popout]').click();
 assert(popupHTML.includes('data-asset-display'));
@@ -93,5 +103,20 @@ assert.equal((popupHTML.match(/<\/script>/g) || []).length, 4);
 assert(popupHTML.includes('https://example.com/checkplant/asset-status.js?v=20261117'));
 assert(!popupHTML.includes('backOfficeUnlocked'));
 fakeWindow.AssetStatus.open({ db: fakeDb, canAccess: () => true });
-assert.equal(subscriptions, 3); // Reopening does not multiply subscriptions.
+assert.equal(subscriptions, 2); // Reopening does not multiply subscriptions.
 console.log('PASS: lazy listeners, locked access creates no data connections, independent pop-out bootstrap, valid script tags, live connection status and repeat-open behavior');
+// A tall asset/job board must scale as a whole rather than clipping or paging rows.
+const source=fs.readFileSync('asset-status.js','utf8');
+const fitCode=source.slice(source.indexOf('    function fit() {'),source.indexOf('    function tick()'));
+for(const [width,height,contentHeight] of [[1920,1080,1700],[1280,720,1400],[3840,2160,1800]]){
+ const style={};const canvas={style,scrollHeight:contentHeight};
+ const fitRoot={clientWidth:width,classList:{contains:()=>true},querySelector:()=>canvas};
+ const fitting=vm.createContext({root:fitRoot,displayWindow:{innerHeight:height}});
+ vm.runInContext(fitCode,fitting);fitting.fit();
+ const scale=Number(style.transform.match(/scale\(([^)]+)\)/)[1]);
+ assert(contentHeight*scale<=height-32+.01);
+ assert(Math.abs(Number.parseFloat(style.width)*scale-(width-40))<.01);
+}
+assert(source.includes("root.dataset.wallDisplay === 'true'"));
+assert(!source.includes('defects: []'));
+console.log('PASS: complete asset/job board fits 720p, 1080p and 4K viewport bounds; standalone remains in wall mode after exiting fullscreen; no defect subscription');
