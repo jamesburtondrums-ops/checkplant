@@ -1,0 +1,46 @@
+.asset-report-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.asset-report-actions button:disabled { opacity: .55; cursor: default; }
+.asset-cost-report-open main > :not(#screen-asset-costs) { display: none; }
+#assetCostOutput .section-title { font-size: 1.35rem; }
+#assetCostResults .stat-row { grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); }
+.asset-report-scope { color: #4b5563; font-size: .9rem; }
+.asset-report-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+.asset-report-charts h2, #assetCostResults h2 { color: var(--navy); font-size: 1rem; }
+.asset-report-bar-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(36px, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 25px;
+  font-size: .82rem;
+  overflow-wrap: anywhere;
+}
+.asset-report-bar-row svg { display: block; width: 100%; height: 8px; fill: #2e2e8f; }
+.asset-report-bar-row svg.downtime { fill: #17754c; }
+#assetCostResults table { min-width: 510px; }
+#assetCostResults th, #assetCostResults td { overflow-wrap: anywhere; }
+
+@media screen and (max-width: 650px) {
+  .asset-report-charts { grid-template-columns: 1fr; }
+  #navAssetCosts { margin-bottom: 4px; }
+}
+
+@media print {
+  @page { size: A4; margin: 12mm; }
+  body.asset-cost-report-open { background: white; }
+  .asset-cost-report-open > :not(main),
+  .asset-cost-report-open .asset-report-controls { display: none !important; }
+  .asset-cost-report-open main { max-width: none; padding: 0; }
+  #assetCostOutput { padding: 0; border: 0; box-shadow: none; }
+  #assetCostResults .table-wrap { overflow: visible; }
+  #assetCostResults table { min-width: 0; }
+  #assetCostResults thead { display: table-header-group; }
+  #assetCostResults tr, .asset-report-charts, #assetCostResults .stat-row { break-inside: avoid; }
+  #assetCostResults h2 { break-after: avoid; }
+}
