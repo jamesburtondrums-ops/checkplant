@@ -88,9 +88,9 @@ const assetCostReport = (() => {
       const date = day(entry.date);
       if (!Number.isFinite(date) || date < first || date >= afterLast) continue;
       const row = findRow(entry.machineId, entry.machineName, entry.branch);
-      const duration = number(entry.downtimeHours);
+      const duration = costEntryDowntime(entry);
       row.entries++;
-      if (duration === null || duration < 0) row.missing++;
+      if (duration === null) row.missing++;
       else row.loggedHours += duration;
 
       if (entry.costStatus === 'hours_authorised') {
@@ -186,7 +186,7 @@ const assetCostReport = (() => {
     const scope = period + ' | ' + select.selectedOptions[0].textContent + ' | Run ' + displayDate(asOf);
     const notes = [
       'Spend includes recorded labour, parts and other costs on company assets, including servicing. Customer work and costs awaiting final sign-off are excluded.',
-      'Logged downtime uses the downtime field on cost entries. Out-of-service days come from the register and count calendar days up to the return date, excluding that date. The two measures may overlap.',
+      'Completed job downtime uses authorised hours plus any extra time entered for other resolved defects. Manual cost entries use the downtime entered. Out-of-service days come from the register and count calendar days up to the return date, excluding that date. The two measures may overlap.',
       'A dash means downtime was not entered. Older entries saved with zero hours can include blank downtime fields.',
     ];
     if (state.history === 'error') notes.push('Out-of-service history could not load. Register figures only cover currently out-of-service assets.');
