@@ -32,7 +32,7 @@ const DEFAULT_IDS=['ENG_1_premier-league','ENG_2_championship','ENG_3_league-one
 const MARKETS={HB:'Home win + BTTS',AB:'Away win + BTTS',B:'BTTS Yes',H:'Home win',A:'Away win'};
 const $=x=>document.getElementById(x);
 let registry=[], leagues=new Map(), fixtures=[], picks=[], active='picks', loadAll=false, loading=false, runId=0, manuallyImported=[];
-let lastModels=[], archivedMatches=[], playerNews={}, evidenceLoaded=false;try{picks=JSON.parse(localStorage.getItem('touchline_picks_v1')||'[]')}catch{}
+let lastModels=[], archivedMatches=[], archivedPairIndex=new Map(), standingsCache=new WeakMap(), playerNews={}, evidenceLoaded=false;try{picks=JSON.parse(localStorage.getItem('touchline_picks_v1')||'[]')}catch{}
 const pct=p=>Number.isFinite(p)?(p*100).toFixed(1)+'%':'—';const odds=p=>Number.isFinite(p)&&p>0?(1/p).toFixed(2):'—';const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0;
 function safe(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function parseCSV(text){const rows=[];let cols=[],v='',row=[],q=false;for(let i=0;i<text.length;i++){let ch=text[i];if(ch==='"'){if(q&&text[i+1]==='"'){v+='"';i++}else q=!q}else if(ch===','&&!q){row.push(v);v=''}else if((ch==='\n'||ch==='\r')&&!q){if(ch==='\r'&&text[i+1]==='\n')i++;row.push(v);v='';if(row.some(x=>x.length)){if(!cols.length)cols=row.map(x=>x.trim().replace(/^\uFEFF/,''));else{let obj={};cols.forEach((c,j)=>obj[c]=row[j]||'');rows.push(obj)}}row=[]}else v+=ch}if(v||row.length){row.push(v);if(!cols.length)cols=row;else{let obj={};cols.forEach((c,j)=>obj[c]=row[j]||'');rows.push(obj)}}return rows}
@@ -72,14 +72,14 @@ function canonicalTeam(n){
 async function loadEvidenceData(){
   try{
     const data=await Promise.allSettled(['./h2h-archive.json','./availability.json'].map(u=>fetch(u+'?v='+Date.now(),{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error(r.status);return r.json()})));
-    archivedMatches=data[0].status==='fulfilled'?(data[0].value.matches||[]):[];
+    archivedMatches=data[0].status==='fulfilled'?(data[0].value.matches||[]):[];archivedPairIndex=new Map();for(let match of archivedMatches){let pair=[canonicalTeam(match[2]),canonicalTeam(match[3])].sort().join('|');if(!archivedPairIndex.has(pair))archivedPairIndex.set(pair,[]);archivedPairIndex.get(pair).push(match)}
     playerNews={};
     if(data[1].status==='fulfilled')for(let [team,info] of Object.entries(data[1].value.teams||{}))playerNews[canonicalTeam(team)]=info;
     evidenceLoaded=true;
   }catch(e){console.warn('Optional evidence sources not available',e)}
 }
 function leagueTable(rows){
-  const m=new Map();
+  if(standingsCache.has(rows))return standingsCache.get(rows);const m=new Map();
   for(let r of rows){
     for(let [t,gf,ga] of [[r.home,r.hg,r.ag],[r.away,r.ag,r.hg]]){
       if(!m.has(t))m.set(t,{team:t,p:0,pts:0,gf:0,ga:0,gd:0});
@@ -87,11 +87,11 @@ function leagueTable(rows){
     }
   }
   const sorted=[...m.values()].sort((a,b)=>b.pts-a.pts||b.gd-a.gd||b.gf-a.gf||a.team.localeCompare(b.team));
-  return new Map(sorted.map((t,i)=>[t.team,{...t,rank:i+1,total:sorted.length,ppg:t.pts/t.p}]));
+  const table=new Map(sorted.map((t,i)=>[t.team,{...t,rank:i+1,total:sorted.length,ppg:t.pts/t.p}]));standingsCache.set(rows,table);return table;
 }
 function headToHead(f,rows){
   const h=canonicalTeam(f.home),a=canonicalTeam(f.away);
-  let past=archivedMatches.filter(r=>r.length>=6&&canonicalTeam(r[2])!==canonicalTeam(r[3])&&((canonicalTeam(r[2])===h&&canonicalTeam(r[3])===a)||(canonicalTeam(r[2])===a&&canonicalTeam(r[3])===h)))
+  let pair=[h,a].sort().join('|');let past=(archivedPairIndex.get(pair)||[]).filter(r=>r.length>=6&&canonicalTeam(r[2])!==canonicalTeam(r[3]))
     .map(r=>({date:r[1],home:r[2],away:r[3],hg:Number(r[4]),ag:Number(r[5]),season:r[0]}));
   past.push(...rows.filter(r=>r.date<f.date&&((canonicalTeam(r.home)===h&&canonicalTeam(r.away)===a)||(canonicalTeam(r.home)===a&&canonicalTeam(r.away)===h)))
     .map(r=>({date:r.date,home:r.home,away:r.away,hg:r.hg,ag:r.ag,season:'2026-27'})));
@@ -203,7 +203,7 @@ let txt=`<p class="small">${used.toLocaleString('en-GB')} usable out-of-sample g
 if(!used)txt+='<div class="blank"><b>Not enough prior matches</b>Use a league with more completed games.</div>';else{txt+='<div class="modelgrid">';for(let k of ['B','HB','AB']){let arr=measurements[k],bs=brier(arr),pred=avg(arr.map(x=>x.p)),actual=avg(arr.map(x=>x.y));txt+=`<div class="modelMetric"><div>${MARKETS[k]}</div><strong>${bs.toFixed(3)}</strong><div class="mini">Brier score (lower is better)</div><div class="mathrow"><span>Forecast avg.</span><b>${pct(pred)}</b></div><div class="mathrow"><span>Actual rate</span><b>${pct(actual)}</b></div><div class="mathrow"><span>Difference</span><b>${(Math.abs(actual-pred)*100).toFixed(1)} pp</b></div></div>`}txt+='</div>';
 let bsB=brier(measurements.B);let base=avg(measurements.B.map(x=>x.y));let baseline=avg(measurements.B.map(x=>(base-x.y)**2));txt+=`<p class="small" style="margin-top:15px">BTTS Brier baseline (hindsight sample event frequency): ${baseline.toFixed(3)}. Model: ${bsB.toFixed(3)}. A lower score than baseline would indicate added predictive signal on this sample, not a proven betting edge.</p>`;txt+='<p class="small">No bookmaker odds are in this backtest. It measures probability forecasting, not historical profit, and includes no adjustment for overround or market prices. Do not read these metrics as a guarantee of profitable betting.</p>'}
 target.innerHTML=txt;$('runBacktest').disabled=false}
-function wire(){document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{active=b.dataset.tab;document.querySelectorAll('#tabs button').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.tabonly').forEach(el=>el.classList.toggle('active',el.id==='tab-'+active));if(active==='form')renderForm();if(active==='players')renderPlayers()});for(let id of ['leagueFilter','marketFilter','sortFilter','daysFilter','sampleFilter','thresholdFilter'])$(id).addEventListener('change',renderAll);$('query').addEventListener('input',renderAll);$('coverageToggle').onclick=async()=>{loadAll=!loadAll;if(!loadAll){for(let id of leagues.keys())if(!DEFAULT_IDS.includes(id))leagues.delete(id)}playerCache=null;await loadLeagues()};$('reload').onclick=async()=>{leagues.clear();playerCache=null;await initialize()};$('downloadPicks').onclick=exportPicks;$('print').onclick=()=>window.print();$('clearPicks').onclick=()=>{picks=[];savePicks();renderPicks()};$('stake').oninput=updateAcca;$('runBacktest').onclick=backtest;$('playerCSV').onchange=async e=>{let file=e.target.files?.[0];if(!file)return;try{let data=parseCSV(await file.text());let header=['player','team','goals'];if(!header.every(x=>Object.keys(data[0]||{}).includes(x)))throw new Error('CSV must have columns: player, team, goals');manuallyImported=data;renderPlayers()}catch(err){alert('Could not import player CSV: '+err.message)}}}
+function wire(){document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{active=b.dataset.tab;document.querySelectorAll('#tabs button').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.tabonly').forEach(el=>el.classList.toggle('active',el.id==='tab-'+active));if(active==='form')renderForm();if(active==='players')renderPlayers()});for(let id of ['leagueFilter','marketFilter','sortFilter','daysFilter','sampleFilter','thresholdFilter'])$(id).addEventListener('change',renderAll);$('query').addEventListener('input',renderAll);$('coverageToggle').onclick=async()=>{loadAll=!loadAll;if(!loadAll){for(let id of leagues.keys())if(!DEFAULT_IDS.includes(id))leagues.delete(id)}playerCache=null;await loadLeagues()};$('reload').onclick=async()=>{leagues.clear();standingsCache=new WeakMap();playerCache=null;await initialize()};$('downloadPicks').onclick=exportPicks;$('print').onclick=()=>window.print();$('clearPicks').onclick=()=>{picks=[];savePicks();renderPicks()};$('stake').oninput=updateAcca;$('runBacktest').onclick=backtest;$('playerCSV').onchange=async e=>{let file=e.target.files?.[0];if(!file)return;try{let data=parseCSV(await file.text());let header=['player','team','goals'];if(!header.every(x=>Object.keys(data[0]||{}).includes(x)))throw new Error('CSV must have columns: player, team, goals');manuallyImported=data;renderPlayers()}catch(err){alert('Could not import player CSV: '+err.message)}}}
 wire();initialize();
 </script>
 </body></html>
