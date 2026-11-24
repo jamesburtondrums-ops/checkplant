@@ -1,6 +1,6 @@
 {
   "updated": "2026-11-24",
-  "note": "Sourced team-news reports; not confirmed final lineups. All records expire after 7 days. May include media reports if official clubs are unavailable; sources identified individually.",
+  "note": "Club sources are distinguished from media predictions. Named injury/suspension reports may change and do not confirm matchday squad, especially for fixtures more than a week ahead.",
   "teams": {
     "Cardiff City": {
       "asOf": "2026-11-22",
@@ -32,7 +32,9 @@
           "available",
           "Ban served; return expected"
         ]
-      ]
+      ],
+      "sourceTier": "media",
+      "recheckBeforeKickoff": true
     },
     "Preston North End": {
       "asOf": "2026-11-22",
@@ -69,7 +71,9 @@
           "doubt",
           "Fitness concern"
         ]
-      ]
+      ],
+      "sourceTier": "media",
+      "recheckBeforeKickoff": true
     },
     "Middlesbrough": {
       "asOf": "2026-11-24",
@@ -91,7 +95,9 @@
           "doubt",
           "Ankle injury under assessment"
         ]
-      ]
+      ],
+      "sourceTier": "media",
+      "recheckBeforeKickoff": true
     },
     "Swansea City": {
       "asOf": "2026-11-24",
@@ -128,7 +134,9 @@
           "doubt",
           "Missed previous match through illness"
         ]
-      ]
+      ],
+      "sourceTier": "club",
+      "recheckBeforeKickoff": true
     },
     "Wolverhampton Wanderers": {
       "asOf": "2026-11-24",
@@ -170,7 +178,9 @@
           "available",
           "Returned to squad at weekend"
         ]
-      ]
+      ],
+      "sourceTier": "club",
+      "recheckBeforeKickoff": true
     },
     "Derby County": {
       "asOf": "2026-11-24",
@@ -232,7 +242,9 @@
           "available",
           "Returned to squad"
         ]
-      ]
+      ],
+      "sourceTier": "club",
+      "recheckBeforeKickoff": true
     },
     "Norwich City": {
       "asOf": "2026-11-23",
@@ -254,7 +266,9 @@
           "out",
           "Shoulder"
         ]
-      ]
+      ],
+      "sourceTier": "media",
+      "recheckBeforeKickoff": true
     },
     "Brentford": {
       "asOf": "2026-11-20",
@@ -281,7 +295,9 @@
           "doubt",
           "Recovering; potentially back"
         ]
-      ]
+      ],
+      "sourceTier": "club",
+      "recheckBeforeKickoff": true
     },
     "Man Utd": {
       "asOf": "2026-11-22",
@@ -313,7 +329,9 @@
           "out",
           "Injury"
         ]
-      ]
+      ],
+      "sourceTier": "media",
+      "recheckBeforeKickoff": true
     },
     "Brighton": {
       "asOf": "2026-11-23",
@@ -340,7 +358,9 @@
           "out",
           "Injury"
         ]
-      ]
+      ],
+      "sourceTier": "media",
+      "recheckBeforeKickoff": true
     }
   }
 }
