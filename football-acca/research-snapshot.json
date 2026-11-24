@@ -1,83 +1,281 @@
 {
   "asOf": "2026-11-24",
   "sourceBuild": "2026-11-24T09:12:24Z",
-  "version": "2",
+  "version": "3",
   "historicalMatches": 6421,
   "market": {
-    "status": "not yet independently sourced",
+    "status": "historical 1X2 statistics ready",
     "source": "football-data.co.uk",
-    "asOf": null
+    "asOf": "2026-11-24",
+    "sampleWithOdds": 6771
   },
   "leagues": {
     "ENG_1_premier-league": {
       "source": "open-matchday 2026/27",
       "results": 110,
       "shot_matches": 110,
-      "shot_coverage_pct": 100,
-      "home_win_rate": 0.436,
-      "away_win_rate": 0.291,
-      "draw_rate": 0.273,
-      "btts_rate": 0.482,
+      "shot_coverage_pct": 100.0,
+      "home_win_rate": 0.432,
+      "away_win_rate": 0.2909,
+      "draw_rate": 0.2727,
+      "btts_rate": 0.5744,
       "goals_per_game": 2.75,
       "goals_home_per_game": 1.58,
       "goals_away_per_game": 1.17,
-      "market_matches": null,
-      "odds_matches": null,
-      "latest": "2026-11-23"
+      "latest": "2026-11-23",
+      "market_matches": 1250,
+      "odds_matches": 1250,
+      "average_overround": 0.0474,
+      "home_win_calibration_buckets": [
+        {
+          "range": "0-10%",
+          "n": 18,
+          "expected": 0.0761,
+          "actual": 0.0
+        },
+        {
+          "range": "10-20%",
+          "n": 120,
+          "expected": 0.1599,
+          "actual": 0.1167
+        },
+        {
+          "range": "20-30%",
+          "n": 182,
+          "expected": 0.2546,
+          "actual": 0.2308
+        },
+        {
+          "range": "30-40%",
+          "n": 235,
+          "expected": 0.349,
+          "actual": 0.3574
+        },
+        {
+          "range": "40-50%",
+          "n": 221,
+          "expected": 0.4484,
+          "actual": 0.4434
+        },
+        {
+          "range": "50-60%",
+          "n": 204,
+          "expected": 0.5498,
+          "actual": 0.5588
+        },
+        {
+          "range": "60-70%",
+          "n": 139,
+          "expected": 0.651,
+          "actual": 0.6187
+        },
+        {
+          "range": "70-80%",
+          "n": 95,
+          "expected": 0.7488,
+          "actual": 0.7158
+        },
+        {
+          "range": "80-90%",
+          "n": 36,
+          "expected": 0.8427,
+          "actual": 0.9444
+        }
+      ],
+      "note": "Past bookmaker prices, not current prices. Closing odds preferred where available; no identical settlement guarantee."
     },
     "ENG_2_championship": {
       "source": "open-matchday 2026/27",
       "results": 192,
       "shot_matches": 192,
-      "shot_coverage_pct": 100,
-      "home_win_rate": 0.438,
-      "away_win_rate": 0.302,
-      "draw_rate": 0.26,
-      "btts_rate": 0.615,
+      "shot_coverage_pct": 100.0,
+      "home_win_rate": 0.4399,
+      "away_win_rate": 0.3021,
+      "draw_rate": 0.2604,
+      "btts_rate": 0.54,
       "goals_per_game": 2.92,
       "goals_home_per_game": 1.65,
       "goals_away_per_game": 1.27,
-      "market_matches": null,
-      "odds_matches": null,
-      "latest": "2026-11-22"
+      "latest": "2026-11-22",
+      "market_matches": 1848,
+      "odds_matches": 1848,
+      "average_overround": 0.0572,
+      "home_win_calibration_buckets": [
+        {
+          "range": "10-20%",
+          "n": 70,
+          "expected": 0.1648,
+          "actual": 0.2857
+        },
+        {
+          "range": "20-30%",
+          "n": 221,
+          "expected": 0.2604,
+          "actual": 0.2443
+        },
+        {
+          "range": "30-40%",
+          "n": 487,
+          "expected": 0.3544,
+          "actual": 0.3614
+        },
+        {
+          "range": "40-50%",
+          "n": 532,
+          "expected": 0.4473,
+          "actual": 0.4492
+        },
+        {
+          "range": "50-60%",
+          "n": 331,
+          "expected": 0.5465,
+          "actual": 0.5498
+        },
+        {
+          "range": "60-70%",
+          "n": 139,
+          "expected": 0.6408,
+          "actual": 0.6475
+        },
+        {
+          "range": "70-80%",
+          "n": 58,
+          "expected": 0.7396,
+          "actual": 0.7931
+        }
+      ],
+      "note": "Past bookmaker prices, not current prices. Closing odds preferred where available; no identical settlement guarantee."
     },
     "ENG_3_league-one": {
       "source": "open-matchday 2026/27",
       "results": 175,
       "shot_matches": 175,
-      "shot_coverage_pct": 100,
-      "home_win_rate": 0.417,
-      "away_win_rate": 0.303,
+      "shot_coverage_pct": 100.0,
+      "home_win_rate": 0.4364,
+      "away_win_rate": 0.3029,
       "draw_rate": 0.28,
-      "btts_rate": 0.571,
+      "btts_rate": 0.5227,
       "goals_per_game": 2.83,
       "goals_home_per_game": 1.54,
       "goals_away_per_game": 1.29,
-      "market_matches": null,
-      "odds_matches": null,
-      "latest": "2026-11-21"
+      "latest": "2026-11-21",
+      "market_matches": 1831,
+      "odds_matches": 1831,
+      "average_overround": 0.0686,
+      "home_win_calibration_buckets": [
+        {
+          "range": "10-20%",
+          "n": 35,
+          "expected": 0.1702,
+          "actual": 0.0857
+        },
+        {
+          "range": "20-30%",
+          "n": 284,
+          "expected": 0.2568,
+          "actual": 0.2606
+        },
+        {
+          "range": "30-40%",
+          "n": 477,
+          "expected": 0.3517,
+          "actual": 0.3396
+        },
+        {
+          "range": "40-50%",
+          "n": 517,
+          "expected": 0.4473,
+          "actual": 0.4487
+        },
+        {
+          "range": "50-60%",
+          "n": 336,
+          "expected": 0.5466,
+          "actual": 0.5952
+        },
+        {
+          "range": "60-70%",
+          "n": 159,
+          "expected": 0.6399,
+          "actual": 0.6981
+        },
+        {
+          "range": "70-80%",
+          "n": 23,
+          "expected": 0.7396,
+          "actual": 0.7391
+        }
+      ],
+      "note": "Past bookmaker prices, not current prices. Closing odds preferred where available; no identical settlement guarantee."
     },
     "ENG_4_league-two": {
       "source": "open-matchday 2026/27",
       "results": 186,
       "shot_matches": 186,
-      "shot_coverage_pct": 100,
-      "home_win_rate": 0.478,
-      "away_win_rate": 0.194,
+      "shot_coverage_pct": 100.0,
+      "home_win_rate": 0.4349,
+      "away_win_rate": 0.1935,
       "draw_rate": 0.328,
-      "btts_rate": 0.581,
+      "btts_rate": 0.5396,
       "goals_per_game": 2.69,
       "goals_home_per_game": 1.58,
       "goals_away_per_game": 1.12,
-      "market_matches": null,
-      "odds_matches": null,
-      "latest": "2026-11-21"
+      "latest": "2026-11-21",
+      "market_matches": 1842,
+      "odds_matches": 1842,
+      "average_overround": 0.0703,
+      "home_win_calibration_buckets": [
+        {
+          "range": "10-20%",
+          "n": 28,
+          "expected": 0.1745,
+          "actual": 0.1429
+        },
+        {
+          "range": "20-30%",
+          "n": 253,
+          "expected": 0.2625,
+          "actual": 0.2846
+        },
+        {
+          "range": "30-40%",
+          "n": 508,
+          "expected": 0.3523,
+          "actual": 0.3563
+        },
+        {
+          "range": "40-50%",
+          "n": 574,
+          "expected": 0.4466,
+          "actual": 0.4774
+        },
+        {
+          "range": "50-60%",
+          "n": 338,
+          "expected": 0.5421,
+          "actual": 0.5385
+        },
+        {
+          "range": "60-70%",
+          "n": 124,
+          "expected": 0.6392,
+          "actual": 0.6129
+        },
+        {
+          "range": "70-80%",
+          "n": 17,
+          "expected": 0.7126,
+          "actual": 0.7059
+        }
+      ],
+      "note": "Past bookmaker prices, not current prices. Closing odds preferred where available; no identical settlement guarantee."
     }
   },
+  "warning": "No live bookmaker odds; historical odds are not an available betting price.",
   "sourceLinks": [
     "https://github.com/oladeeayo/open-matchday",
     "https://github.com/openfootball/football.json",
     "https://www.football-data.co.uk/"
   ],
-  "warning": "No sportsbook prices are live. Closing historical 1X2 odds will be an optional separate data source and may be unavailable."
+  "sourceWarnings": []
 }
