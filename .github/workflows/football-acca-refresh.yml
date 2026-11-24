@@ -35,5 +35,15 @@ jobs:
           fi
           if ! git diff --cached --quiet; then
             git commit -m "Touchline: refresh sourced football research"
-            git push
+            for attempt in 1 2 3; do
+              git fetch origin main
+              git rebase origin/main
+              if git push origin HEAD:main; then
+                echo "Research data published"
+                exit 0
+              fi
+              sleep 4
+            done
+            echo "Could not push refreshed research data after three attempts" >&2
+            exit 1
           fi
