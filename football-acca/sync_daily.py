@@ -129,6 +129,36 @@ def scorers_from_espn(slug):
                     break
     return result
 
+def fixture_odds():
+    """Sample pre-match 1X2 market as a comparator, never an executable bookmaker quote."""
+    text=retrieve("https://www.football-data.co.uk/fixtures.csv")
+    if not text:return None
+    from datetime import date
+    rows=[]
+    mapping={v[0]:k for k,v in LEAGUES.items()}
+    for r in csv_rows(text):
+        league=mapping.get((r.get("Div") or "").strip())
+        if not league:continue
+        datevalue=(r.get("Date") or "").strip()
+        day=None
+        for fmt in ("%d/%m/%Y","%d/%m/%y","%Y-%m-%d"):
+            try:day=datetime.strptime(datevalue,fmt).date();break
+            except ValueError:pass
+        if day is None or day<TODAY or day>TODAY+timedelta(days=28):continue
+        trips=[("AvgH","AvgD","AvgA"),("B365H","B365D","B365A"),("MaxH","MaxD","MaxA")]
+        odds=next((tuple(num(r.get(z)) for z in x) for x in trips if all(num(r.get(z)) and num(r.get(z))>1.001 for z in x)),None)
+        if not odds:continue
+        inv=[1/z for z in odds];total=sum(inv)
+        if total<.8 or total>1.55:continue
+        home=(r.get("HomeTeam") or "").strip();away=(r.get("AwayTeam") or "").strip()
+        if not home or not away:continue
+        rows.append({"league":league,"date":str(day),"home":home,"away":away,
+                     "homeP":round(inv[0]/total,4),"drawP":round(inv[1]/total,4),
+                     "awayP":round(inv[2]/total,4),"overround":round(total-1,4)})
+    return {"asOf":str(TODAY),"source":"football-data.co.uk/fixtures.csv",
+            "nonLive":True,"status":"Fixed-interval snapshot, not live prices",
+            "matches":rows,"total":len(rows)}
+
 def main():
     p=BASE/"research-snapshot.json"
     previous={}
@@ -171,6 +201,9 @@ def main():
         summary["market"]={"status":"historical bookmaker data unavailable; do not infer prices","source":"football-data.co.uk","asOf":None}
     summary["sourceWarnings"]=WARNINGS[:30]
     p.write_text(json.dumps(summary,ensure_ascii=False,indent=2)+"\n",encoding="utf8")
+    indicative=fixture_odds()
+    if indicative:
+        (BASE/"odds-reference.json").write_text(json.dumps(indicative,ensure_ascii=False,indent=2)+"\\n",encoding="utf8")
     if players:
         scorer_file.write_text(json.dumps({"asOf":str(TODAY),"source":"ESPN public soccer scoreboard goal leaders; partial competition-day coverage","leagues":players},ensure_ascii=False,indent=2)+"\n",encoding="utf8")
     print("source audit",STAMP,"calls",CALLS,"markets",odds_count,"playerLeagues",len(players),"warnings",len(WARNINGS))
