@@ -1,0 +1,83 @@
+{
+  "asOf": "2026-11-24",
+  "sourceBuild": "2026-11-24T09:12:24Z",
+  "version": "2",
+  "historicalMatches": 6421,
+  "market": {
+    "status": "not yet independently sourced",
+    "source": "football-data.co.uk",
+    "asOf": null
+  },
+  "leagues": {
+    "ENG_1_premier-league": {
+      "source": "open-matchday 2026/27",
+      "results": 110,
+      "shot_matches": 110,
+      "shot_coverage_pct": 100,
+      "home_win_rate": 0.436,
+      "away_win_rate": 0.291,
+      "draw_rate": 0.273,
+      "btts_rate": 0.482,
+      "goals_per_game": 2.75,
+      "goals_home_per_game": 1.58,
+      "goals_away_per_game": 1.17,
+      "market_matches": null,
+      "odds_matches": null,
+      "latest": "2026-11-23"
+    },
+    "ENG_2_championship": {
+      "source": "open-matchday 2026/27",
+      "results": 192,
+      "shot_matches": 192,
+      "shot_coverage_pct": 100,
+      "home_win_rate": 0.438,
+      "away_win_rate": 0.302,
+      "draw_rate": 0.26,
+      "btts_rate": 0.615,
+      "goals_per_game": 2.92,
+      "goals_home_per_game": 1.65,
+      "goals_away_per_game": 1.27,
+      "market_matches": null,
+      "odds_matches": null,
+      "latest": "2026-11-22"
+    },
+    "ENG_3_league-one": {
+      "source": "open-matchday 2026/27",
+      "results": 175,
+      "shot_matches": 175,
+      "shot_coverage_pct": 100,
+      "home_win_rate": 0.417,
+      "away_win_rate": 0.303,
+      "draw_rate": 0.28,
+      "btts_rate": 0.571,
+      "goals_per_game": 2.83,
+      "goals_home_per_game": 1.54,
+      "goals_away_per_game": 1.29,
+      "market_matches": null,
+      "odds_matches": null,
+      "latest": "2026-11-21"
+    },
+    "ENG_4_league-two": {
+      "source": "open-matchday 2026/27",
+      "results": 186,
+      "shot_matches": 186,
+      "shot_coverage_pct": 100,
+      "home_win_rate": 0.478,
+      "away_win_rate": 0.194,
+      "draw_rate": 0.328,
+      "btts_rate": 0.581,
+      "goals_per_game": 2.69,
+      "goals_home_per_game": 1.58,
+      "goals_away_per_game": 1.12,
+      "market_matches": null,
+      "odds_matches": null,
+      "latest": "2026-11-21"
+    }
+  },
+  "sourceLinks": [
+    "https://github.com/oladeeayo/open-matchday",
+    "https://github.com/openfootball/football.json",
+    "https://www.football-data.co.uk/"
+  ],
+  "warning": "No sportsbook prices are live. Closing historical 1X2 odds will be an optional separate data source and may be unavailable."
+}
