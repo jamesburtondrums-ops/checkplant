@@ -40,7 +40,7 @@
 <script>
 'use strict';
 const RAW='https://raw.githubusercontent.com/oladeeayo/open-matchday/master/', CDN='https://cdn.jsdelivr.net/gh/oladeeayo/open-matchday@master/';
-const DEFAULT_IDS=['ENG_1_premier-league','ENG_2_championship','ENG_3_league-one','ENG_4_league-two','ENG_5_national-league','SCO_1_premiership','SCO_2_championship','SCO_3_league-one','ESP_1_la-liga','GER_1_bundesliga','GER_2_2-bundesliga','ITA_1_serie-a','FRA_1_ligue-1','NED_1_eredivisie','POR_1_primeira-liga','BEL_1_pro-league','TUR_1_super-lig','UEFA_1_champions-league','UEFA_1_europa-league','UEFA_1_conference-league'];
+const DEFAULT_IDS=['ENG_1_premier-league','ENG_2_championship','ENG_3_league-one','ENG_4_league-two','UEFA_1_champions-league'];
 const MARKETS={HB:'Home win + BTTS',AB:'Away win + BTTS',B:'BTTS Yes',H:'Home win',A:'Away win'};
 const $=x=>document.getElementById(x);
 let registry=[], leagues=new Map(), fixtures=[], picks=[], active='picks', loadAll=false, loading=false, runId=0, manuallyImported=[];
@@ -185,7 +185,60 @@ function evidenceMarkup(m){
 
 function fixtureKey(f){return f.league+'|'+f.date+'|'+f.home+'|'+f.away}
 function getLeagueResults(id){return leagues.get(id)?.results||[]}
-async function initialize(){try{await loadEvidenceData();let [index,summary]=await Promise.all([getText('LEAGUE_INDEX.md'),getText('build_summary.json')]);registry=currentRegistry(index);const meta=JSON.parse(summary);let generated=meta.generated_utc||'';$('statUpdated').textContent=generated?new Date(generated).toLocaleDateString('en-GB',{day:'2-digit',month:'short'}):'Not reported';$('sourceStatus').textContent='2026/27 · '+(generated?'DATA '+dateDisplay(generated.slice(0,10)).toUpperCase():'DAILY DATA');$('statCoverage').textContent=registry.length+' available competitions';await loadLeagues()}catch(e){$('loadText').textContent='Unable to fetch data: '+e.message;$('matchRows').innerHTML='<tr><td colspan="8"><div class="blank"><b>Data cannot be loaded</b>Check internet access or the source availability and press Refresh.</div></td></tr>';console.error(e)}}
+
+async function loadBundledCache(){
+ const control=new AbortController(),timer=setTimeout(()=>control.abort(),9000);
+ try{
+  $('loadText').textContent='Loading prepared match data…';
+  const response=await fetch('./fixtures-data.json?v='+Math.floor(Date.now()/3600000),{signal:control.signal,cache:'no-cache'});
+  if(!response.ok)throw new Error('Prepared fixtures HTTP '+response.status);
+  const cached=await response.json();
+  if(!cached?.leagues?.length)throw new Error('Prepared match data is empty');
+  leagues.clear();standingsCache=new WeakMap();
+  registry=cached.leagues.map(l=>({id:l.id,name:l.name,country:l.country}));
+  for(const l of cached.leagues){
+   const completed=(l.results||[]).filter(m=>m.date<=nowISO());
+   const rs=completed.filter(m=>m.date<nowISO()).map(m=>({...m,league:l.id})).sort((a,b)=>a.date.localeCompare(b.date));
+   const upcoming=(l.upcoming||[]).filter(f=>f.date>=nowISO()).map(f=>({...f,league:l.id}));
+   for(const m of completed.filter(x=>x.date===nowISO())){
+    if(!upcoming.some(f=>f.date===m.date&&f.home===m.home&&f.away===m.away))
+      upcoming.push({league:l.id,date:m.date,home:m.home,away:m.away,completedResult:{hg:m.hg,ag:m.ag}});
+   }
+   leagues.set(l.id,{name:l.name,country:l.country,results:rs,upcoming});
+  }
+  fixtures=[...leagues.values()].flatMap(x=>x.upcoming);
+  $('statUpdated').textContent=cached.updated||'Latest bundle';
+  $('statCoverage').textContent=leagues.size+' prepared competitions';
+  $('sourceStatus').textContent='2026/27 · '+leagues.size+' LEAGUES READY';
+  $('loadText').textContent='Match data ready · refreshed '+(cached.updated||'date unknown');
+  $('coverageToggle').textContent='Load more competitions';
+  populateLeagues();renderAll();
+  return true;
+ }catch(err){console.warn('Local match cache unavailable; trying direct source',err);$('loadText').textContent='Prepared data unavailable, trying other source…';return false}
+ finally{clearTimeout(timer)}
+}
+async function initialize(){
+ const evidencePromise=loadEvidenceData().then(()=>{if(leagues.size)renderAll();}).catch(e=>console.warn('Supporting evidence unavailable',e));
+ const cached=await loadBundledCache();
+ if(window.TouchlineLive)TouchlineLive.refresh(nowISO(),()=>{if(leagues.size)renderAll()}).catch(e=>console.warn('Live scoreboard unavailable',e));
+ try{
+  const [indexed,summary]=await Promise.allSettled([getText('LEAGUE_INDEX.md'),getText('build_summary.json')]);
+  if(indexed.status==='fulfilled'){
+   const complete=currentRegistry(indexed.value);
+   if(complete.length)registry=complete;
+  }
+  if(summary.status==='fulfilled'){
+   const meta=JSON.parse(summary.value),generated=meta.generated_utc||'';
+   $('statUpdated').textContent=generated?new Date(generated).toLocaleDateString('en-GB',{day:'2-digit',month:'short'}):$('statUpdated').textContent;
+  }
+  $('statCoverage').textContent=registry.length+' available competitions';
+  if(!cached)await loadLeagues();
+  else{$('coverageToggle').textContent='Load all '+registry.length+' competitions';populateLeagues();renderAll();}
+ }catch(e){
+  console.error('Remote data index not available',e);
+  if(!cached){$('loadText').textContent='Match data currently unavailable — please refresh';$('matchCards').innerHTML='<div class="noFixture"><h3>Could not load football results</h3><p>Check your connection or press Refresh to try again.</p></div>'}
+ }
+}
 async function loadLeagues(){if(loading)return;loading=true;const id=++runId;const wanted=registry.filter(l=>loadAll||DEFAULT_IDS.includes(l.id));let pending=wanted.filter(l=>!leagues.has(l.id)),done=0,failed=[];$('loadText').textContent='Loading '+pending.length+' competition(s)…';$('coverageToggle').disabled=true;
 let cursor=0;async function worker(){while(cursor<pending.length){let item=pending[cursor++];try{let [rt,ft]=await Promise.all([getText('data/'+item.id+'/results_2627.csv'),getText('data/'+item.id+'/fixtures_2627.csv')]);let completed=parseCSV(rt).filter(r=>r.ft_home!==''&&r.ft_away!=='').map(r=>({league:item.id,date:r.date,home:r.home,away:r.away,hg:Number(r.ft_home),ag:Number(r.ft_away),stat:r})).filter(m=>m.home&&m.away&&Number.isFinite(m.hg)&&Number.isFinite(m.ag)&&m.date<=nowISO()).sort((a,b)=>a.date.localeCompare(b.date));let results=completed.filter(m=>m.date<nowISO());let upcoming=parseCSV(ft).filter(m=>m.date&&m.home&&m.away).map(m=>({...m,league:item.id}));for(const completedToday of completed.filter(x=>x.date===nowISO()))if(!upcoming.some(x=>x.date===completedToday.date&&x.home===completedToday.home&&x.away===completedToday.away))upcoming.push({league:item.id,date:completedToday.date,home:completedToday.home,away:completedToday.away,completedResult:{hg:completedToday.hg,ag:completedToday.ag}});leagues.set(item.id,{name:item.name,country:item.country,results,upcoming});}catch(e){failed.push(item.name);console.warn('Skipped',item.id,e)}finally{done++;$('loadText').textContent=`Loaded ${done}/${pending.length} · ${failed.length} unavailable`}}}
 await Promise.all(Array.from({length:Math.min(6,pending.length)},worker));if(id!==runId)return;
