@@ -19,24 +19,6 @@
         "asOf": "2026-11-24",
         "athleteId": "265653"
       }
-    },
-    "ENG_2_championship": {
-      "wolverhampton wanderers": {
-        "team": "Wolverhampton Wanderers",
-        "player": "Fernando López",
-        "goals": 6,
-        "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-24",
-        "athleteId": "395625"
-      },
-      "derby county": {
-        "team": "Derby County",
-        "player": "Bobby Clark",
-        "goals": 3,
-        "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-24",
-        "athleteId": "330607"
-      }
     }
   }
 }
