@@ -1,1 +1,346 @@
-{"updated":"2026-11-23","note":"Dated third-party reports. Do not treat as an official matchday squad. Recheck each match; records older than 7 days are stale.","teams":{"Cardiff City":{"asOf":"2026-11-23","source":"https://uktouchline.com/teams/cardiff/injuries","sourceName":"Cardiff injury tracker (23 Nov)","players":[["Calum Chambers","out","Knee"],["Dylan Lawlor","out","Hamstring"],["Gabriel Osho","out","Knee"],["Isaak Davies","out","Muscle"],["Perry Ng","doubt","Match fitness"]]},"Preston North End":{"asOf":"2026-11-23","source":"https://starting11.com/championship/gameweek/17","sourceName":"Championship team-news compilation","players":[["Clarke","out","Knee"],["Gibbs","out","Muscle"],["Gibson","out","Muscle"],["Kenny","out","Hamstring"],["McCann","out","Hamstring"]]},"Middlesbrough":{"asOf":"2026-11-23","source":"https://starting11.com/championship/gameweek/17","sourceName":"Championship team-news compilation","players":[["Jones","out","Calf"],["Pukštas","out","Hamstring"],["Lankshear","doubt","Fitness"]]},"Swansea City":{"asOf":"2026-11-23","source":"https://starting11.com/championship/gameweek/17","sourceName":"Championship team-news compilation","players":[["Burgess","out","Achilles"],["Ronald","out","Hamstring"],["Josh Tymon","suspended","Disciplinary"],["Eustáquio","out","Shoulder"],["Welsh","out","Muscle"]]},"Wolverhampton Wanderers":{"asOf":"2026-11-23","source":"https://starting11.com/championship/gameweek/17","sourceName":"Championship team-news compilation","players":[["Jiménez","out","Knee"],["Konan","out","Knee"],["James","out","Muscle"],["Traoré","out","Calf / hamstring: source ambiguous"]]},"Derby County":{"asOf":"2026-11-23","source":"https://starting11.com/championship/gameweek/17","sourceName":"Championship team-news compilation","players":[["Forsyth","out","Knee"],["Langås","out","Groin"],["Murkin","out","Hamstring"],["Szmodics","out","Knee"],["Taylor","out","Hamstring"],["Cashin","doubt","Fitness"]]},"Norwich City":{"asOf":"2026-11-23","source":"https://starting11.com/championship/gameweek/17","sourceName":"Championship team-news compilation","players":[["Ahmed","out","Knee"],["Diallo","out","Hamstring"],["Touré","out","Shoulder"]]},"Brentford":{"asOf":"2026-11-23","source":"https://www.fotmob.com/en-GB/matches/brentford-vs-manchester-united/3dfzjk","sourceName":"FotMob 28 Nov match team news","players":[["Igor Thiago","suspended","Red-card ban"],["Aaron Hickey","out","Injury"],["Nathan Collins","out","Injury"],["Rico Henry","out","Injury"],["Fábio Carvalho","doubt","Recovery status varies by report"]]},"Man Utd":{"asOf":"2026-11-22","source":"https://kickoffhour.com/football/premier-league/injuries/","sourceName":"Premier League injury tracker (22 Nov)","players":[["Carlos Baleba","out","Thigh"],["Luke Shaw","doubt","Muscle"],["Ayden Heaven","doubt","Injury"],["Marcus Rashford","doubt","Hip"],["Benjamin Šeško","out","Injury"]]},"Brighton":{"asOf":"2026-11-23","source":"https://www.fotmob.com/en-GB/matches/brighton-hove-albion-vs-newcastle-united/3gos5a","sourceName":"FotMob 29 Nov match team news","players":[["Kaoru Mitoma","doubt","Hamstring; reassess return"],["Evan Ferguson","out","Ankle"],["Stefanos Tzimas","out","Knee / fitness"],["Zadok Yohanna","out","Injury"]]}}}
+{
+  "updated": "2026-11-24",
+  "note": "Sourced team-news reports; not confirmed final lineups. All records expire after 7 days. May include media reports if official clubs are unavailable; sources identified individually.",
+  "teams": {
+    "Cardiff City": {
+      "asOf": "2026-11-22",
+      "source": "https://www.sportsmole.co.uk/football/cardiff-city/preview/cardiff-vs-preston-prediction-team-news-lineups_609608.html",
+      "sourceName": "Sports Mole Cardiff–Preston preview (22 Nov)",
+      "players": [
+        [
+          "Perry Ng",
+          "out",
+          "Knee – expected to miss match"
+        ],
+        [
+          "Gabriel Osho",
+          "out",
+          "Injury – expected to miss match"
+        ],
+        [
+          "Dylan Lawlor",
+          "out",
+          "Injury – expected to miss match"
+        ],
+        [
+          "Calum Chambers",
+          "out",
+          "Injury – expected to miss match"
+        ],
+        [
+          "Joel Bagan",
+          "available",
+          "Ban served; return expected"
+        ]
+      ]
+    },
+    "Preston North End": {
+      "asOf": "2026-11-22",
+      "source": "https://www.sportsmole.co.uk/football/cardiff-city/preview/cardiff-vs-preston-prediction-team-news-lineups_609608.html",
+      "sourceName": "Sports Mole Cardiff–Preston preview (22 Nov)",
+      "players": [
+        [
+          "Lewis Gibson",
+          "out",
+          "Injury – expected absence"
+        ],
+        [
+          "Harry Clarke",
+          "out",
+          "Injury – expected absence"
+        ],
+        [
+          "Liam Gibbs",
+          "out",
+          "Injury – expected absence"
+        ],
+        [
+          "Andrija Vukcevic",
+          "doubt",
+          "Injured in last match"
+        ],
+        [
+          "Stanley Mills",
+          "doubt",
+          "Fitness concern"
+        ],
+        [
+          "Andrew Moran",
+          "doubt",
+          "Fitness concern"
+        ]
+      ]
+    },
+    "Middlesbrough": {
+      "asOf": "2026-11-24",
+      "source": "https://www.btfstats.com/match-preview,2026,middlesbrough,swansea,2026-11-24",
+      "sourceName": "BTFStats matchday injuries (24 Nov)",
+      "players": [
+        [
+          "Alfie Jones",
+          "out",
+          "Injury reported"
+        ],
+        [
+          "Rokas Pukstas",
+          "out",
+          "Injury reported"
+        ],
+        [
+          "Neto Borges",
+          "doubt",
+          "Ankle injury under assessment"
+        ]
+      ]
+    },
+    "Swansea City": {
+      "asOf": "2026-11-24",
+      "source": "https://www.swanseacity.com/news/preview-middlesbrough-v-swansea-city-7",
+      "sourceName": "Swansea City official matchday preview (24 Nov)",
+      "players": [
+        [
+          "Goncalo Franco",
+          "out",
+          "Injured"
+        ],
+        [
+          "Marko Stamenic",
+          "suspended",
+          "Suspension"
+        ],
+        [
+          "Josh Tymon",
+          "suspended",
+          "Fifth yellow card"
+        ],
+        [
+          "Cameron Burgess",
+          "out",
+          "Long-term injury"
+        ],
+        [
+          "Moussa Yeo",
+          "doubt",
+          "Fitness being checked"
+        ],
+        [
+          "Ross Stewart",
+          "doubt",
+          "Missed previous match through illness"
+        ]
+      ]
+    },
+    "Wolverhampton Wanderers": {
+      "asOf": "2026-11-24",
+      "source": "https://www.wolves.co.uk/news/features/20261124-the-preview-wolves-vs-derby/",
+      "sourceName": "Wolves official pre-match preview (24 Nov)",
+      "players": [
+        [
+          "Raul Jimenez",
+          "out",
+          "Long-term injury"
+        ],
+        [
+          "Ghislain Konan",
+          "out",
+          "Long-term injury"
+        ],
+        [
+          "Rodrigo Gomes",
+          "doubt",
+          "Illness – manager expects him to be an option"
+        ],
+        [
+          "Nasser Djiga",
+          "doubt",
+          "Travel return – manager expects him to be an option"
+        ],
+        [
+          "Jordan James",
+          "available",
+          "Returned to squad at weekend"
+        ],
+        [
+          "Bertrand Traore",
+          "available",
+          "Returned to squad at weekend"
+        ],
+        [
+          "Boubacar Traore",
+          "available",
+          "Returned to squad at weekend"
+        ]
+      ]
+    },
+    "Derby County": {
+      "asOf": "2026-11-24",
+      "source": "https://www.wolves.co.uk/news/features/20261124-the-preview-wolves-vs-derby/",
+      "sourceName": "Wolves official Derby match preview (24 Nov)",
+      "players": [
+        [
+          "Lewis Travis",
+          "out",
+          "Ankle injury"
+        ],
+        [
+          "Sammie Szmodics",
+          "out",
+          "Knee injury"
+        ],
+        [
+          "Derry Murkin",
+          "out",
+          "Hamstring"
+        ],
+        [
+          "Charlie Taylor",
+          "out",
+          "Hamstring"
+        ],
+        [
+          "Craig Forsyth",
+          "out",
+          "Knee"
+        ],
+        [
+          "Sondre Langas",
+          "out",
+          "Groin"
+        ],
+        [
+          "Patrick Agyemang",
+          "out",
+          "Achilles"
+        ],
+        [
+          "Eiran Cashin",
+          "out",
+          "Calf"
+        ],
+        [
+          "Ryan Hedges",
+          "out",
+          "Injury"
+        ],
+        [
+          "Matt Clarke",
+          "available",
+          "Returned to squad"
+        ],
+        [
+          "Joe Ward",
+          "available",
+          "Returned to squad"
+        ]
+      ]
+    },
+    "Norwich City": {
+      "asOf": "2026-11-23",
+      "source": "https://starting11.com/championship/gameweek/17",
+      "sourceName": "Championship team-news compilation",
+      "players": [
+        [
+          "Ahmed",
+          "out",
+          "Knee"
+        ],
+        [
+          "Diallo",
+          "out",
+          "Hamstring"
+        ],
+        [
+          "Touré",
+          "out",
+          "Shoulder"
+        ]
+      ]
+    },
+    "Brentford": {
+      "asOf": "2026-11-20",
+      "source": "https://www.brentfordfc.com/en/news/first-team-brentford-v-everton-team-news-aaron-hickey-nathan-collins-injury-update",
+      "sourceName": "Brentford FC official 20 Nov medical update + Thiago suspension",
+      "players": [
+        [
+          "Igor Thiago",
+          "suspended",
+          "Official three-match suspension includes Manchester United"
+        ],
+        [
+          "Aaron Hickey",
+          "out",
+          "Hamstring; out for weeks"
+        ],
+        [
+          "Nathan Collins",
+          "out",
+          "Knee; out for weeks"
+        ],
+        [
+          "Fabio Carvalho",
+          "doubt",
+          "Recovering; potentially back"
+        ]
+      ]
+    },
+    "Man Utd": {
+      "asOf": "2026-11-22",
+      "source": "https://kickoffhour.com/football/premier-league/injuries/",
+      "sourceName": "Third-party injury tracker (22 Nov; club verification pending)",
+      "players": [
+        [
+          "Carlos Baleba",
+          "out",
+          "Thigh"
+        ],
+        [
+          "Luke Shaw",
+          "doubt",
+          "Muscle"
+        ],
+        [
+          "Ayden Heaven",
+          "doubt",
+          "Injury"
+        ],
+        [
+          "Marcus Rashford",
+          "doubt",
+          "Hip"
+        ],
+        [
+          "Benjamin Šeško",
+          "out",
+          "Injury"
+        ]
+      ]
+    },
+    "Brighton": {
+      "asOf": "2026-11-23",
+      "source": "https://www.fotmob.com/en-GB/matches/brighton-hove-albion-vs-newcastle-united/3gos5a",
+      "sourceName": "Third-party injury list (23 Nov; reassess ahead of 29 Nov)",
+      "players": [
+        [
+          "Kaoru Mitoma",
+          "doubt",
+          "Hamstring; reassess return"
+        ],
+        [
+          "Evan Ferguson",
+          "out",
+          "Ankle"
+        ],
+        [
+          "Stefanos Tzimas",
+          "out",
+          "Knee / fitness"
+        ],
+        [
+          "Zadok Yohanna",
+          "out",
+          "Injury"
+        ]
+      ]
+    }
+  }
+}
