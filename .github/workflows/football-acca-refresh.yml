@@ -1,0 +1,39 @@
+name: Touchline Football Acca — verified data refresh
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 7,13,19 * * *"
+  push:
+    paths:
+      - "football-acca/sync_daily.py"
+      - ".github/workflows/football-acca-refresh.yml"
+permissions:
+  contents: write
+concurrency:
+  group: touchline-research-sync
+  cancel-in-progress: false
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Check out latest selector
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Refresh permitted public match statistics and price history
+        run: python football-acca/sync_daily.py
+      - name: Commit audited derived data only
+        run: |
+          git config user.name "touchline-data-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add football-acca/research-snapshot.json
+          if [ -f football-acca/player-research.json ]; then
+            git add football-acca/player-research.json
+          fi
+          if ! git diff --cached --quiet; then
+            git commit -m "Touchline: refresh sourced football research"
+            git push
+          fi
