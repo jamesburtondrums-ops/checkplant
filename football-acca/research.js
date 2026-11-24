@@ -48,5 +48,22 @@ function marketDetail(snapshot,leagueId,safe){
  '<div class="source">Research summary only. Past bookmaker prices are NOT current odds or proof of value. Data updated '+safe(snapshot.asOf||'unknown')+'.</div>'+
  '</div></div>';
 }
-window.TouchlineResearch={inspect,render,marketDetail};
+function marketCompare(f,reference,canonicalTeam,safe){
+ if(!reference||!Array.isArray(reference.matches))return '';
+ const target=reference.matches.find(x=>x.league===f.league&&x.date===f.date&&canonicalTeam(x.home)===canonicalTeam(f.home)&&canonicalTeam(x.away)===canonicalTeam(f.away));
+ if(!target)return '';
+ const ph=Number(f.P.H),pd=Number(f.P.D),pa=Number(f.P.A);
+ const fmt=n=>(100*n).toFixed(1)+'%';
+ const diff=Math.max(Math.abs(ph-target.homeP),Math.abs(pd-target.drawP),Math.abs(pa-target.awayP));
+ const warn=diff>.15?'MATERIAL MODEL–MARKET DISAGREEMENT — investigate team news and assumptions':'Model and indicative market are within 15 percentage points';
+ return '<div class="detailgrid" style="margin-top:9px"><div class="detailCard">'+
+ '<span class="dcTitle">Indicative 1X2 market vs model</span><div><b>'+safe(warn)+'</b></div>'+
+ '<div>Home: model '+fmt(ph)+' / indicative market '+fmt(target.homeP)+'</div>'+
+ '<div>Draw: model '+fmt(pd)+' / indicative market '+fmt(target.drawP)+'</div>'+
+ '<div>Away: model '+fmt(pa)+' / indicative market '+fmt(target.awayP)+'</div>'+
+ '<div class="source">Source: football-data.co.uk fixed-interval fixtures CSV, retrieved '+safe(reference.asOf)+'. This is NOT live odds, does not price BTTS + Win, and is not proof of a value bet.</div>'+
+ '</div></div>';
+}
+
+window.TouchlineResearch={inspect,render,marketDetail,marketCompare};
 })();
