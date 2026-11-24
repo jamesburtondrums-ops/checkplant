@@ -159,6 +159,55 @@ def fixture_odds():
             "nonLive":True,"status":"Fixed-interval snapshot, not live prices",
             "matches":rows,"total":len(rows)}
 
+
+def build_ready_fixtures():
+    """Small local browser cache; source data stays attributed and renews on each workflow run."""
+    source="https://raw.githubusercontent.com/oladeeayo/open-matchday/master/data/"
+    comps={
+        "ENG_1_premier-league":("Premier League","England"),
+        "ENG_2_championship":("Championship","England"),
+        "ENG_3_league-one":("League One","England"),
+        "ENG_4_league-two":("League Two","England"),
+        "UEFA_1_champions-league":("UEFA Champions League","Europe")
+    }
+    local=BASE/"fixtures-data.json"
+    old={}
+    if local.exists():
+        try:
+            old={x["id"]:x for x in json.loads(local.read_text(encoding="utf8")).get("leagues",[])}
+        except Exception:pass
+    packed=[]
+    for league,(name,country) in comps.items():
+        rt=retrieve(source+league+"/results_2627.csv")
+        ft=retrieve(source+league+"/fixtures_2627.csv")
+        if not rt or not ft:
+            if league in old:
+                packed.append(old[league])
+            continue
+        results=[]
+        for v in csv_rows(rt):
+            h=num(v.get("ft_home"));a=num(v.get("ft_away"))
+            if h is None or a is None or not v.get("home") or not v.get("away") or not v.get("date"):continue
+            if v["date"]>str(TODAY):continue
+            results.append({"date":v["date"],"home":v["home"],"away":v["away"],"hg":int(h),"ag":int(a),
+               "stat":{k:v.get(k) for k in ("home_shots","away_shots","home_target","away_target")}})
+        fixtures=[]
+        for v in csv_rows(ft):
+            date=v.get("date","")
+            if not date or date<str(TODAY) or date>str(TODAY+timedelta(days=40)):continue
+            if not v.get("home") or not v.get("away"):continue
+            fixtures.append({"date":date,"time":v.get("time",""),"gw":v.get("gw",""),"home":v["home"],"away":v["away"],"league":league})
+        packed.append({"id":league,"name":name,"country":country,"results":results,"upcoming":fixtures})
+    if len(packed)>=4:
+        bundle={"updated":STAMP,"source":"open-matchday",
+            "sourceUrl":"https://github.com/oladeeayo/open-matchday",
+            "attribution":"Daily public data; non-commercial personal research only. Source times require independent confirmation.",
+            "leagues":packed}
+        local.write_text(json.dumps(bundle,ensure_ascii=False,separators=(",",":"))+"\n",encoding="utf8")
+        print("ready fixtures",len(packed),"competitions",sum(len(x["upcoming"]) for x in packed),"future fixtures")
+    else:
+        WARNINGS.append("Could not rebuild the ready-fixture cache from public source")
+
 def main():
     p=BASE/"research-snapshot.json"
     previous={}
@@ -199,6 +248,7 @@ def main():
         summary["market"]={"status":"historical 1X2 statistics ready","source":"football-data.co.uk","asOf":str(TODAY),"sampleWithOdds":odds_count}
     else:
         summary["market"]={"status":"historical bookmaker data unavailable; do not infer prices","source":"football-data.co.uk","asOf":None}
+    build_ready_fixtures()
     summary["sourceWarnings"]=WARNINGS[:30]
     p.write_text(json.dumps(summary,ensure_ascii=False,indent=2)+"\n",encoding="utf8")
     indicative=fixture_odds()
