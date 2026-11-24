@@ -203,7 +203,7 @@ def main():
     p.write_text(json.dumps(summary,ensure_ascii=False,indent=2)+"\n",encoding="utf8")
     indicative=fixture_odds()
     if indicative:
-        (BASE/"odds-reference.json").write_text(json.dumps(indicative,ensure_ascii=False,indent=2)+"\\n",encoding="utf8")
+        (BASE/"odds-reference.json").write_text(json.dumps(indicative,ensure_ascii=False,indent=2)+"\n",encoding="utf8")
     if players:
         scorer_file.write_text(json.dumps({"asOf":str(TODAY),"source":"ESPN public soccer scoreboard goal leaders; partial competition-day coverage","leagues":players},ensure_ascii=False,indent=2)+"\n",encoding="utf8")
     print("source audit",STAMP,"calls",CALLS,"markets",odds_count,"playerLeagues",len(players),"warnings",len(WARNINGS))
