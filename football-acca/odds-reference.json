@@ -1,0 +1,199 @@
+{
+  "asOf": "2026-11-24",
+  "source": "football-data.co.uk/fixtures.csv",
+  "nonLive": true,
+  "status": "Fixed-interval snapshot, not live prices",
+  "matches": [
+    {
+      "league": "ENG_2_championship",
+      "date": "2026-11-24",
+      "home": "Bristol City",
+      "away": "Wrexham",
+      "homeP": 0.3874,
+      "drawP": 0.2893,
+      "awayP": 0.3233,
+      "overround": 0.0667
+    },
+    {
+      "league": "ENG_2_championship",
+      "date": "2026-11-24",
+      "home": "Cardiff",
+      "away": "Preston",
+      "homeP": 0.6373,
+      "drawP": 0.1972,
+      "awayP": 0.1655,
+      "overround": 0.0675
+    },
+    {
+      "league": "ENG_2_championship",
+      "date": "2026-11-24",
+      "home": "Charlton",
+      "away": "Lincoln",
+      "homeP": 0.3486,
+      "drawP": 0.2921,
+      "awayP": 0.3593,
+      "overround": 0.0664
+    },
+    {
+      "league": "ENG_2_championship",
+      "date": "2026-11-24",
+      "home": "Middlesbrough",
+      "away": "Swansea",
+      "homeP": 0.6497,
+      "drawP": 0.1982,
+      "awayP": 0.1521,
+      "overround": 0.0689
+    },
+    {
+      "league": "ENG_2_championship",
+      "date": "2026-11-24",
+      "home": "Norwich",
+      "away": "QPR",
+      "homeP": 0.4786,
+      "drawP": 0.2549,
+      "awayP": 0.2665,
+      "overround": 0.066
+    },
+    {
+      "league": "ENG_2_championship",
+      "date": "2026-11-24",
+      "home": "Portsmouth",
+      "away": "West Ham",
+      "homeP": 0.2367,
+      "drawP": 0.254,
+      "awayP": 0.5093,
+      "overround": 0.067
+    },
+    {
+      "league": "ENG_2_championship",
+      "date": "2026-11-24",
+      "home": "Sheffield United",
+      "away": "Southampton",
+      "homeP": 0.3681,
+      "drawP": 0.2667,
+      "awayP": 0.3652,
+      "overround": 0.0654
+    },
+    {
+      "league": "ENG_2_championship",
+      "date": "2026-11-24",
+      "home": "Wolves",
+      "away": "Derby",
+      "homeP": 0.7231,
+      "drawP": 0.1777,
+      "awayP": 0.0993,
+      "overround": 0.0639
+    },
+    {
+      "league": "ENG_2_championship",
+      "date": "2026-11-25",
+      "home": "Bolton",
+      "away": "West Brom",
+      "homeP": 0.2673,
+      "drawP": 0.2577,
+      "awayP": 0.4749,
+      "overround": 0.0688
+    },
+    {
+      "league": "ENG_2_championship",
+      "date": "2026-11-25",
+      "home": "Burnley",
+      "away": "Birmingham",
+      "homeP": 0.3562,
+      "drawP": 0.2646,
+      "awayP": 0.3792,
+      "overround": 0.0676
+    },
+    {
+      "league": "ENG_2_championship",
+      "date": "2026-11-25",
+      "home": "Watford",
+      "away": "Blackburn",
+      "homeP": 0.3749,
+      "drawP": 0.2729,
+      "awayP": 0.3522,
+      "overround": 0.0714
+    },
+    {
+      "league": "ENG_2_championship",
+      "date": "2026-11-25",
+      "home": "Stoke",
+      "away": "Millwall",
+      "homeP": 0.4254,
+      "drawP": 0.2802,
+      "awayP": 0.2943,
+      "overround": 0.0684
+    },
+    {
+      "league": "ENG_3_league-one",
+      "date": "2026-11-24",
+      "home": "Blackpool",
+      "away": "Leicester",
+      "homeP": 0.2246,
+      "drawP": 0.229,
+      "awayP": 0.5464,
+      "overround": 0.0703
+    },
+    {
+      "league": "ENG_3_league-one",
+      "date": "2026-11-24",
+      "home": "Bradford",
+      "away": "Barnsley",
+      "homeP": 0.5974,
+      "drawP": 0.2128,
+      "awayP": 0.1898,
+      "overround": 0.073
+    },
+    {
+      "league": "ENG_3_league-one",
+      "date": "2026-11-24",
+      "home": "Bromley",
+      "away": "Wycombe",
+      "homeP": 0.2336,
+      "drawP": 0.244,
+      "awayP": 0.5223,
+      "overround": 0.0755
+    },
+    {
+      "league": "ENG_3_league-one",
+      "date": "2026-11-24",
+      "home": "Stevenage",
+      "away": "Sheffield Weds",
+      "homeP": 0.355,
+      "drawP": 0.2744,
+      "awayP": 0.3706,
+      "overround": 0.0751
+    },
+    {
+      "league": "ENG_3_league-one",
+      "date": "2026-11-26",
+      "home": "Doncaster",
+      "away": "Huddersfield",
+      "homeP": 0.2278,
+      "drawP": 0.2318,
+      "awayP": 0.5404,
+      "overround": 0.0759
+    },
+    {
+      "league": "ENG_4_league-two",
+      "date": "2026-11-24",
+      "home": "Crawley Town",
+      "away": "Barnet",
+      "homeP": 0.2534,
+      "drawP": 0.244,
+      "awayP": 0.5026,
+      "overround": 0.0813
+    },
+    {
+      "league": "ENG_4_league-two",
+      "date": "2026-11-24",
+      "home": "Port Vale",
+      "away": "Northampton",
+      "homeP": 0.4473,
+      "drawP": 0.2867,
+      "awayP": 0.2661,
+      "overround": 0.08
+    }
+  ],
+  "total": 19
+}
