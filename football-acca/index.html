@@ -101,11 +101,12 @@ function headToHead(f,rows){
     awayWins=result.filter(x=>(canonicalTeam(x.home)===a?x.hg>x.ag:x.ag>x.hg)).length,draws=result.length-homeWins-awayWins;
   return {matches:result,homeWins,awayWins,draws};
 }
-function injuryFor(name){
+function injuryFor(name,fixtureDate){
   const n=playerNews[canonicalTeam(name)];
   if(!n)return null;
   const age=Math.round((new Date(nowISO()+'T12:00:00Z')-new Date(n.asOf+'T12:00:00Z'))/86400000);
-  return {...n,age,stale:age>7||age<0};
+  const daysUntilMatch=fixtureDate?Math.round((new Date(fixtureDate+'T12:00:00Z')-new Date(n.asOf+'T12:00:00Z'))/86400000):0;
+  return {...n,age,sourceTier:n.sourceTier||'media',stale:age>7||age<0||daysUntilMatch>8};
 }
 function lastPoints(team,rows){
   const games=recent(team,rows,5);return games.reduce((sum,m)=>{let [g,a]=scoreFor(team,m);return sum+(g>a?3:g===a?1:0)},0);
@@ -113,7 +114,7 @@ function lastPoints(team,rows){
 function evidenceFor(f,m,rows,market){
   const hpos=leagueTable(rows).get(f.home),apos=leagueTable(rows).get(f.away),
         h=teamStat(f.home,rows,true),a=teamStat(f.away,rows,false),
-        hh=headToHead(f,rows),hn=injuryFor(f.home),an=injuryFor(f.away),
+        hh=headToHead(f,rows),hn=injuryFor(f.home,f.date),an=injuryFor(f.away,f.date),
         hp=lastPoints(f.home,rows),ap=lastPoints(f.away,rows);
   const side=market==='HB'||market==='H'?'home':market==='AB'||market==='A'?'away':'btts';
   const sample=Math.round(22*Math.min(1,m.support/14));
@@ -127,24 +128,25 @@ function evidenceFor(f,m,rows,market){
   const table=(hpos&&apos?4:0)+(tableSupport?6:0);
   const histMatches=hh.matches.length;
   const h2hScore=histMatches?Math.min(5,histMatches*2)+(side==='home'&&hh.homeWins>hh.awayWins||side==='away'&&hh.awayWins>hh.homeWins||side==='btts'&&hh.matches.filter(x=>x.hg&&x.ag).length>=Math.ceil(histMatches/2)?4:0):0;
-  const news=(hn&&!hn.stale?9:0)+(an&&!an.stale?9:0);
+  const news=(hn&&!hn.stale?(hn.sourceTier==='club'?9:4):0)+(an&&!an.stale?(an.sourceTier==='club'?9:4):0);
   let score=Math.round(Math.min(95,sample+venues+venueAlign+form+table+h2hScore+news));
   const reportedOut=[hn,an].filter(Boolean).reduce((count,n)=>count+n.players.filter(p=>p[1]==='out'||p[1]==='suspended').length,0);
   score=Math.max(0,score-(reportedOut>=5?12:reportedOut>=3?7:0));
   score=Math.min(79,score); // Matchday XI unconfirmed: cap evidence confidence
   if(!hn||!an||hn.stale||an.stale)score=Math.min(60,score);
+  else if(hn.sourceTier!=='club'||an.sourceTier!=='club')score=Math.min(65,score);
   const grade=score>=73?'Stronger evidence':score>=48?'Moderate evidence':'Limited evidence';
   const notes=[];
   notes.push('Venue '+(venueSupport?'supports':'does not clearly support')+' '+(side==='btts'?'both scoring':side+' result'));
   notes.push('Last 5 points: '+f.home+' '+hp+'/15; '+f.away+' '+ap+'/15');
   notes.push(hpos&&apos?'Table: '+hpos.rank+'/'+hpos.total+' vs '+apos.rank+'/'+apos.total:'League table incomplete');
   notes.push(histMatches?histMatches+' archived/current head-to-head meetings':'No comparable recent head-to-head');
-  notes.push(hn&&!hn.stale&&an&&!an.stale?'Both teams have dated reports':'Team news incomplete or stale');notes.push('Reported unavailable: '+f.home+' '+(hn?hn.players.filter(x=>x[1]==='out'||x[1]==='suspended').length:'unknown')+', '+f.away+' '+(an?an.players.filter(x=>x[1]==='out'||x[1]==='suspended').length:'unknown')+'; player importance not modelled');
+  notes.push(hn&&!hn.stale&&an&&!an.stale?'Both teams have dated reports (not confirmed XI)':'Team news incomplete or stale');notes.push('Reported unavailable: '+f.home+' '+(hn?hn.players.filter(x=>x[1]==='out'||x[1]==='suspended').length:'unknown')+', '+f.away+' '+(an?an.players.filter(x=>x[1]==='out'||x[1]==='suspended').length:'unknown')+'; player importance not modelled');
   return {score,grade,notes,homeVenue,awayVenue,homeRank:hpos,awayRank:apos,h2h:hh,homeNews:hn,awayNews:an,parts:{sample,venues:venues+venueAlign,form,table,h2h:h2hScore,news}};
 }
 function newsCard(team,n){
   if(!n)return '<div class="detailCard"><span class="dcTitle">'+safe(team)+' team news</span><b>Unverified</b><div class="mini">No matching dated injury report in the current evidence snapshot. Check the club and the matchday squad.</div></div>';
-  let html='<div class="detailCard"><span class="dcTitle">'+safe(team)+' team news</span><div><b>'+(n.stale?'STALE — recheck':'Reported '+safe(n.asOf))+'</b> · '+safe(n.sourceName||'Third-party team-news report')+'</div>';
+  let html='<div class="detailCard"><span class="dcTitle">'+safe(team)+' team news</span><div><b>'+(n.stale?'STALE — recheck':'Reported '+safe(n.asOf)+' ('+(n.sourceTier==='club'?'club source':'media report')+')')+'</b> · '+safe(n.sourceName||'Third-party team-news report')+'</div>';
   html+='<div style="margin:6px 0">'+(n.players||[]).map(p=>'<div>'+safe(p[0])+' · <b>'+safe(p[1])+'</b> ('+safe(p[2])+')</div>').join('')+'</div>';
   html+='<a target="_blank" rel="noopener" href="'+safe(n.source)+'">Read original report</a><div class="source">Statuses can change; these are not confirmed matchday XI lists.</div></div>';
   return html;
