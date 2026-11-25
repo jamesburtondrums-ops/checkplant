@@ -77,13 +77,21 @@
     const key = String(job.id || job.jobId || '');
     return '<section class="as-progress"><h4>Progress notes</h4>' + (notes.length ? notes.slice(0,2).map(entryHTML).join('') + (notes.length > 2 ? '<details class="as-note-history" data-note-history="' + h(key) + '" ' + (expanded.has(key) ? 'open' : '') + '><summary>Earlier notes (' + (notes.length - 2) + ')</summary>' + notes.slice(2).map(entryHTML).join('') + '</details>' : '') : '<div class="as-no-progress">No progress notes recorded yet.</div>') + '</section>';
   }
-  function jobList(rows, jobs, expanded = new Set()) {
+  function orderedPartsHTML(job, parts) {
+    const related = parts.filter(p => p.jobDocId === job.id && p.requestType !== 'service_kit_replenishment' && p.requestType !== 'consumables_tools' && ['ordered','received','requested'].includes(p.status));
+    if (!related.length) return '';
+    const rank = {ordered:0,requested:1,received:2};
+    const labels = {ordered:'On order',requested:'Requested — awaiting order',received:'Received'};
+    related.sort((a,b)=>rank[a.status]-rank[b.status]||String(a.partName||'').localeCompare(String(b.partName||'')));
+    return '<section class="as-parts"><h4>Parts required / ordered</h4>' + related.map(p=>'<div class="as-part-row"><span class="as-part-name">'+h(p.partName||'Part')+(Number(p.quantity)>0?' × '+h(p.quantity):'')+(p.partNumber?' <small>('+h(p.partNumber)+')</small>':'')+'</span><span class="as-part-status as-part-'+p.status+'">'+labels[p.status]+'</span></div>').join('')+'</section>';
+  }
+  function jobList(rows, jobs, expanded = new Set(), parts = []) {
     const machines = new Map(rows.map(row => [row.machine.id, row.machine]));
     const priority = { active: 0, paused: 1, assigned: 2, planned: 3 };
     return eligibleJobs(jobs).slice().sort((a,b) => priority[a.status] - priority[b.status] || String(a.machineName || '').localeCompare(String(b.machineName || ''), 'en-GB', { numeric: true })).map(job => {
       const machine = machines.get(job.machineId);
       const description = job.jobDescription || job.jobCategory || (job.jobType === 'service' ? 'Service' : 'Engineering job');
-      return '<article class="as-job ' + (job.status === 'active' ? 'active' : 'waiting') + '"><div class="as-job-head"><strong>' + h(machine ? machine.name : job.machineName || 'Unassigned asset') + '</strong><span class="as-badge ' + (job.status === 'active' ? 'blue' : 'warning') + '">' + jobStates[job.status] + '</span></div><div class="as-job-title" title="' + h(description) + '">' + h(description) + '</div><div class="as-job-meta">' + h([job.jobId || job.id, job.jobCategory || '', job.engineerName || 'Unassigned engineer', job.plannedDate || job.date || ''].filter(Boolean).join(' · ')) + '</div>' + ((job.notes || job.finalNotes) ? '<div class="as-work-notes"><h4>Work notes</h4>' + h(job.finalNotes || job.notes) + '</div>' : '') + progressNotesHTML(job, expanded) + '</article>';
+      return '<article class="as-job ' + (job.status === 'active' ? 'active' : 'waiting') + '"><div class="as-job-head"><strong>' + h(machine ? machine.name : job.machineName || 'Unassigned asset') + '</strong><span class="as-badge ' + (job.status === 'active' ? 'blue' : 'warning') + '">' + jobStates[job.status] + '</span></div><div class="as-job-title" title="' + h(description) + '">' + h(description) + '</div><div class="as-job-meta">' + h([job.jobId || job.id, job.jobCategory || '', job.engineerName || 'Unassigned engineer', job.plannedDate || job.date || ''].filter(Boolean).join(' · ')) + '</div>' + ((job.notes || job.finalNotes) ? '<div class="as-work-notes"><h4>Work notes</h4>' + h(job.finalNotes || job.notes) + '</div>' : '') + orderedPartsHTML(job, parts) + progressNotesHTML(job, expanded) + '</article>';
     }).join('') || '<div class="as-empty">No current or outstanding jobs.</div>';
   }
   function shell(popout) {
@@ -176,9 +184,9 @@
   }
   const standalone = document.querySelector('[data-asset-display]');
   let root, popup = null, access, database, started = false, subscriptions = [];
-  let data = { machines: [], liveJobs: [], services: [] }, loaded = new Set(), cached = new Set(), failed = new Set();
+  let data = { machines: [], liveJobs: [], services: [], partRequests: [] }, loaded = new Set(), cached = new Set(), failed = new Set();
   const scriptURL = document.currentScript.src;
-  const cssURL = new URL('asset-status.css?v=20261119-jobs-width', scriptURL).href;
+  const cssURL = new URL('asset-status.css?v=20261125-parts-status', scriptURL).href;
   function paint(target, rows) {
     target.dataset.layoutRevision = String((Number(target.dataset.layoutRevision) || 0) + 1);
     const stats = [
@@ -196,13 +204,13 @@
     target.querySelector('[data-as-jobs]').style.columnCount = String(wall ? plan.jobColumns : 2);
     const size = Math.ceil(rows.length / columns), tables = [];
     for (let start = 0; start < rows.length; start += size) tables.push(table(rows.slice(start, start + size)));
-    grid.innerHTML = rows.length ? tables.join('') : '<div class="as-empty">' + (loaded.size === 3 ? 'No assets recorded.' : 'Loading all assets…') + '</div>';
+    grid.innerHTML = rows.length ? tables.join('') : '<div class="as-empty">' + (loaded.size === Object.keys(data).length ? 'No assets recorded.' : 'Loading all assets…') + '</div>';
     const expandedNotes = new Set(Array.from(target.querySelectorAll('[data-note-history][open]')).map(detail => detail.getAttribute('data-note-history')));
-    target.querySelector('[data-as-jobs]').innerHTML = jobList(rows, data.liveJobs, expandedNotes);
+    target.querySelector('[data-as-jobs]').innerHTML = jobList(rows, data.liveJobs, expandedNotes, data.partRequests);
     target.querySelector('[data-as-count]').textContent = 'Showing all ' + rows.length + ' assets · No pagination';
-    const live = loaded.size === 3 && !cached.size && !failed.size && navigator.onLine;
+    const live = loaded.size === Object.keys(data).length && !cached.size && !failed.size && navigator.onLine;
     target.dataset.live = String(live);
-    target.dataset.connection = failed.size ? 'Updates unavailable for ' + [...failed].join(', ') + ' — showing last received data. Reopen Asset Status to retry.' : !navigator.onLine ? 'Offline — showing last received data' : loaded.size < 3 ? 'Loading assets, jobs and service history…' : cached.size ? 'Cached data — waiting for a live connection' : 'Live updates · Assets, jobs and full service history synced';
+    target.dataset.connection = failed.size ? 'Updates unavailable for ' + [...failed].join(', ') + ' — showing last received data. Reopen Asset Status to retry.' : !navigator.onLine ? 'Offline — showing last received data' : loaded.size < Object.keys(data).length ? 'Loading assets, jobs, parts and service history…' : cached.size ? 'Cached data — waiting for a live connection' : 'Live updates · Assets, jobs, parts and service history synced';
   }
   function render() {
     if (!root) return;
