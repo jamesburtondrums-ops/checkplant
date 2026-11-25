@@ -83,7 +83,7 @@
     const rank = {ordered:0,requested:1,received:2};
     const labels = {ordered:'On order',requested:'Requested — awaiting order',received:'Received'};
     related.sort((a,b)=>rank[a.status]-rank[b.status]||String(a.partName||'').localeCompare(String(b.partName||'')));
-    return '<section class="as-parts"><h4>Parts required / ordered</h4>' + related.map(p=>'<div class="as-part-row"><span class="as-part-name">'+h(p.partName||'Part')+(Number(p.quantity)>0?' × '+h(p.quantity):'')+(p.partNumber?' <small>('+h(p.partNumber)+')</small>':'')+'</span><span class="as-part-status as-part-'+p.status+'">'+labels[p.status]+'</span></div>').join('')+'</section>';
+    return '<section class="as-parts"><h4>Parts required / ordered</h4>' + related.flatMap(p=>(Array.isArray(p.lines)&&p.lines.length?p.lines:[p]).map(l=>({...p,...l,status:p.status}))).map(p=>'<div class="as-part-row"><span class="as-part-name">'+h(p.partName||'Part')+(Number(p.quantity)>0?' × '+h(p.quantity):'')+(p.partNumber?' <small>('+h(p.partNumber)+')</small>':'')+'</span><span class="as-part-status as-part-'+p.status+'">'+labels[p.status]+'</span></div>').join('')+'</section>';
   }
   function jobList(rows, jobs, expanded = new Set(), parts = []) {
     const machines = new Map(rows.map(row => [row.machine.id, row.machine]));
