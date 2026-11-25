@@ -1487,6 +1487,7 @@ const m=machines.find(x=>x.id===currentDefect.machineId);
 const record={recordId:await getNextRecordId('defect'),type:'defect',defectId:currentDefect.defectId||currentDefect.id,machineId:currentDefect.machineId,subject:currentDefect.machineName+' — '+currentDefect.itemName,serialNumber:m?(m.serialNumber||''):'',branch:m?(m.branch||''):'',technician:signName,date:document.getElementById('defResolvedDate').value,items:[{name:currentDefect.itemName,status:'Resolved'}],notes:workDone,signName,signDate,signatureData:sig.canvas.toDataURL('image/png'),hoursReading:Number(hours),defectRefId:currentDefect.id,createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending'};
 if(m)await db.collection('machines').doc(m.id).update({currentHours:Number(hours)});
 await db.collection('defects').doc(currentDefect.id).update({status:'resolved',resolvedDate:document.getElementById('defResolvedDate').value,resolvedAt:firebase.firestore.Timestamp.now(),resolvedBy:signName,resolutionNotes:workDone,resolutionMachineHours:Number(hours),updatedAt:firebase.firestore.Timestamp.now()});
+try{await cpPurgeResolvedDefectPhotos(currentDefect.id);}catch(e){console.warn('Resolved defect photo cleanup failed',e);toast('Defect resolved; photo cleanup pending');}
 await saveRecordToFirestore(record);
 if(record.id)await db.collection('defects').doc(currentDefect.id).update({resolutionRecordId:record.id});
 }}
@@ -1772,7 +1773,7 @@ async function addCategoryItem(key, mode){
       const newItems = current.filter((_,i)=>i!==idx);
       await db.collection('categories').doc(key).update({ [field]: newItems });
     }
-function renderDefectsTable(){const ce=document.getElementById('defectCount');const oc=defects.filter(d=>d.status==='open').length;if(ce)ce.textContent=oc;
+function renderDefectsTable(){if(backOfficeUnlocked){for(const d of defects.filter(x=>x.status==='resolved'&&Array.isArray(x.photoRefs)&&x.photoRefs.length).slice(0,10))cpPurgeResolvedDefectPhotos(d.id).catch(e=>console.warn('Photo cleanup pending',e));}const ce=document.getElementById('defectCount');const oc=defects.filter(d=>d.status==='open').length;if(ce)ce.textContent=oc;
 const w=document.getElementById('defectsTableWrap');if(!w)return;if(!defects.length){w.innerHTML='<div class="empty-state">No defects.</div>';return;}
 const sorted=[...defects].sort((a,b)=>(a.dateRaised||'').localeCompare(b.dateRaised||''));
 let h='<table><thead><tr><th>ID</th><th>Machine</th><th>Defect</th><th>Raised</th><th>Days</th><th>Status</th><th>Resolved</th><th>Work Done / Notes</th><th>Photos</th></tr></thead><tbody>';
@@ -2310,7 +2311,29 @@ async function cpAddDefectPhoto(idx,file,btn,list){
 function cpRenderPhotoPreviews(idx,list){
  list.replaceChildren();(cpDefectPhotos.get(idx)||[]).forEach((p,i)=>{const card=document.createElement('div');card.style.cssText='width:112px';const img=document.createElement('img');img.src=p.data;img.alt='Defect photo preview';img.style.cssText='width:112px;height:78px;object-fit:cover;border-radius:8px';const caption=document.createElement('div');caption.className='progress-note';caption.textContent=Math.ceil(p.bytes/1024)+' KB';const b=document.createElement('button');b.type='button';b.className='btn btn-secondary btn-sm';b.textContent='Remove';b.onclick=()=>{const arr=cpDefectPhotos.get(idx)||[];arr.splice(i,1);cpRenderPhotoPreviews(idx,list);};card.append(img,caption,b);list.appendChild(card);});
 }
-function cpDefectPhotoButton(d){const count=(d.photoRefs||[]).length;return count?'<button type="button" class="btn btn-secondary btn-sm" onclick="cpViewDefectPhotos('+cpEsc(JSON.stringify(d.id))+')">View ('+count+')</button>':'—';}
+const cpPhotoCleanupRunning=new Set();
+async function cpPurgeResolvedDefectPhotos(id){
+ if(cpPhotoCleanupRunning.has(id))return;
+ cpPhotoCleanupRunning.add(id);
+ try{
+ const ref=db.collection('defects').doc(id);
+ // Delete in bounded transactions; recheck the status so reopened defects retain evidence.
+ for(let round=0;round<100;round++){
+  const more=await db.runTransaction(async tx=>{
+   const snap=await tx.get(ref);if(!snap.exists)return false;
+   const data=snap.data();if(data.status!=='resolved')return false;
+   const photos=Array.isArray(data.photoRefs)?data.photoRefs:[];
+   if(!photos.length)return false;
+   const chunk=photos.slice(0,100);
+   for(const p of chunk){if(p&&typeof p.id==='string'&&p.id&&!p.id.includes('/'))tx.delete(db.collection('defectPhotos').doc(p.id));}
+   tx.update(ref,{photoRefs:photos.slice(chunk.length),photosRemovedCount:(Number(data.photosRemovedCount)||0)+chunk.length,photosRemovedAt:firebase.firestore.FieldValue.serverTimestamp()});
+   return photos.length>chunk.length;
+  });
+  if(!more)break;
+ }
+ }finally{cpPhotoCleanupRunning.delete(id);}
+}
+function cpDefectPhotoButton(d){if(d.status==='resolved'&&d.photosRemovedCount)return 'Removed on resolution';const count=(d.photoRefs||[]).length;return count?'<button type="button" class="btn btn-secondary btn-sm" onclick="cpViewDefectPhotos('+cpEsc(JSON.stringify(d.id))+')">View ('+count+')</button>':'—';}
 async function cpViewDefectPhotos(id){
  const d=defects.find(x=>x.id===id);if(!d)return;
  const refs=Array.isArray(d.photoRefs)?d.photoRefs:[];if(!refs.length)return toast('No photos attached');
