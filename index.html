@@ -2065,6 +2065,116 @@ document.getElementById('bookingDate').value=todayISO();
 document.getElementById('adhocDate').value=todayISO();populateAdHocCategories();
 initFirestoreListeners();renderSheetsStatus();
 </script>
-<script src="asset-status.js?v=20261119-jobs-width"></script>
+<script src="asset-status.js?v=20261119-jobs-width">
+/* Parts ordering and cost ledger — shared Firestore */
+let cpPartRequests=[],cpSuppliers=[],cpStockParts=[];
+const cpEsc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const cpNorm=v=>String(v||'').replace(/[^a-z0-9]/gi,'').toUpperCase();
+const cpMoney=v=>'£'+(Number(v)||0).toFixed(2);
+function cpPartsInit(){
+  const eng=document.getElementById('screen-engineer-hub');
+  if(eng){let card=document.createElement('div');card.className='card';card.innerHTML='<div class="section-title">Parts Ordering</div><p class="progress-note">Request non-stock parts for an existing machine repair or service job.</p><button class="btn btn-primary" onclick="cpOpenRequest()">Request Non-Stock Part</button><div id="cpEngineerRequests" style="margin-top:14px"></div>';eng.appendChild(card);}
+  const tabs=document.querySelector('#screen-backoffice .tabs');
+  if(tabs){let b=document.createElement('button');b.dataset.tab='partshub';b.textContent='Parts Request Hub';b.setAttribute('onclick',"switchOfficeTab('partshub')");tabs.appendChild(b);}
+  const office=document.getElementById('screen-backoffice');
+  if(office){let pane=document.createElement('div');pane.id='office-partshub';pane.className='office-tab';pane.style.display='none';pane.innerHTML='<div class="card"><div class="section-title">Parts Request Hub</div><p class="progress-note">Requests are linked to machine and job records. Enter actual prices and mark items received to post costs once.</p><div id="cpPartsSummary"></div><div id="cpPartsList"></div></div><div class="card"><div class="section-title">Supplier Directory</div><div id="cpSuppliersList"></div><button class="btn btn-primary" onclick="cpEditSupplier()">Add Supplier</button></div><div class="card"><div class="section-title">Stocked Parts Register</div><p class="progress-note">Maintain stock part numbers here to block requests for items already held in stock. If a part has no number, engineers must confirm it is not in stock.</p><div id="cpStockList"></div><button class="btn btn-secondary" onclick="cpAddStock()">Add Stocked Part</button></div>';office.appendChild(pane);}
+  let modal=document.createElement('div');modal.id='cpPartsModal';modal.style.cssText='display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:10000;overflow:auto;padding:25px 10px';modal.innerHTML='<div style="max-width:650px;margin:0 auto;background:#fff;padding:24px;border-radius:16px"><button style="float:right" class="btn btn-secondary" onclick="cpCloseRequest()">Close</button><h2>Request Non-Stock Part</h2><p class="progress-note">Select the existing job. Machine information is taken from the job automatically.</p><label>Linked job *</label><select id="cpReqJob" onchange="cpJobChanged()"></select><div id="cpReqAsset" class="progress-note" style="margin:8px 0 18px"></div><label>Part description *</label><input id="cpReqName" placeholder="e.g. hydraulic hose / alternator"><label>Original part number (if known)</label><input id="cpReqNumber" placeholder="Enter number from removed part" oninput="cpStockWarning()"><div id="cpStockWarning" style="font-weight:700;margin:8px 0"></div><label>Quantity *</label><input id="cpReqQty" type="number" min="1" step="1" value="1"><label>Urgency</label><select id="cpReqPriority"><option value="normal">Normal</option><option value="urgent">Urgent — machine stopped</option></select><label>Notes / specifications</label><textarea id="cpReqNotes" placeholder="Sizes, specifications, photographs reference, symptoms"></textarea><label style="display:flex;align-items:center;gap:8px;margin:12px 0"><input style="width:auto" id="cpReqNonStock" type="checkbox">I have checked our stock and confirm this part is not held in stock</label><button class="btn btn-primary btn-block" onclick="cpSubmitRequest()">Send to Parts Request Hub</button></div>';document.body.appendChild(modal);
+  db.collection('partRequests').onSnapshot(s=>{cpPartRequests=s.docs.map(d=>({id:d.id,...d.data()}));cpRenderParts();},e=>console.error('Parts subscriptions:',e));
+  db.collection('partSuppliers').onSnapshot(s=>{cpSuppliers=s.docs.map(d=>({id:d.id,...d.data()}));cpRenderParts();},e=>console.error('Suppliers subscriptions:',e));
+  db.collection('stockedParts').onSnapshot(s=>{cpStockParts=s.docs.map(d=>({id:d.id,...d.data()}));cpRenderParts();},e=>console.error('Stock subscriptions:',e));
+}
+function cpIsStocked(n){return cpNorm(n)&&cpStockParts.some(p=>cpNorm(p.partNumber)===cpNorm(n));}
+function cpOpenRequest(){
+  if(!currentEngineer){toast('Engineer sign-in required');return;}
+  const jobs=liveJobs.filter(j=>j.machineId && j.status!=='cancelled'&&j.status!=='completed' && (j.engineerId===currentEngineer.id||j.engineerName===currentEngineer.name||(j.supportEngineerIds||[]).includes(currentEngineer.id)));
+  const sel=document.getElementById('cpReqJob');
+  sel.innerHTML='<option value="">Select allocated/open job...</option>'+jobs.map(j=>'<option value="'+cpEsc(j.id)+'">'+cpEsc(j.jobId||j.id)+' — '+cpEsc(j.machineName||j.machineId)+' — '+cpEsc(j.jobDescription||j.jobType||'Repair')+'</option>').join('');
+  ['cpReqName','cpReqNumber','cpReqNotes'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('cpReqQty').value='1';document.getElementById('cpReqNonStock').checked=false;
+  document.getElementById('cpPartsModal').style.display='block';cpJobChanged();cpStockWarning();
+}
+function cpCloseRequest(){document.getElementById('cpPartsModal').style.display='none';}
+function cpJobChanged(){
+ const j=liveJobs.find(x=>x.id===document.getElementById('cpReqJob').value);
+ document.getElementById('cpReqAsset').textContent=j?('Machine: '+(j.machineName||j.machineId)+' | Serial: '+(j.serialNumber||'Not recorded')+' | Branch: '+(j.branch||'Not recorded')):'Choose an allocated job';
+}
+function cpStockWarning(){
+  const n=document.getElementById('cpReqNumber').value;
+  const stocked=cpIsStocked(n);
+  const el=document.getElementById('cpStockWarning');el.textContent=stocked?'This part is registered as in stock. Use existing stock; a purchase request is blocked.':n?'No matching stock number found. Verify physical stock before submitting.':'Part number optional. Check physical stock before submitting.';
+  el.style.color=stocked?'#b91c1c':'#665';
+}
+async function cpSubmitRequest(){
+ const j=liveJobs.find(x=>x.id===document.getElementById('cpReqJob').value),name=document.getElementById('cpReqName').value.trim(),partNumber=document.getElementById('cpReqNumber').value.trim(),qty=Number(document.getElementById('cpReqQty').value);
+ if(!currentEngineer||!j)return toast('Select one of your allocated open jobs');
+ if(!name||!Number.isInteger(qty)||qty<1)return toast('Part description and valid quantity required');
+ if(cpIsStocked(partNumber))return toast('This part is in the stock register and cannot be requested');
+ if(!document.getElementById('cpReqNonStock').checked)return toast('Confirm the item is not in stock');
+ const btn=document.querySelector('#cpPartsModal .btn-block');btn.disabled=true;
+ try{
+  await db.collection('partRequests').add({jobDocId:j.id,jobId:j.jobId||j.id,machineId:j.machineId,machineName:j.machineName||'',serialNumber:j.serialNumber||'',branch:j.branch||'',jobDescription:j.jobDescription||j.jobType||'',engineerId:currentEngineer.id,engineerName:currentEngineer.name,partName:name,partNumber,quantity:qty,priority:document.getElementById('cpReqPriority').value,notes:document.getElementById('cpReqNotes').value.trim(),stockChecked:true,status:'requested',supplierId:'',supplierName:'',unitCost:null,deliveryCost:0,totalCost:null,createdAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+  cpCloseRequest();toast('Part request sent to Parts Request Hub');
+ }catch(e){toast('Could not save parts request: '+e.message)}finally{btn.disabled=false;}
+}
+function cpRenderParts(){
+ const engr=document.getElementById('cpEngineerRequests');
+ if(engr&&currentEngineer)engr.innerHTML='<strong>My Part Requests</strong>'+cpPartRequests.filter(r=>r.engineerId===currentEngineer.id).slice().sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0)).slice(0,12).map(r=>'<div style="padding:8px;border-bottom:1px solid #ddd">'+cpEsc(r.machineName)+' / '+cpEsc(r.jobId)+' — '+cpEsc(r.partName)+' ×'+cpEsc(r.quantity)+' <b>'+cpEsc(r.status)+'</b></div>').join('')||'';
+ const list=document.getElementById('cpPartsList');if(!list)return;
+ const open=cpPartRequests.filter(r=>!['received','cancelled'].includes(r.status));
+ document.getElementById('cpPartsSummary').textContent=cpPartRequests.length+' total requests | '+open.length+' outstanding | '+cpPartRequests.filter(r=>r.status==='received').length+' received';
+ list.innerHTML=cpPartRequests.slice().sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0)).map(r=>{
+ const done=r.status==='received',cancel=r.status==='cancelled';return '<div class="card" style="border:1px solid #ddd;margin:12px 0;padding:14px"><strong>'+cpEsc(r.machineName)+' — '+cpEsc(r.partName)+'</strong> <b>('+cpEsc(r.status)+')</b><div class="progress-note">Job '+cpEsc(r.jobId)+' | '+cpEsc(r.jobDescription)+' | Serial '+cpEsc(r.serialNumber)+' | '+cpEsc(r.branch)+' | Engineer '+cpEsc(r.engineerName)+'</div><div>Original part no: <b>'+cpEsc(r.partNumber||'Unknown')+'</b> | Qty '+cpEsc(r.quantity)+' | '+cpEsc(r.priority)+'</div><div>'+cpEsc(r.notes||'')+'</div><div style="margin-top:8px">Supplier: '+cpEsc(r.supplierName||'Not selected')+' | Total part cost: '+(r.totalCost==null?'Not entered':cpMoney(r.totalCost))+'</div>'+(done||cancel?'':'<button class="btn btn-secondary btn-sm" style="margin:8px 8px 0 0" onclick="cpManageRequest('+JSON.stringify(r.id)+')">Manage / Order / Receive</button><button class="btn btn-danger btn-sm" style="margin-top:8px" onclick="cpCancelRequest('+JSON.stringify(r.id)+')">Cancel</button>')+'</div>';
+ }).join('')||'<p>No parts requests yet.</p>';
+ document.getElementById('cpSuppliersList').innerHTML=cpSuppliers.slice().sort((a,b)=>String(a.name).localeCompare(String(b.name))).map(p=>'<div style="padding:8px;border-bottom:1px solid #ddd"><b>'+cpEsc(p.name)+'</b> — '+cpEsc(p.contact||'')+' | '+cpEsc(p.phone||'')+' | '+cpEsc(p.email||'')+' <button class="btn btn-secondary btn-sm" onclick="cpEditSupplier('+JSON.stringify(p.id)+')">Edit</button> <button class="btn btn-danger btn-sm" onclick="cpDeleteSupplier('+JSON.stringify(p.id)+')">Remove</button></div>').join('')||'<p>No suppliers saved.</p>';
+ document.getElementById('cpStockList').innerHTML=cpStockParts.map(p=>'<div style="padding:7px;border-bottom:1px solid #ddd">'+cpEsc(p.partNumber)+' — '+cpEsc(p.description||'')+' <button class="btn btn-danger btn-sm" onclick="cpRemoveStock('+JSON.stringify(p.id)+')">Remove</button></div>').join('')||'<p>No stocked part numbers registered. Stock confirmation is currently manual for unlisted items.</p>';
+}
+async function cpManageRequest(id){
+ const r=cpPartRequests.find(x=>x.id===id);if(!r||['received','cancelled'].includes(r.status))return;
+ const supplierOpts=cpSuppliers.map((s,i)=>(i+1)+'. '+s.name).join('\n');
+ const supplied=prompt('Supplier directory:\n'+(supplierOpts||'No suppliers yet. Add one first.')+'\n\nEnter supplier number (or blank to keep current):');
+ if(supplied===null)return;
+ let supplier=cpSuppliers[Number(supplied)-1];if(supplied.trim()&&!supplier)return toast('Invalid supplier number');
+ if(!supplier&&!r.supplierId)return toast('Select a supplier in the directory first');
+ const uc=prompt('Actual unit price (£), excluding VAT (leave blank if not yet known):',r.unitCost==null?'':String(r.unitCost));if(uc===null)return;
+ const dc=prompt('Delivery / carriage (£), excluding VAT:',String(r.deliveryCost||0));if(dc===null)return;
+ const state=prompt('Status: requested, ordered or received.\nOnly RECEIVED posts cost to the linked job.',r.status==='requested'?'ordered':r.status);if(state===null)return;
+ const status=state.toLowerCase().trim();
+ if(!['requested','ordered','received'].includes(status))return toast('Invalid status');
+ const unit=uc.trim()===''?null:Number(uc),delivery=Number(dc);
+ if(unit!==null&&(!Number.isFinite(unit)||unit<0)||!Number.isFinite(delivery)||delivery<0)return toast('Invalid cost');
+ if(status==='received'&&unit===null)return toast('Unit price required to receive parts');
+ const total=unit===null?null:Math.round((unit*r.quantity+delivery)*100)/100;
+ const update={supplierId:supplier?.id||r.supplierId,supplierName:supplier?.name||r.supplierName,unitCost:unit,deliveryCost:delivery,totalCost:total,status,updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
+ if(status==='received'){
+  try{
+   await db.runTransaction(async tx=>{
+    const ref=db.collection('partRequests').doc(id),jobRef=db.collection('liveJobs').doc(r.jobDocId),ledgerRef=db.collection('partCostLedger').doc(id);
+    const [old,job,ledger]=await Promise.all([tx.get(ref),tx.get(jobRef),tx.get(ledgerRef)]);
+    if(!old.exists||old.data().status==='received'||ledger.exists)throw Error('Already received or recorded');
+    if(!job.exists)throw Error('Linked job not found: cannot post cost');
+    tx.update(ref,{...update,receivedAt:firebase.firestore.FieldValue.serverTimestamp()});
+    tx.set(ledgerRef,{requestId:id,jobDocId:r.jobDocId,jobId:r.jobId,machineId:r.machineId,machineName:r.machineName,partName:r.partName,partNumber:r.partNumber||'',quantity:r.quantity,supplierId:update.supplierId,supplierName:update.supplierName,unitCost:unit,deliveryCost:delivery,totalCost:total,postedAt:firebase.firestore.FieldValue.serverTimestamp()});
+    tx.update(jobRef,{partCostTotal:firebase.firestore.FieldValue.increment(total),updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+   });toast('Received — part cost posted to job');
+  }catch(e){toast('Could not post cost: '+e.message);}
+ }else{try{await db.collection('partRequests').doc(id).update(update);toast('Parts request updated')}catch(e){toast(e.message)}}
+}
+async function cpCancelRequest(id){const r=cpPartRequests.find(x=>x.id===id);if(!r||r.status==='received')return;if(!confirm('Cancel this parts request?'))return;try{await db.collection('partRequests').doc(id).update({status:'cancelled',updatedAt:firebase.firestore.FieldValue.serverTimestamp()});}catch(e){toast(e.message)}}
+async function cpEditSupplier(id){
+ const old=cpSuppliers.find(x=>x.id===id)||{};
+ const name=prompt('Supplier company name *',old.name||'');if(name===null||!name.trim())return;
+ const contact=prompt('Contact person',old.contact||'');if(contact===null)return;
+ const phone=prompt('Telephone',old.phone||'');if(phone===null)return;
+ const email=prompt('Email',old.email||'');if(email===null)return;
+ const website=prompt('Website',old.website||'');if(website===null)return;
+ const notes=prompt('Supplier notes / account reference',old.notes||'');if(notes===null)return;
+ try{await db.collection('partSuppliers').doc(id||db.collection('partSuppliers').doc().id).set({name:name.trim(),contact,phone,email,website,notes,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});toast('Supplier saved');}catch(e){toast(e.message)}
+}
+async function cpDeleteSupplier(id){if(!confirm('Remove supplier from directory? Historical orders retain the supplier name.'))return;try{await db.collection('partSuppliers').doc(id).delete()}catch(e){toast(e.message)}}
+async function cpAddStock(){const number=prompt('Stocked part number *');if(!number?.trim())return;if(cpIsStocked(number))return toast('Already in stock register');const description=prompt('Description of stocked item','');if(description===null)return;try{await db.collection('stockedParts').add({partNumber:number.trim(),description:description.trim(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()})}catch(e){toast(e.message)}}
+async function cpRemoveStock(id){if(!confirm('Remove stocked part from stock register?'))return;try{await db.collection('stockedParts').doc(id).delete()}catch(e){toast(e.message)}}
+document.addEventListener('DOMContentLoaded',cpPartsInit);
+
+</script>
 </body>
 </html>
