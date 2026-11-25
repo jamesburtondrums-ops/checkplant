@@ -36,6 +36,9 @@ textarea{min-height:90px;}
 .check-box.serviceable.active{background:#e3f7e8;border-color:var(--green);color:var(--green-dark);}
 .check-box.replaced.active{background:#fee2e2;border-color:var(--red);color:var(--red);}
 .check-box.na.active{background:#f3f4f6;border-color:#9aa1ab;color:#6b7280;}
+#checkItemsList .daily-fluid-row .check-pair{gap:4px;flex-shrink:0;}
+#checkItemsList .daily-fluid-row .check-box{width:54px;}
+@media(max-width:380px){#checkItemsList .daily-fluid-row .check-box{width:44px;}}
 #serviceItemsList .service-section{font-size:.85rem;font-weight:800;color:var(--navy);background:#eef0f8;padding:8px 10px;margin:12px 0 2px;border-radius:5px;}
 #serviceItemsList .checklist-item{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;padding:8px 4px;gap:7px;font-size:.89rem;line-height:1.3;}
 #serviceItemsList .check-pair{display:grid;grid-template-columns:repeat(4,minmax(62px,1fr));gap:4px;}
@@ -985,6 +988,16 @@ function renderDailyChecks(){
   });
   wrap.innerHTML = html || '<div class="empty-state">No machines to show.</div>';
 }
+const DAILY_FLUID_CHECKS=['Oil level check','Water / coolant level check'];
+function checkItemsWithFluids(cat){
+  const base=Array.isArray(cat?.checkItems)&&cat.checkItems.length?cat.checkItems:(Array.isArray(cat?.items)?cat.items:[]);
+  const list=[...base];
+  const keys=new Set(list.map(x=>String(x).trim().toLowerCase()));
+  for(const item of DAILY_FLUID_CHECKS)if(!keys.has(item.toLowerCase()))list.push(item);
+  return list;
+}
+function isDailyFluidCheck(item){return DAILY_FLUID_CHECKS.some(x=>x.toLowerCase()===String(item).trim().toLowerCase());}
+let displayedDailyCheckItems=[];
 async function ensureCategoriesSeeded(existingDocs){
   const batch = db.batch();
   let needsCommit = false;
@@ -993,6 +1006,7 @@ async function ensureCategoriesSeeded(existingDocs){
     if(!existingKeys.has(key)){
       batch.set(db.collection('categories').doc(key), {
         ...defaultCat,
+        checkItems:checkItemsWithFluids(defaultCat),
         serviceItems:detailedServiceTemplate(key,defaultCat)||serviceItemsWithRequired(key,defaultCat.items),
         serviceTemplateVersion:SERVICE_TEMPLATE_VERSION
       });
@@ -1015,6 +1029,9 @@ async function ensureCategoriesSeeded(existingDocs){
         if(cleanedItems.length!==data.items.length) patch.items=cleanedItems;
       }
     }
+    const checkBase=Array.isArray(data.checkItems)&&data.checkItems.length?data.checkItems:(patch.items||data.items||[]);
+    const daily=checkItemsWithFluids({checkItems:checkBase});
+    if(JSON.stringify(daily)!==JSON.stringify(checkBase))patch.checkItems=daily;
     const serviceBase=(Array.isArray(data.serviceItems)&&data.serviceItems.length)
       ? data.serviceItems
       : (Array.isArray(data.items)?data.items:(defaultCat?defaultCat.items:[]));
@@ -1256,7 +1273,7 @@ function renderServiceItems(){
  });
 }
 function toggleCheck(el,mode){const idx=el.dataset.idx;const c=mode==='service'?document.getElementById('serviceItemsList'):document.getElementById('checkItemsList');
-const pair=c.querySelectorAll('.check-box[data-idx="'+idx+'"]');pair.forEach(b=>{if(b===el)b.classList.toggle('active');else if(el.classList.contains('active'))b.classList.remove('active');});
+const pair=c.querySelectorAll('.check-box[data-idx="'+idx+'"]');const wasActive=el.classList.contains('active');pair.forEach(b=>b.classList.remove('active'));if(!wasActive)el.classList.add('active');
 if(mode==='check'){const note=c.querySelector('.defect-note-inline[data-idx="'+idx+'"]');const isDefect=el.textContent.trim()==='Defect'&&el.classList.contains('active');if(note){note.classList.toggle('show',isDefect);if(isDefect)setTimeout(()=>note.focus(),50);else note.value='';}}}
 function toggleLolerStatus(el,status){pendingLolerStatus=status;document.querySelectorAll('#svcLolerPanel .check-box').forEach(b=>b.classList.remove('active'));el.classList.add('active');}
 function renderCategoryGrid(){const g=document.getElementById('categoryGrid');if(!g)return;g.innerHTML='';
@@ -1311,10 +1328,10 @@ function cancelTimedCheck(){
  resetTimedCheckState(false);
 }
 function renderCheckItems(){const l=document.getElementById('checkItemsList');l.innerHTML='';const cat = categories[currentCheckCategory];
-      const items = (cat.checkItems && cat.checkItems.length) ? cat.checkItems : cat.items;
+      const items = displayedDailyCheckItems=checkItemsWithFluids(cat);
 document.getElementById('chkItemCount').textContent=items.length;document.getElementById('chkNoItemsNote').style.display=items.length?'none':'block';
-items.forEach((item,idx)=>{const row=document.createElement('div');row.className='checklist-item';
-row.innerHTML='<div>'+escapeHtml(item)+'</div><div class="check-pair"><div class="check-box serviceable" data-idx="'+idx+'" onclick="toggleCheck(this,\'check\')">Pass</div><div class="check-box replaced" data-idx="'+idx+'" onclick="toggleCheck(this,\'check\')">Defect</div></div><input class="defect-note-inline" data-idx="'+idx+'" type="text" maxlength="500" placeholder="Defect note — describe what is wrong (optional)">';
+items.forEach((item,idx)=>{const row=document.createElement('div');row.className='checklist-item';if(isDailyFluidCheck(item))row.classList.add('daily-fluid-row');
+row.innerHTML='<div>'+escapeHtml(item)+'</div><div class="check-pair"><div class="check-box serviceable" data-idx="'+idx+'" onclick="toggleCheck(this,\'check\')">Pass</div><div class="check-box replaced" data-idx="'+idx+'" onclick="toggleCheck(this,\'check\')">Defect</div>'+(isDailyFluidCheck(item)?'<div class="check-box na" data-idx="'+idx+'" onclick="toggleCheck(this,\'check\')" title="Only if the machine has no applicable oil or coolant system">N/A</div>':'')+'</div><input class="defect-note-inline" data-idx="'+idx+'" type="text" maxlength="500" placeholder="Defect note — describe what is wrong (optional)">';
 l.appendChild(row);});}
 const sigPads={};
 function initSigPad(canvasId){const canvas=document.getElementById(canvasId);if(!canvas)return;const ctx=canvas.getContext('2d');let saved=null;
@@ -1407,7 +1424,7 @@ const completeStatus=document.getElementById('checkCompleteStatus'),completeBtn=
 if(!signName){if(completeStatus)completeStatus.textContent='Enter operator name before completing.';toast('Enter operator name');return;}
 if(hours===''){if(completeStatus)completeStatus.textContent='Enter machine hours before completing.';toast('Enter machine hours');return;}
 const cat = categories[currentCheckCategory];
-    const checkSrc = (cat.checkItems && cat.checkItems.length) ? cat.checkItems : cat.items;
+    const checkSrc = displayedDailyCheckItems;
     const items = collectItems('checkItemsList', checkSrc);
 const incomplete=items.filter(i=>i.status==='Not checked');if(incomplete.length){const msg=incomplete.length+' checklist item'+(incomplete.length===1?' is':'s are')+' still unanswered';if(completeStatus)completeStatus.textContent=msg+'.';toast(msg);return;}
 if(completeBtn){completeBtn.disabled=true;completeBtn.textContent='Completing Check…';}if(completeStatus)completeStatus.textContent='Saving completed check…';
@@ -1675,7 +1692,7 @@ async function updateMachineLolerField(id,field,val){const m=machines.find(x=>x.
 function renderCategoryItems(key){
       const cat = categories[key];
       const svcList = (cat.serviceItems && cat.serviceItems.length) ? cat.serviceItems : cat.items;
-      const chkList = (cat.checkItems && cat.checkItems.length) ? cat.checkItems : cat.items;
+      const chkList = checkItemsWithFluids(cat);
 
       const svcEl = document.getElementById(`svcCatItems-${key}`);
       if(svcEl){
@@ -1707,7 +1724,7 @@ async function addCategoryItem(key, mode){
       if(!val) return;
       const cat = categories[key];
       const field = mode==='service' ? 'serviceItems' : 'checkItems';
-      const current = (cat[field] && cat[field].length) ? cat[field] : [...cat.items];
+      const current = mode==='check'?checkItemsWithFluids(cat):((cat[field] && cat[field].length) ? cat[field] : [...cat.items]);
       const newItems = [...current, val];
       await db.collection('categories').doc(key).update({ [field]: newItems });
       input.value = '';
@@ -1716,7 +1733,8 @@ async function addCategoryItem(key, mode){
     async function editCategoryItem(key, mode, idx, val){
       const cat = categories[key];
       const field = mode==='service' ? 'serviceItems' : 'checkItems';
-      const current = (cat[field] && cat[field].length) ? [...cat[field]] : [...cat.items];
+      const current = mode==='check'?checkItemsWithFluids(cat):((cat[field] && cat[field].length) ? [...cat[field]] : [...cat.items]);
+      if(mode==='check'&&isDailyFluidCheck(current[idx]))return toast('Oil and coolant checks are required in all categories');
       current[idx] = val;
       await db.collection('categories').doc(key).update({ [field]: current });
     }
@@ -1724,7 +1742,8 @@ async function addCategoryItem(key, mode){
     async function deleteCategoryItem(key, mode, idx){
       const cat = categories[key];
       const field = mode==='service' ? 'serviceItems' : 'checkItems';
-      const current = (cat[field] && cat[field].length) ? [...cat[field]] : [...cat.items];
+      const current = mode==='check'?checkItemsWithFluids(cat):((cat[field] && cat[field].length) ? [...cat[field]] : [...cat.items]);
+      if(mode==='check'&&isDailyFluidCheck(current[idx]))return toast('Oil and coolant checks are required in all categories');
       const newItems = current.filter((_,i)=>i!==idx);
       await db.collection('categories').doc(key).update({ [field]: newItems });
     }
