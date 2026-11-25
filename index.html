@@ -2094,7 +2094,7 @@ document.getElementById('defResolvedDate').value=todayISO();document.getElementB
 document.getElementById('bookingDate').value=todayISO();
 document.getElementById('adhocDate').value=todayISO();populateAdHocCategories();
 </script>
-<script src="asset-status.js?v=20261125-parts-status"></script>
+<script src="asset-status.js?v=20261125-order-lines"></script>
 <script>
 /* Parts ordering and cost ledger — shared Firestore */
 let cpPartRequests=[],cpSuppliers=[],cpStockParts=[];
@@ -2262,7 +2262,7 @@ function cpRenderJobParts(){
   card.style.display=cpCanRequestForJob(fresh)?'block':'none';if(!cpCanRequestForJob(fresh))continue;
   const rows=cpPartRequests.filter(r=>r.jobDocId===fresh.id).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
   const pending=rows.filter(r=>!['received','cancelled'].includes(r.status)).length;
-  card.querySelector('.cpJobPartsStatus').innerHTML='<div class="progress-note"><b>'+pending+' outstanding request(s)</b> • '+rows.length+' total</div>'+ (rows.map(r=>'<div style="padding:10px 0;border-bottom:1px solid #ddd"><b>'+cpEsc(r.partName)+'</b> × '+cpEsc(r.quantity)+'<div class="progress-note">Part no: '+cpEsc(r.partNumber||'Unknown')+' | '+cpEsc(r.supplierName||'Supplier pending')+'</div><span class="badge '+(r.status==='received'?'green':r.status==='cancelled'?'red':'amber')+'">'+cpEsc(r.status==='requested'?'Awaiting order':r.status==='ordered'?'Ordered':r.status==='received'?'Received':r.status)+'</span></div>').join('')||'<p class="progress-note">No parts requested for this job.</p>');
+  card.querySelector('.cpJobPartsStatus').innerHTML='<div class="progress-note"><b>'+pending+' outstanding request(s)</b> • '+rows.length+' total</div>'+ (rows.flatMap(r=>(Array.isArray(r.lines)&&r.lines.length?r.lines:[r]).map(l=>({...r,...l,status:r.status}))).map(r=>'<div style="padding:10px 0;border-bottom:1px solid #ddd"><b>'+cpEsc(r.partName)+'</b> × '+cpEsc(r.quantity)+'<div class="progress-note">Part no: '+cpEsc(r.partNumber||'Unknown')+' | '+cpEsc(r.supplierName||'Supplier pending')+'</div><span class="badge '+(r.status==='received'?'green':r.status==='cancelled'?'red':'amber')+'">'+cpEsc(r.status==='requested'?'Awaiting order':r.status==='ordered'?'Ordered':r.status==='received'?'Received':r.status)+'</span></div>').join('')||'<p class="progress-note">No parts requested for this job.</p>');
  }
 }
 
