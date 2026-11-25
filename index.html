@@ -1170,7 +1170,7 @@ function goHome(){showScreen('home');}
 function backToEngineerJobs(){if(currentEngineer){renderEngineerLiveJobs();showScreen('engineer-hub');}else requestEngineerSignIn();}
 function requestEngineerSignIn(){if(currentEngineer){showScreen('engineer-hub');cpRenderParts();return;}showScreen('engineer-pin');const el=document.getElementById('engineerPinInput');el.value='';setTimeout(()=>el.focus(),100);}
 function submitEngineerPin(){const pin=document.getElementById('engineerPinInput').value.trim();const match=engineers.find(e=>e.active!==false&&String(e.pin||'')===pin);if(!match){toast(engineers.length?'Incorrect engineer PIN':'No engineer PINs configured — add one in Back Office > Security');return;}currentEngineer=match;document.getElementById('engineerSignedInName').textContent=match.name;document.getElementById('adhocEngineer').value=match.name;renderEngineerLiveJobs();showScreen('engineer-hub');cpRenderParts();toast('Signed in as '+match.name);}
-function engineerSignOut(){stopLiveTimer();currentEngineer=null;cpKitConfirmedJob=null;cpKitConfirmedSignature=null;cpRenderParts();currentServiceMachine=null;currentAdHocMachine=null;currentLiveJob=null;goHome();}
+function engineerSignOut(){stopLiveTimer();stopServiceTimer();currentEngineer=null;currentServiceLiveJob=null;cpCloseRequest();cpKitConfirmedJob=null;cpKitConfirmedSignature=null;cpRenderParts();currentServiceMachine=null;currentAdHocMachine=null;currentLiveJob=null;goHome();}
 function startService(){if(!currentEngineer){requestEngineerSignIn();return;}showScreen('service-select');setTimeout(()=>{const t=document.getElementById('svcTechName');if(t){t.value=currentEngineer.name;t.readOnly=true;}const s=document.getElementById('svcSignName');if(s){s.value=currentEngineer.name;s.readOnly=true;}},0);}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);}
 function escapeHtml(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
@@ -1853,6 +1853,7 @@ function formatDuration(ms){const total=Math.max(0,Math.floor(ms/1000));const h=
 function stopLiveTimer(){if(liveTimerInterval){clearInterval(liveTimerInterval);liveTimerInterval=null;}}
 function startLiveTimer(){stopLiveTimer();const tick=()=>{const el=document.getElementById('adhocTimer');if(el&&currentLiveJob)el.textContent=formatDuration(liveElapsedMs(currentLiveJob));};tick();liveTimerInterval=setInterval(tick,1000);}
 function renderLiveJobState(){
+ cpRenderJobParts();
   const live=!!currentLiveJob,panel=document.getElementById('adhocTimerPanel');if(!panel)return;
   panel.style.display=live?'block':'none';document.getElementById('adhocProgressCard').style.display=live?'block':'none';document.getElementById('openAdhocJobBtn').style.display=live?'none':'block';document.getElementById('completeAdhocJobBtn').style.display=live&&engineerIsLead(currentLiveJob)?'block':'none';
   const idBadge=document.getElementById('adhocLiveId');idBadge.style.display=live?'inline-block':'none';idBadge.textContent=live?(currentLiveJob.jobId||'LIVE'):'';
@@ -1957,6 +1958,7 @@ async function submitAdHocJob(markVOR){
   const completedAt=Date.now();let durationMs=Number(currentLiveJob.accumulatedMs)||0;if(currentLiveJob.status==='active')durationMs+=Math.max(0,completedAt-tsToMs(currentLiveJob.activeStartedAt));
   const record={recordId:currentLiveJob.jobId,liveJobId:currentLiveJob.id,defectRefIds:currentLiveJob.defectRefIds||(currentLiveJob.defectRefId?[currentLiveJob.defectRefId]:[]),defectRefId:currentLiveJob.defectRefId||null,defectId:currentLiveJob.defectId||null,type:'adhoc',machineId:m.id,machineName:m.name,subject:m.name+' — '+currentLiveJob.jobCategory,serialNumber:m.serialNumber||'',branch:m.branch||'',technician:currentEngineer.name,engineerId:currentEngineer.id,date:currentLiveJob.date||todayISO(),jobCategory:currentLiveJob.jobCategory,jobDescription:currentLiveJob.jobDescription||'',jobSource:currentLiveJob.source||'',outcome,items:[{name:currentLiveJob.jobCategory,status:outcome}],notes,progressNotes:currentLiveJob.progressNotes||[],signName:currentEngineer.name,signDate:todayISO(),signatureData:'',hoursReading:Number(currentLiveJob.hoursReading),startedAt:currentLiveJob.startedAt,completedAt:firebase.firestore.Timestamp.fromMillis(completedAt),jobDurationMs:durationMs,jobDurationFormatted:formatDuration(durationMs),createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending',vorRaised:!!markVOR,isDamage:!!adHocDamage,damageDriver:document.getElementById('damageDriver').value.trim(),damageIncident:document.getElementById('damageIncident').value.trim(),billingStatus:'awaiting_authorisation'};
   const recordRef=db.collection('records').doc();record.id=recordRef.id;
+  record.partCostTotal=Number(currentLiveJob.partCostTotal)||0;
   const batch=db.batch();
   batch.update(db.collection('machines').doc(m.id),{currentHours:Number(currentLiveJob.hoursReading),...(markVOR?{outOfService:true,outOfServiceReason:currentLiveJob.jobCategory+' — '+notes,outOfServiceSince:todayISO(),outOfServiceRecordId:record.recordId,outOfServiceBy:currentEngineer.name}: {})});
   batch.set(recordRef,record);
@@ -1969,6 +1971,7 @@ async function submitAdHocJob(markVOR){
 function stopServiceTimer(){if(serviceTimerInterval){clearInterval(serviceTimerInterval);serviceTimerInterval=null;}}
 function startServiceTimer(){stopServiceTimer();const tick=()=>{const el=document.getElementById('serviceTimer');if(el&&currentServiceLiveJob)el.textContent=formatDuration(liveElapsedMs(currentServiceLiveJob));};tick();serviceTimerInterval=setInterval(tick,1000);}
 function renderServiceLiveState(){
+ cpRenderJobParts();
   cpRenderServiceKit();
   const svcSign=document.getElementById('svcSignName'),svcDate=document.getElementById('svcSignDate');if(svcSign&&!svcSign.value&&currentEngineer)svcSign.value=currentEngineer.name||'';if(svcDate&&!svcDate.value)svcDate.value=todayISO();
   const live=!!currentServiceLiveJob,panel=document.getElementById('serviceTimerPanel');if(!panel)return;
@@ -2092,6 +2095,12 @@ const cpEsc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':
 const cpNorm=v=>String(v||'').replace(/[^a-z0-9]/gi,'').toUpperCase();
 const cpMoney=v=>'£'+(Number(v)||0).toFixed(2);
 function cpPartsInit(){
+ for(const [anchor,id,kind] of [['adhocProgressCard','cpAdhocJobParts','adhoc'],['serviceProgressCard','cpServiceJobParts','service']]){
+  const el=document.getElementById(anchor);if(!el)continue;
+  const card=document.createElement('div');card.id=id;card.className='card';card.style.display='none';
+  card.innerHTML='<div class="section-title">Parts Required / Ordered</div><p class="progress-note">Request non-stock parts for this job. Purchasing progress is updated automatically.</p><button type="button" class="btn btn-primary btn-block" onclick="cpOpenCurrentJobParts(\''+kind+'\')">Request Part for This Job</button><div class="cpJobPartsStatus" style="margin-top:12px"></div>';
+  el.insertAdjacentElement('afterend',card);
+ }
   const eng=document.getElementById('screen-engineer-hub');
   if(eng){let card=document.createElement('div');card.className='card';card.innerHTML='<div class="section-title">Parts Ordering</div><p class="progress-note">Request non-stock parts for an existing machine repair or service job.</p><button class="btn btn-primary" onclick="cpOpenRequest()">Request Non-Stock Part</button><div id="cpEngineerRequests" style="margin-top:14px"></div>';eng.appendChild(card);}
   const tabs=document.querySelector('#screen-backoffice .tabs');
@@ -2104,11 +2113,13 @@ function cpPartsInit(){
   db.collection('stockedParts').onSnapshot(s=>{cpStockParts=s.docs.map(d=>({id:d.id,...d.data()}));cpRenderParts();},e=>console.error('Stock subscriptions:',e));
 }
 function cpIsStocked(n){return cpNorm(n)&&cpStockParts.some(p=>cpNorm(p.partNumber)===cpNorm(n));}
-function cpOpenRequest(){
+function cpOpenRequest(jobId){
   if(!currentEngineer){toast('Engineer sign-in required');return;}
-  const jobs=liveJobs.filter(j=>j.machineId && j.status!=='cancelled'&&j.status!=='completed' && (j.engineerId===currentEngineer.id||j.engineerName===currentEngineer.name||(j.supportEngineerIds||[]).includes(currentEngineer.id)));
+  const jobs=liveJobs.filter(cpCanRequestForJob);
+  if(jobId&&!jobs.some(j=>j.id===jobId))return toast('This job is no longer allocated to you');
   const sel=document.getElementById('cpReqJob');
   sel.innerHTML='<option value="">Select allocated/open job...</option>'+jobs.map(j=>'<option value="'+cpEsc(j.id)+'">'+cpEsc(j.jobId||j.id)+' — '+cpEsc(j.machineName||j.machineId)+' — '+cpEsc(j.jobDescription||j.jobType||'Repair')+'</option>').join('');
+  sel.value=jobId||'';sel.disabled=!!jobId;
   ['cpReqName','cpReqNumber','cpReqNotes'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('cpReqQty').value='1';document.getElementById('cpReqNonStock').checked=false;
   document.getElementById('cpPartsModal').style.display='block';cpJobChanged();cpStockWarning();
@@ -2126,7 +2137,7 @@ function cpStockWarning(){
 }
 async function cpSubmitRequest(){
  const j=liveJobs.find(x=>x.id===document.getElementById('cpReqJob').value),name=document.getElementById('cpReqName').value.trim(),partNumber=document.getElementById('cpReqNumber').value.trim(),qty=Number(document.getElementById('cpReqQty').value);
- if(!currentEngineer||!j)return toast('Select one of your allocated open jobs');
+ if(!cpCanRequestForJob(j))return toast('Select one of your allocated open jobs');
  if(!name||!Number.isInteger(qty)||qty<1)return toast('Part description and valid quantity required');
  if(cpIsStocked(partNumber))return toast('This part is in the stock register and cannot be requested');
  if(!document.getElementById('cpReqNonStock').checked)return toast('Confirm the item is not in stock');
@@ -2137,6 +2148,7 @@ async function cpSubmitRequest(){
  }catch(e){toast('Could not save parts request: '+e.message)}finally{btn.disabled=false;}
 }
 function cpRenderParts(){
+ cpRenderJobParts();
  const engr=document.getElementById('cpEngineerRequests');
  if(engr&&!currentEngineer)engr.innerHTML='';
  if(engr&&currentEngineer)engr.innerHTML='<strong>My Part Requests</strong>'+cpPartRequests.filter(r=>r.engineerId===currentEngineer.id).slice().sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0)).slice(0,12).map(r=>'<div style="padding:8px;border-bottom:1px solid #ddd">'+cpEsc(r.machineName)+' / '+cpEsc(r.jobId)+' — '+cpEsc(r.partName)+' ×'+cpEsc(r.quantity)+' <b>'+cpEsc(r.status)+'</b></div>').join('')||'';
@@ -2230,6 +2242,18 @@ async function cpEditServiceKit(){
  const supplier=prompt('Preferred supplier (optional):\n'+cpSuppliers.map((p,i)=>(i+1)+'. '+p.name).join('\n')+'\nLeave blank to retain existing supplier.','');if(supplier===null)return;
  const p=cpSuppliers[Number(supplier)-1];if(supplier.trim()&&!p)return toast('Invalid supplier selection');
  try{await db.collection('machines').doc(m.id).update({serviceKit:{name:name.trim(),partNumber:partNumber.trim(),cost:Math.round(cost*100)/100,supplierId:p?.id||k.supplierId||'',supplierName:p?.name||k.supplierName||''}});toast('Service kit saved');}catch(e){toast(e.message)}
+}
+function cpCanRequestForJob(j){return !!(j&&j.machineId&&currentEngineer&&['active','paused','assigned','planned'].includes(j.status)&&(engineerIsLead(j)||engineerIsSupport(j)));}
+function cpOpenCurrentJobParts(kind){const j=kind==='service'?currentServiceLiveJob:currentLiveJob;if(!cpCanRequestForJob(j))return toast('Open an allocated job first');cpOpenRequest(j.id);}
+function cpRenderJobParts(){
+ for(const [id,j] of [['cpAdhocJobParts',currentLiveJob],['cpServiceJobParts',currentServiceLiveJob]]){
+  const card=document.getElementById(id);if(!card)continue;
+  const fresh=j&&liveJobs.find(x=>x.id===j.id);
+  card.style.display=cpCanRequestForJob(fresh)?'block':'none';if(!cpCanRequestForJob(fresh))continue;
+  const rows=cpPartRequests.filter(r=>r.jobDocId===fresh.id).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+  const pending=rows.filter(r=>!['received','cancelled'].includes(r.status)).length;
+  card.querySelector('.cpJobPartsStatus').innerHTML='<div class="progress-note"><b>'+pending+' outstanding request(s)</b> • '+rows.length+' total</div>'+ (rows.map(r=>'<div style="padding:10px 0;border-bottom:1px solid #ddd"><b>'+cpEsc(r.partName)+'</b> × '+cpEsc(r.quantity)+'<div class="progress-note">Part no: '+cpEsc(r.partNumber||'Unknown')+' | '+cpEsc(r.supplierName||'Supplier pending')+'</div><span class="badge '+(r.status==='received'?'green':r.status==='cancelled'?'red':'amber')+'">'+cpEsc(r.status==='requested'?'Awaiting order':r.status==='ordered'?'Ordered':r.status==='received'?'Received':r.status)+'</span></div>').join('')||'<p class="progress-note">No parts requested for this job.</p>');
+ }
 }
 document.addEventListener('DOMContentLoaded',cpPartsInit);
 
