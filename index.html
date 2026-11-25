@@ -1412,7 +1412,7 @@ try{
   const common={jobDocId:jobRef.id,jobId:record.recordId,machineId:machineRef.id,machineName:record.machineName,serialNumber:record.serialNumber,branch:record.branch,partName:kit.name,partNumber:kit.partNumber||'',quantity:1,supplierId:kit.supplierId||'',supplierName:kit.supplierName||''};
   record.serviceKitUsed=true;record.serviceKit={name:kit.name,partNumber:kit.partNumber||'',cost,supplierId:common.supplierId,supplierName:common.supplierName};record.partCostTotal=(Number(freshJob.data().partCostTotal)||0)+cost;
   batch.set(kitLedgerRef,{...common,requestId:kitRequestRef.id,type:'service_kit_consumption',unitCost:cost,deliveryCost:0,totalCost:cost,postedAt:firebase.firestore.FieldValue.serverTimestamp()});
-  batch.set(kitRequestRef,{...common,jobDescription:'Replacement service kit — replenish stock',engineerId:currentEngineer.id,engineerName:currentEngineer.name,priority:'normal',notes:'Automatically raised when service kit was consumed. Replacement receipt must not charge this job again.',requestType:'service_kit_replenishment',jobCostAlreadyPosted:true,consumedKitCost:cost,stockChecked:true,status:'requested',unitCost:null,deliveryCost:0,totalCost:null,createdAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+  batch.set(kitRequestRef,{...common,jobDescription:'Replacement service kit — replenish stock',engineerId:currentEngineer.id,engineerName:currentEngineer.name,priority:'normal',notes:'Automatically raised when service kit was consumed. Replacement receipt must not charge this job again.',requestType:'service_kit_replenishment',jobCostAlreadyPosted:true,consumedKitCost:cost,stockChecked:true,stockReplenishment:j.accountType==='stock_replenishment',status:'requested',unitCost:null,deliveryCost:0,totalCost:null,createdAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
   const machinePatch={currentHours:hoursNum,lastServiceHours:hoursNum,nextServiceDueHours:nextDue};
   if(lolerSection.status!=='na')machinePatch.loler={applies:true,lastExamDate:lolerCertDate||null,nextDueDate:lolerNextDue||null,examinerName:lolerExaminer||''};
   batch.set(recordRef,record);
@@ -2133,23 +2133,25 @@ function cpOpenRequest(jobId){
 function cpCloseRequest(){const modal=document.getElementById('cpPartsModal');if(modal)modal.style.display='none';}
 function cpJobChanged(){
  const j=cpRequestChoices().find(x=>x.id===document.getElementById('cpReqJob').value);
- document.getElementById('cpReqAsset').textContent=j?.purchasingOnly?'Workshop purchasing account — not an outstanding job':j?('Machine: '+(j.machineName||j.machineId)+' | Serial: '+(j.serialNumber||'Not recorded')+' | Branch: '+(j.branch||'Not recorded')):'Choose an allocated job';
+ document.getElementById('cpReqAsset').textContent=j?.accountType==='stock_replenishment'?'STOCK-001 — stock replenishment only; no maintenance job':j?.purchasingOnly?'Workshop purchasing account — not an outstanding job':j?('Machine: '+(j.machineName||j.machineId)+' | Serial: '+(j.serialNumber||'Not recorded')+' | Branch: '+(j.branch||'Not recorded')):'Choose an allocated job or purchasing account';
+ const stock=j?.accountType==='stock_replenishment';const box=document.getElementById('cpReqNonStock');if(box){const label=box.parentElement;const textNode=[...label.childNodes].find(n=>n.nodeType===3);if(textNode)textNode.textContent=stock?'I confirm these parts are required to replenish workshop stock':'I have checked our stock and confirm this part is not held in stock';box.checked=false;}cpStockWarning();
 }
 function cpStockWarning(){
   const n=document.getElementById('cpReqNumber').value;
+  const stockOrder=document.getElementById('cpReqJob').value==='stock-replenishment';
   const stocked=cpIsStocked(n);
-  const el=document.getElementById('cpStockWarning');el.textContent=stocked?'This part is registered as in stock. Use existing stock; a purchase request is blocked.':n?'No matching stock number found. Verify physical stock before submitting.':'Part number optional. Check physical stock before submitting.';
+  const el=document.getElementById('cpStockWarning');if(stockOrder){el.textContent='Stock replenishment — registered stock numbers may be ordered.';el.style.color='#665';return;}el.textContent=stocked?'This part is registered as in stock. Use existing stock; a purchase request is blocked.':n?'No matching stock number found. Verify physical stock before submitting.':'Part number optional. Check physical stock before submitting.';
   el.style.color=stocked?'#b91c1c':'#665';
 }
 async function cpSubmitRequest(){
  const j=cpRequestChoices().find(x=>x.id===document.getElementById('cpReqJob').value),name=document.getElementById('cpReqName').value.trim(),partNumber=document.getElementById('cpReqNumber').value.trim(),qty=Number(document.getElementById('cpReqQty').value);
- if(!j||(!j.purchasingOnly&&!cpCanRequestForJob(j)))return toast('Select one of your allocated open jobs or Consumables & Tools');
+ if(!j||(!j.purchasingOnly&&!cpCanRequestForJob(j)))return toast('Select an allocated job, Consumables & Tools or STOCK-001');
  if(!name||!Number.isInteger(qty)||qty<1)return toast('Part description and valid quantity required');
- if(cpIsStocked(partNumber))return toast('This part is in the stock register and cannot be requested');
- if(!document.getElementById('cpReqNonStock').checked)return toast('Confirm the item is not in stock');
+ if(j.accountType!=='stock_replenishment'&&cpIsStocked(partNumber))return toast('This part is in the stock register and cannot be requested');
+ if(!document.getElementById('cpReqNonStock').checked)return toast(j.accountType==='stock_replenishment'?'Confirm replenishment is required':'Confirm the item is not in stock');
  const btn=document.querySelector('#cpPartsModal .btn-block');btn.disabled=true;
  try{
-  await db.collection('partRequests').add({jobDocId:j.id,jobId:j.jobId||j.id,requestType:j.purchasingOnly?'consumables_tools':'job_part',costAccount:j.purchasingOnly?'consumables_tools':'machine_job',machineId:j.machineId,machineName:j.machineName||'',serialNumber:j.serialNumber||'',branch:j.branch||'',jobDescription:j.jobDescription||j.jobType||'',engineerId:currentEngineer.id,engineerName:currentEngineer.name,partName:name,partNumber,quantity:qty,priority:document.getElementById('cpReqPriority').value,notes:document.getElementById('cpReqNotes').value.trim(),stockChecked:true,status:'requested',supplierId:'',supplierName:'',unitCost:null,deliveryCost:0,totalCost:null,createdAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+  await db.collection('partRequests').add({jobDocId:j.id,jobId:j.jobId||j.id,requestType:j.purchasingOnly?j.accountType:'job_part',costAccount:j.purchasingOnly?j.accountType:'machine_job',machineId:j.machineId,machineName:j.machineName||'',serialNumber:j.serialNumber||'',branch:j.branch||'',jobDescription:j.jobDescription||j.jobType||'',engineerId:currentEngineer.id,engineerName:currentEngineer.name,partName:name,partNumber,quantity:qty,priority:document.getElementById('cpReqPriority').value,notes:document.getElementById('cpReqNotes').value.trim(),stockChecked:true,status:'requested',supplierId:'',supplierName:'',unitCost:null,deliveryCost:0,totalCost:null,createdAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
   cpCloseRequest();toast('Part request sent to Parts Request Hub');
  }catch(e){toast('Could not save parts request: '+e.message)}finally{btn.disabled=false;}
 }
@@ -2249,7 +2251,7 @@ async function cpEditServiceKit(){
  const p=cpSuppliers[Number(supplier)-1];if(supplier.trim()&&!p)return toast('Invalid supplier selection');
  try{await db.collection('machines').doc(m.id).update({serviceKit:{name:name.trim(),partNumber:partNumber.trim(),cost:Math.round(cost*100)/100,supplierId:p?.id||k.supplierId||'',supplierName:p?.name||k.supplierName||''}});toast('Service kit saved');}catch(e){toast(e.message)}
 }
-function cpRequestChoices(){return [...cpAvailableJobs(),...(currentEngineer?[{id:'consumables-tools',jobId:'CONSUMABLES & TOOLS',machineId:'',machineName:'Consumables & Tools',jobDescription:'Workshop purchasing only',purchasingOnly:true}]:[])];}
+function cpRequestChoices(){return [...cpAvailableJobs(),...(currentEngineer?[{id:'consumables-tools',jobId:'CONSUMABLES & TOOLS',machineId:'',machineName:'Consumables & Tools',jobDescription:'Workshop purchasing only',purchasingOnly:true,accountType:'consumables_tools'},{id:'stock-replenishment',jobId:'STOCK-001',machineId:'',machineName:'Stock Replenishment',jobDescription:'Order parts for workshop stock',purchasingOnly:true,accountType:'stock_replenishment'}]:[])];}
 function cpAvailableJobs(){const byId=new Map();for(const j of [currentLiveJob,currentServiceLiveJob,...liveJobs])if(j?.id)byId.set(j.id,j);return [...byId.values()].filter(cpCanRequestForJob);}
 function cpCanRequestForJob(j){return !!(j&&j.machineId&&currentEngineer&&['active','paused','assigned','planned'].includes(j.status)&&(engineerIsLead(j)||engineerIsSupport(j)));}
 function cpOpenCurrentJobParts(kind){const j=kind==='service'?currentServiceLiveJob:currentLiveJob;if(!cpCanRequestForJob(j))return toast('Open an allocated job first');cpOpenRequest(j.id);}
