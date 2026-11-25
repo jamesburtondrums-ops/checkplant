@@ -69,6 +69,7 @@ th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 20px;border-radius:10px;font-size:.9rem;font-weight:600;z-index:200;box-shadow:0 6px 20px rgba(0,0,0,.2);opacity:0;transition:opacity .25s;pointer-events:none;}
 .toast.show{opacity:1;}
 </style>
+<script src="cost-report-values.js?v=1"></script>
 </head>
 <body>
 <header>
@@ -116,7 +117,8 @@ th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;}
 
 <div class="stat-row">
   <div class="stat-box"><div class="num" id="statInternalCost">£0</div><div class="lbl">Internal Work Cost</div><div class="sub" id="statInternalCostSub"></div></div>
-  <div class="stat-box"><div class="num" id="statExternalCost">£0</div><div class="lbl">External Work Cost</div><div class="sub" id="statExternalCostSub"></div></div>
+  <div class="stat-box"><div class="num" id="statExternalCost">£0</div><div class="lbl">External Work Cost to KCM</div><div class="sub" id="statExternalCostSub"></div></div>
+  <div class="stat-box"><div class="num" id="statCustomerCharges">—</div><div class="lbl">External Customer Charges</div></div>
 </div>
 
 <div class="stat-row">
@@ -132,7 +134,7 @@ th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;}
 </div>
 
 <div class="card">
-  <div class="section-title">Monthly Cost by Asset (Top 10) <span style="font-size:.72rem;font-weight:600;color:var(--grey)">■ Internal &nbsp; <span style="color:var(--amber)">■</span> External</span></div>
+  <div class="section-title">Monthly Cost by Asset / Customer Equipment (Top 10) <span style="font-size:.72rem;font-weight:600;color:var(--grey)">■ Internal &nbsp; <span style="color:var(--amber)">■</span> External</span></div>
   <div class="chart-bar-wrap" id="costChart"></div>
 </div>
 
@@ -234,7 +236,7 @@ const ENGINEERING_JOB_CATEGORIES=["Hydraulic Hose","Hydraulic Ram / Cylinder","H
 function todayISO(){return new Date().toISOString().slice(0,10);}
 function escapeHtml(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600);}
-function money(n){return '£'+(Number(n)||0).toLocaleString('en-GB',{minimumFractionDigits:0,maximumFractionDigits:0});}
+function money(n){return '£'+(Number(n)||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function daysBetween(a,b){return Math.round((new Date(b)-new Date(a))/86400000);}
 function jobTsMs(v){if(!v)return 0;if(v.toMillis)return v.toMillis();if(v.toDate)return v.toDate().getTime();if(typeof v==='number')return v;return new Date(v).getTime()||0;}
 function jobElapsedMs(j){const base=Number(j&&j.accumulatedMs)||0;if(!j||j.status!=='active'||!j.activeStartedAt)return base;return base+Math.max(0,Date.now()-jobTsMs(j.activeStartedAt));}
@@ -292,7 +294,10 @@ function initListeners(){
   db.collection('costEntries').onSnapshot(s=>{
     costEntries=s.docs.map(d=>({id:d.id,...d.data()}));
     computeStats();renderAssetCostHours();
-  }, e=>{});
+  }, e=>{
+    setConn(false,'Costs error: '+e.message);
+    document.getElementById('statExternalCostSub').textContent = 'Could not load cost entries';
+  });
   db.collection('engineers').orderBy('name').onSnapshot(s=>{engineers=s.docs.map(d=>({id:d.id,...d.data()}));renderAssignmentSelectors();renderAssignmentBoard();renderEngineerDailyHours();renderEngineerPins();},e=>{});
   db.collection('liveJobs').onSnapshot(s=>{liveJobs=s.docs.map(d=>({id:d.id,...d.data()})).filter(j=>j.status!=='completed'&&j.status!=='cancelled');renderAssignmentBoard();updateDefectOptions();},e=>{});
 
@@ -606,21 +611,29 @@ function getMonthRange(){
 function computeStats(){
   const {from,to} = getMonthRange();
 
-  // Cost this month
-  const monthCosts = costEntries.filter(e=>e.date>=from && e.date<=to);
-  const totalCost = monthCosts.reduce((s,e)=>s+(e.totalCost||0),0);
-  const internalCost = monthCosts.filter(e=>(e.workSource||'internal')==='internal').reduce((s,e)=>s+(e.totalCost||0),0);
-  const externalCost = monthCosts.filter(e=>e.workSource==='external').reduce((s,e)=>s+(e.totalCost||0),0);
-  document.getElementById('statMonthCost').textContent = money(totalCost);
-  document.getElementById('statMonthCostSub').textContent = monthCosts.length+' entries logged';
-  document.getElementById('statInternalCost').textContent = money(internalCost);
-  document.getElementById('statInternalCostSub').textContent = monthCosts.filter(e=>(e.workSource||'internal')==='internal').length+' internal entries';
-  document.getElementById('statExternalCost').textContent = money(externalCost);
-  document.getElementById('statExternalCostSub').textContent = monthCosts.filter(e=>e.workSource==='external').length+' external entries';
+  const monthCosts = costEntries.filter(e => e.date >= from && e.date <= to);
+  const external = monthCosts.filter(e => e.workSource === 'external');
+  const internal = monthCosts.filter(e => e.workSource !== 'external');
+  const internalCost = internal.reduce((sum, entry) => sum + entryCostPence(entry), 0);
+  const externalCost = external.reduce((sum, entry) => sum + entryCostPence(entry), 0);
+  const charges = external.map(customerChargePence).filter(amount => amount !== null);
+  document.getElementById('statMonthCost').textContent = money((internalCost + externalCost) / 100);
+  document.getElementById('statMonthCostSub').textContent = monthCosts.length + ' entries logged';
+  document.getElementById('statInternalCost').textContent = money(internalCost / 100);
+  document.getElementById('statInternalCostSub').textContent = internal.length + ' internal entries';
+  document.getElementById('statExternalCost').textContent = money(externalCost / 100);
+  document.getElementById('statExternalCostSub').textContent = external.length + ' external entries';
+  document.getElementById('statCustomerCharges').textContent = charges.length
+    ? money(charges.reduce((sum, amount) => sum + amount, 0) / 100) : '—';
 
   // Cost by asset chart (internal vs external stacked)
-  const groups={};
-  monthCosts.forEach(e=>{ const k=e.machineName||'Unknown'; if(!groups[k]) groups[k]={internal:0,external:0}; groups[k][e.workSource==='external'?'external':'internal'] += (e.totalCost||0); });
+  const groups = Object.create(null);
+  for (const entry of monthCosts) {
+    const externalWork = entry.workSource === 'external';
+    const key = entry.machineName || entry.externalMachineDescription || (externalWork && entry.customerName) || 'Unknown';
+    if (!groups[key]) groups[key] = { internal: 0, external: 0 };
+    groups[key][externalWork ? 'external' : 'internal'] += entryCostPence(entry);
+  }
   const sorted=Object.entries(groups).map(([k,v])=>[k,v.internal+v.external,v]).sort((a,b)=>b[1]-a[1]).slice(0,10);
   const maxVal=sorted.length?sorted[0][1]:1;
   const chartWrap=document.getElementById('costChart');
@@ -629,7 +642,7 @@ function computeStats(){
     chartWrap.innerHTML = sorted.map(([label,total,v])=>`<div class="chart-bar-row">
       <div class="chart-bar-label">${escapeHtml(label)}</div>
       <div class="chart-bar-track"><div class="chart-bar-fill" style="width:${maxVal?(v.internal/maxVal*100):0}%;display:inline-block"></div><div class="chart-bar-fill" style="background:var(--amber);width:${maxVal?(v.external/maxVal*100):0}%;display:inline-block"></div></div>
-      <div class="chart-bar-val">${money(total)}</div>
+      <div class="chart-bar-val">${money(total / 100)}</div>
     </div>`).join('');
   }
 

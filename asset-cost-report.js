@@ -253,6 +253,24 @@ const assetCostReport = (() => {
       .map(row => new Option(row.name + (row.branch ? ' · ' + row.branch : ''), row.key)));
     select.value = rows.some(row => row.key === selected) ? selected : '';
     const visible = select.value ? rows.filter(row => row.key === select.value) : rows;
+    const external = costEntries.filter(entry => entry.workSource === 'external' &&
+      Number.isFinite(day(entry.date)) && (!from || entry.date >= from) && (!to || entry.date <= to) &&
+      (!select.value || (entry.machineId && select.value === 'id:' + entry.machineId)))
+      .sort((a, b) => b.date.localeCompare(a.date));
+    const externalSpend = external.reduce((sum, entry) => sum + entryCostPence(entry), 0);
+    const charges = external.map(customerChargePence).filter(amount => amount !== null);
+    const externalCharges = charges.length ? cash(charges.reduce((sum, amount) => sum + amount, 0)) : '—';
+    const externalColumns = ['Date', 'Job / Customer', 'Equipment', 'Cost to KCM', 'Customer charge'];
+    const externalRows = external.map(entry => {
+      const charge = customerChargePence(entry);
+      return [
+        displayDate(entry.date),
+        [entry.externalJobRef || entry.jobCardId, entry.customerName].filter(Boolean).join(' · ') || '—',
+        entry.externalMachineDescription || entry.machineName || '—',
+        cash(entryCostPence(entry)),
+        charge === null ? '—' : cash(charge),
+      ];
+    });
     const totals = { spend: 0, loggedHours: 0, days: 0, pending: 0, missing: 0 };
     for (const row of visible) {
       for (const metric of Object.keys(totals)) totals[metric] += row[metric];
@@ -262,7 +280,7 @@ const assetCostReport = (() => {
       : from ? 'From ' + displayDate(from) : to ? 'Through ' + displayDate(to) : 'All dates';
     const scope = period + ' | ' + select.selectedOptions[0].textContent + ' | Run ' + displayDate(asOf);
     const notes = [
-      'Spend includes recorded labour, parts and other costs on company assets, including servicing. Customer work and costs awaiting final sign-off are excluded.',
+      'Asset spend includes recorded labour, parts and other costs on company assets, including servicing. External work is shown below. Spend totals exclude costs awaiting final sign-off.',
       'Completed job downtime uses authorised hours plus any extra time entered for other resolved defects. Manual cost entries use the downtime entered. Out-of-service days come from the register and count calendar days up to the return date, excluding that date. The two measures may overlap.',
       'A dash means downtime was not entered. Older entries saved with zero hours can include blank downtime fields.',
       'Job summaries use the completion date when available. Spend uses the date on the cost entry.',
@@ -285,7 +303,10 @@ const assetCostReport = (() => {
       : ['Most out-of-service days', 'days', value => decimals.format(value) + ' d'];
     const jobAssets = visible.filter(row => row.jobs.length)
       .sort((a, b) => a.name.localeCompare(b.name, 'en', { numeric: true }) || a.branch.localeCompare(b.branch));
-    report = { visible, scope, notes, metrics, columns, cells, from, to, downtimeChart, jobAssets };
+    const externalSummary = 'Cost to KCM ' + cash(externalSpend) + ' · Customer charges ' + externalCharges;
+    const externalNote = select.value ? 'Select All assets to include external work without a linked asset.' : '';
+    report = { visible, scope, notes, metrics, columns, cells, from, to, downtimeChart, jobAssets,
+      externalRows, externalColumns, externalSummary, externalNote };
 
     byId('assetCostResults').innerHTML = `
       <p class="asset-report-scope">KCM Waste Management · ${escapeHtml(scope)}</p>
@@ -303,6 +324,16 @@ const assetCostReport = (() => {
           || '<tr><td colspan="6" class="empty-state">No assets found.</td></tr>'}
       </tbody></table></div>
       ${notes.map(note => `<p class="progress-note">${escapeHtml(note)}</p>`).join('')}
+      <section class="asset-job-summary">
+        <h2>External work costs</h2>
+        <p>${escapeHtml(externalSummary)}</p>
+        ${externalNote ? `<p class="progress-note">${escapeHtml(externalNote)}</p>` : ''}
+        ${externalRows.length ? `<div class="table-wrap"><table><thead><tr>
+          ${externalColumns.map(label => `<th scope="col">${label}</th>`).join('')}
+        </tr></thead><tbody>${externalRows.map(row =>
+          `<tr>${row.map((cell, i) => `<td class="${i >= 3 ? 'num' : ''}">${escapeHtml(cell)}</td>`).join('')}</tr>`
+        ).join('')}</tbody></table></div>` : '<p>No external work recorded for this selection.</p>'}
+      </section>
       <section class="asset-job-summary" id="assetJobSummary">
         <h2>Jobs carried out and parts used</h2>
         ${jobAssets.map(row => `<section class="asset-job-group">
@@ -459,6 +490,19 @@ const assetCostReport = (() => {
         y += size + 4;
         doc.text(line, margin, y);
       }
+    }
+
+    y += 12;
+    newPageIfNeeded(85);
+    jobText('External work costs', 13, 'bold');
+    jobText(data.externalSummary, 10, 'bold');
+    if (data.externalNote) jobText(data.externalNote, 9, 'normal');
+    if (!data.externalRows.length) jobText('No external work recorded for this selection.', 9, 'normal');
+    for (const [date, customer, equipment, cost, charge] of data.externalRows) {
+      y += 5;
+      newPageIfNeeded(38);
+      jobText([date, customer, equipment].join(' · '), 9, 'bold', 'External work costs');
+      jobText('Cost to KCM ' + cost + ' · Customer charge ' + charge, 9, 'normal');
     }
 
     y += 12;
