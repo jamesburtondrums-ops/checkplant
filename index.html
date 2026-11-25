@@ -1074,13 +1074,13 @@ async function createOrLinkCheckDefect(item,record,operatorName){
   const machineId=record.machineId,machineName=record.machineName||record.subject||'Machine';
   const matches=openMatchingDefects(machineId,item.name);
   const reportedAt=new Date().toISOString();
-  const occurrence={reportedAt,reportedDate:record.date,reportedBy:operatorName,inspectionRecordId:record.id||null,inspectionItemName:item.name,condition:item.defectNote||'Marked Defect during routine check'};
+  const occurrence={reportedAt,reportedDate:record.date,reportedBy:operatorName,inspectionRecordId:record.id||null,inspectionItemName:item.name,condition:item.defectNote||'Marked Defect during routine check',photoRefs:Array.isArray(item.photoRefs)?item.photoRefs:[]};
   if(matches.length){
     const existing=matches[0],repeats=Number(existing.reportCount||1);
     await db.collection('defects').doc(existing.id).set({
       inspectionItemCode:defectItemKey(item.name),inspectionItemName:item.name,
       reportCount:repeats+1,lastReportedAt:firebase.firestore.Timestamp.now(),lastReportedAtClient:reportedAt,lastReportedDate:record.date,lastReportedBy:operatorName,lastInspectionId:record.id||null,lastObservedCondition:occurrence.condition,
-      repeatReports:firebase.firestore.FieldValue.arrayUnion(occurrence),updatedAt:firebase.firestore.Timestamp.now()
+      repeatReports:firebase.firestore.FieldValue.arrayUnion(occurrence),...(occurrence.photoRefs.length?{photoRefs:firebase.firestore.FieldValue.arrayUnion(...occurrence.photoRefs)}:{}),updatedAt:firebase.firestore.Timestamp.now()
     },{merge:true});
     return {action:'linked',defectId:existing.defectId||existing.id};
   }
@@ -1088,7 +1088,7 @@ async function createOrLinkCheckDefect(item,record,operatorName){
   await db.collection('defects').add({
     defectId,machineId,machineName,itemName:item.name,inspectionItemCode:defectItemKey(item.name),inspectionItemName:item.name,
     dateRaised:record.date||todayISO(),raisedAt:firebase.firestore.Timestamp.now(),status:'open',resolvedDate:null,resolvedAt:null,resolvedBy:null,resolutionRecordId:null,severity:'routine',
-    reportCount:1,firstReportedAt:firebase.firestore.Timestamp.now(),firstReportedAtClient:reportedAt,firstReportedBy:operatorName,lastReportedAt:firebase.firestore.Timestamp.now(),lastReportedAtClient:reportedAt,lastReportedDate:record.date,lastReportedBy:operatorName,lastInspectionId:record.id||null,lastObservedCondition:occurrence.condition,repeatReports:[occurrence]
+    reportCount:1,firstReportedAt:firebase.firestore.Timestamp.now(),firstReportedAtClient:reportedAt,firstReportedBy:operatorName,lastReportedAt:firebase.firestore.Timestamp.now(),lastReportedAtClient:reportedAt,lastReportedDate:record.date,lastReportedBy:operatorName,lastInspectionId:record.id||null,lastObservedCondition:occurrence.condition,photoRefs:occurrence.photoRefs,repeatReports:[occurrence]
   });
   return {action:'created',defectId};
 }
@@ -1276,7 +1276,7 @@ function renderServiceItems(){
 }
 function toggleCheck(el,mode){const idx=el.dataset.idx;const c=mode==='service'?document.getElementById('serviceItemsList'):document.getElementById('checkItemsList');
 const pair=c.querySelectorAll('.check-box[data-idx="'+idx+'"]');const wasActive=el.classList.contains('active');pair.forEach(b=>b.classList.remove('active'));if(!wasActive)el.classList.add('active');
-if(mode==='check'){const note=c.querySelector('.defect-note-inline[data-idx="'+idx+'"]');const isDefect=el.textContent.trim()==='Defect'&&el.classList.contains('active');if(note){note.classList.toggle('show',isDefect);if(isDefect)setTimeout(()=>note.focus(),50);else note.value='';}}}
+if(mode==='check'){const note=c.querySelector('.defect-note-inline[data-idx="'+idx+'"]');const isDefect=el.textContent.trim()==='Defect'&&el.classList.contains('active');if(note){note.classList.toggle('show',isDefect);if(isDefect)setTimeout(()=>note.focus(),50);else note.value='';}cpTogglePhotoControl(idx,isDefect);}}
 function toggleLolerStatus(el,status){pendingLolerStatus=status;document.querySelectorAll('#svcLolerPanel .check-box').forEach(b=>b.classList.remove('active'));el.classList.add('active');}
 function renderCategoryGrid(){const g=document.getElementById('categoryGrid');if(!g)return;g.innerHTML='';
 Object.entries(categories).forEach(([k,c])=>{const card=document.createElement('div');card.className='cat-card';card.onclick=()=>onCategoryChosen(k);
@@ -1306,6 +1306,7 @@ function startTimedMachineCheck(){
  updateCheckTimer();checkTimerInterval=setInterval(updateCheckTimer,1000);setTimeout(()=>initSigPad('sigPadCheck'),50);
 }
 function resetTimedCheckState(keepScreen){
+ cpResetDefectPhotos();
  stopCheckTimer();checkStartedAtMs=null;
  const ms=document.getElementById('chkMachineSelect'),h=document.getElementById('chkHours');
  if(ms)ms.disabled=false;if(h)h.disabled=false;
@@ -1329,12 +1330,12 @@ function cancelTimedCheck(){
  if(checkStartedAtMs&&document.getElementById('checkWorkArea').style.display!=='none'&&!confirm('Leave this check? The current timer and unfinished check will be discarded.'))return;
  resetTimedCheckState(false);
 }
-function renderCheckItems(){const l=document.getElementById('checkItemsList');l.innerHTML='';const cat = categories[currentCheckCategory];
+function renderCheckItems(){cpResetDefectPhotos();const l=document.getElementById('checkItemsList');l.innerHTML='';const cat = categories[currentCheckCategory];
       const items = displayedDailyCheckItems=checkItemsWithFluids(cat);
 document.getElementById('chkItemCount').textContent=items.length;document.getElementById('chkNoItemsNote').style.display=items.length?'none':'block';
 items.forEach((item,idx)=>{const row=document.createElement('div');row.className='checklist-item';if(isDailyFluidCheck(item))row.classList.add('daily-fluid-row');
 row.innerHTML='<div>'+escapeHtml(item)+'</div><div class="check-pair"><div class="check-box serviceable" data-idx="'+idx+'" onclick="toggleCheck(this,\'check\')">Pass</div><div class="check-box replaced" data-idx="'+idx+'" onclick="toggleCheck(this,\'check\')">Defect</div>'+(isDailyFluidCheck(item)?'<div class="check-box na" data-idx="'+idx+'" onclick="toggleCheck(this,\'check\')" title="Only if the machine has no applicable oil or coolant system">N/A</div>':'')+'</div><input class="defect-note-inline" data-idx="'+idx+'" type="text" maxlength="500" placeholder="Defect note — describe what is wrong (optional)">';
-l.appendChild(row);});}
+cpAttachPhotoControl(row,idx);l.appendChild(row);});}
 const sigPads={};
 function initSigPad(canvasId){const canvas=document.getElementById(canvasId);if(!canvas)return;const ctx=canvas.getContext('2d');let saved=null;
 function resize(){const rect=canvas.getBoundingClientRect();const ratio=Math.max(window.devicePixelRatio||1,1);
@@ -1355,7 +1356,7 @@ function clearSig(id){const p=sigPads[id];if(!p)return;p.ctx.clearRect(0,0,p.can
 function collectItems(containerId,items){const c=document.getElementById(containerId);const res=[];
 items.forEach((item,idx)=>{const boxes=c.querySelectorAll('.check-box[data-idx="'+idx+'"]');let status='Not checked';boxes.forEach(b=>{if(b.classList.contains('active'))status=b.textContent.trim();});let note='';if(containerId==='checkItemsList'){const noteEl=c.querySelector('.defect-note-inline[data-idx="'+idx+'"]');note=noteEl?noteEl.value.trim():'';}res.push({name:item,status,defectNote:note});});return res;}
 function defectRaisedTimestamp(d){if(d.raisedAt&&d.raisedAt.toDate)return d.raisedAt.toDate().getTime();return new Date((d.dateRaised||'1970-01-01')+'T00:00:00').getTime();}
-function renderOutstandingDefectsList(){const w=document.getElementById('outstandingDefectsList');if(!w)return;const open=defects.filter(d=>d.status==='open').sort((a,b)=>defectRaisedTimestamp(a)-defectRaisedTimestamp(b));if(!open.length){w.innerHTML='<div class="empty-state">No outstanding defects.</div>';return;}w.innerHTML='';open.forEach(d=>{const days=daysBetween(d.dateRaised,todayISO());const row=document.createElement('div');row.className='machine-list-item';row.onclick=()=>openDefectForm(d.id);const raisedTime=d.raisedAt&&d.raisedAt.toDate?d.raisedAt.toDate().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'';const count=d.reportCount>1?' · Reported '+d.reportCount+' times':'';row.innerHTML=`<div><div class="mname">${d.defectId?'['+escapeHtml(d.defectId)+'] ':''}${escapeHtml(d.machineName)} — ${escapeHtml(d.itemName)}</div><div class="mlast">Raised ${escapeHtml(d.dateRaised||'')}${raisedTime?' at '+escapeHtml(raisedTime):''}${count}</div></div><div style="display:flex;align-items:center;gap:8px"><button class="btn btn-secondary btn-sm" type="button" data-view-defect="${d.id}">View PDF</button><span class="badge red">${days}d</span></div>`;row.querySelector('[data-view-defect]').onclick=(event)=>{event.stopPropagation();viewDefectPDF(d.id);};w.appendChild(row);});}
+function renderOutstandingDefectsList(){const w=document.getElementById('outstandingDefectsList');if(!w)return;const open=defects.filter(d=>d.status==='open').sort((a,b)=>defectRaisedTimestamp(a)-defectRaisedTimestamp(b));if(!open.length){w.innerHTML='<div class="empty-state">No outstanding defects.</div>';return;}w.innerHTML='';open.forEach(d=>{const days=daysBetween(d.dateRaised,todayISO());const row=document.createElement('div');row.className='machine-list-item';row.onclick=()=>openDefectForm(d.id);const raisedTime=d.raisedAt&&d.raisedAt.toDate?d.raisedAt.toDate().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'';const count=d.reportCount>1?' · Reported '+d.reportCount+' times':'';row.innerHTML=`<div><div class="mname">${d.defectId?'['+escapeHtml(d.defectId)+'] ':''}${escapeHtml(d.machineName)} — ${escapeHtml(d.itemName)}</div><div class="mlast">Raised ${escapeHtml(d.dateRaised||'')}${raisedTime?' at '+escapeHtml(raisedTime):''}${count}</div></div><div style="display:flex;align-items:center;gap:8px"><button class="btn btn-secondary btn-sm" type="button" data-view-defect="${d.id}">View PDF</button><span class="badge red">${days}d</span></div>`;row.querySelector('[data-view-defect]').onclick=(event)=>{event.stopPropagation();viewDefectPDF(d.id);};if((d.photoRefs||[]).length){const b=document.createElement('button');b.type='button';b.className='btn btn-secondary btn-sm';b.textContent='Photos ('+d.photoRefs.length+')';b.onclick=e=>{e.stopPropagation();cpViewDefectPhotos(d.id);};row.lastElementChild.prepend(b);}w.appendChild(row);});}
 function openDefectForm(id){currentDefect=defects.find(d=>d.id===id);if(!currentDefect)return;
 document.getElementById('defMachineName').value=currentDefect.machineName;document.getElementById('defItemName').value=currentDefect.itemName;
 const idField=document.getElementById('defDefectId');if(idField)idField.value=currentDefect.defectId||currentDefect.id;
@@ -1448,14 +1449,17 @@ const cat = categories[currentCheckCategory];
     const checkSrc = displayedDailyCheckItems;
     const items = collectItems('checkItemsList', checkSrc);
 const incomplete=items.filter(i=>i.status==='Not checked');if(incomplete.length){const msg=incomplete.length+' checklist item'+(incomplete.length===1?' is':'s are')+' still unanswered';if(completeStatus)completeStatus.textContent=msg+'.';toast(msg);return;}
+if(cpPhotoPending){toast('Please allow the selected photographs to finish compressing before submitting.');return;}
 if(completeBtn){completeBtn.disabled=true;completeBtn.textContent='Completing Check…';}if(completeStatus)completeStatus.textContent='Saving completed check…';
 const checkCompletedAtMs=Date.now(),checkDurationMs=Math.max(0,checkCompletedAtMs-checkStartedAtMs);
 const signatureData=(sig&&sig.hasSignature)?sig.canvas.toDataURL('image/png'):'';
 const checkRef=db.collection('records').doc();
+const photoWrites=[];items.forEach((item,idx)=>{if(item.status!=='Defect')return;const photos=cpDefectPhotos.get(idx)||[];if(photos.length)item.photoRefs=photos.map(p=>{const ref=db.collection('defectPhotos').doc();photoWrites.push({ref,photo:p,itemName:item.name});return {id:ref.id,bytes:p.bytes,width:p.width,height:p.height};});});
 const record={id:checkRef.id,recordId:'CP-CHK-'+checkRef.id.slice(0,8).toUpperCase(),type:'check',categoryKey:currentCheckCategory,machineId:currentCheckMachine.id,machineName:currentCheckMachine.name,subject:cat.label+' — '+currentCheckMachine.name,serialNumber:currentCheckMachine.serialNumber||'',branch:currentCheckMachine.branch||'',technician:signName,date:document.getElementById('chkDate').value||todayISO(),items,notes:document.getElementById('chkNotes').value.trim(),signName,signDate,signatureData,hoursReading:Number(hours),checkStartedAt:firebase.firestore.Timestamp.fromMillis(checkStartedAtMs),checkCompletedAt:firebase.firestore.Timestamp.fromMillis(checkCompletedAtMs),checkDurationMs,checkDurationFormatted:formatDuration(checkDurationMs),createdAt:firebase.firestore.Timestamp.now(),syncStatus:'pending'};
 try{
   const batch=db.batch();
   batch.set(checkRef,record);
+  for(const entry of photoWrites)batch.set(entry.ref,{recordId:record.id,machineId:record.machineId,itemName:entry.itemName,reportedBy:signName,createdAt:firebase.firestore.FieldValue.serverTimestamp(),contentType:'image/jpeg',bytes:entry.photo.bytes,width:entry.photo.width,height:entry.photo.height,data:entry.photo.data});
   batch.update(db.collection('machines').doc(record.machineId),{currentHours:Number(hours)});
   await batch.commit();
 }catch(err){
@@ -1466,7 +1470,7 @@ for(const di of items.filter(i=>i.status==='Defect')){
   try{await createOrLinkCheckDefect(di,record,signName);}
   catch(err){defectFailures++;console.error('Defect creation/link failed',err);}
 }
-stopCheckTimer();checkStartedAtMs=null;document.getElementById('chkMachineSelect').disabled=false;document.getElementById('chkHours').disabled=false;
+cpResetDefectPhotos();stopCheckTimer();checkStartedAtMs=null;document.getElementById('chkMachineSelect').disabled=false;document.getElementById('chkHours').disabled=false;
 if(completeStatus)completeStatus.textContent='Check completed successfully.';
 lastGeneratedRecord=record;lastGeneratedDoc=null;
 showScreen('pdf-ready');
@@ -1771,11 +1775,11 @@ async function addCategoryItem(key, mode){
 function renderDefectsTable(){const ce=document.getElementById('defectCount');const oc=defects.filter(d=>d.status==='open').length;if(ce)ce.textContent=oc;
 const w=document.getElementById('defectsTableWrap');if(!w)return;if(!defects.length){w.innerHTML='<div class="empty-state">No defects.</div>';return;}
 const sorted=[...defects].sort((a,b)=>(a.dateRaised||'').localeCompare(b.dateRaised||''));
-let h='<table><thead><tr><th>ID</th><th>Machine</th><th>Defect</th><th>Raised</th><th>Days</th><th>Status</th><th>Resolved</th><th>Work Done / Notes</th></tr></thead><tbody>';
+let h='<table><thead><tr><th>ID</th><th>Machine</th><th>Defect</th><th>Raised</th><th>Days</th><th>Status</th><th>Resolved</th><th>Work Done / Notes</th><th>Photos</th></tr></thead><tbody>';
 sorted.forEach(d=>{const days=d.status==='open'?daysBetween(d.dateRaised,todayISO()):daysBetween(d.dateRaised,d.resolvedDate||todayISO());
 const raisedTime=d.raisedAt&&d.raisedAt.toDate?d.raisedAt.toDate().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'';
 const resolvedTime=d.resolvedAt&&d.resolvedAt.toDate?d.resolvedAt.toDate().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'';
-h+='<tr><td style="font-weight:700">'+escapeHtml(d.defectId||'-')+'</td><td>'+escapeHtml(d.machineName)+'</td><td>'+escapeHtml(d.itemName)+'</td><td>'+d.dateRaised+(raisedTime?(' '+raisedTime):'')+'</td><td>'+days+'</td><td><span class="pill '+d.status+'">'+d.status+'</span></td><td>'+(d.resolvedDate?d.resolvedDate+(resolvedTime?(' '+resolvedTime):'')+' by '+escapeHtml(d.resolvedBy||'-'):'-')+'</td><td>'+escapeHtml(d.resolutionNotes||'-')+'</td></tr>';});
+h+='<tr><td style="font-weight:700">'+escapeHtml(d.defectId||'-')+'</td><td>'+escapeHtml(d.machineName)+'</td><td>'+escapeHtml(d.itemName)+'</td><td>'+d.dateRaised+(raisedTime?(' '+raisedTime):'')+'</td><td>'+days+'</td><td><span class="pill '+d.status+'">'+d.status+'</span></td><td>'+(d.resolvedDate?d.resolvedDate+(resolvedTime?(' '+resolvedTime):'')+' by '+escapeHtml(d.resolvedBy||'-'):'-')+'</td><td>'+escapeHtml(d.resolutionNotes||'-')+'</td><td>'+cpDefectPhotoButton(d)+'</td></tr>';});
 h+='</tbody></table>';w.innerHTML=h;}
 function exportDefectsCSV(){if(!defects.length){toast('No defects');return;}let csv='Defect ID,Machine,Defect,Raised,Days,Status,Resolved,By,Work Done Notes\n';
 defects.forEach(d=>{const days=d.status==='open'?daysBetween(d.dateRaised,todayISO()):daysBetween(d.dateRaised,d.resolvedDate||todayISO());
@@ -2258,6 +2262,63 @@ function cpRenderJobParts(){
   const pending=rows.filter(r=>!['received','cancelled'].includes(r.status)).length;
   card.querySelector('.cpJobPartsStatus').innerHTML='<div class="progress-note"><b>'+pending+' outstanding request(s)</b> • '+rows.length+' total</div>'+ (rows.map(r=>'<div style="padding:10px 0;border-bottom:1px solid #ddd"><b>'+cpEsc(r.partName)+'</b> × '+cpEsc(r.quantity)+'<div class="progress-note">Part no: '+cpEsc(r.partNumber||'Unknown')+' | '+cpEsc(r.supplierName||'Supplier pending')+'</div><span class="badge '+(r.status==='received'?'green':r.status==='cancelled'?'red':'amber')+'">'+cpEsc(r.status==='requested'?'Awaiting order':r.status==='ordered'?'Ordered':r.status==='received'?'Received':r.status)+'</span></div>').join('')||'<p class="progress-note">No parts requested for this job.</p>');
  }
+}
+
+/* Optional compact photo evidence. No image payload in subscribed records or defects. */
+const CP_PHOTO_LIMIT=100*1024,CP_PHOTO_MAX_EDGE=1280,CP_PHOTOS_PER_ITEM=2,CP_PHOTOS_PER_CHECK=8;
+let cpDefectPhotos=new Map(),cpPhotoPending=0,cpPhotoEpoch=0;
+function cpResetDefectPhotos(){cpPhotoEpoch++;cpDefectPhotos.clear();cpPhotoPending=0;document.querySelectorAll('.cp-photo-control').forEach(el=>{el.style.display='none';const out=el.querySelector('.cp-photo-list');if(out)out.replaceChildren();});}
+function cpAttachPhotoControl(row,idx){
+ const wrap=document.createElement('div');wrap.className='cp-photo-control';wrap.dataset.idx=idx;wrap.style.cssText='display:none;flex:0 0 100%;padding:8px 0';
+ const input=document.createElement('input');input.type='file';input.accept='image/*';input.setAttribute('capture','environment');input.hidden=true;input.style.display='none';
+ const btn=document.createElement('button');btn.type='button';btn.className='btn btn-secondary btn-sm';btn.textContent='Take / Add Defect Photo';btn.onclick=()=>input.click();
+ const list=document.createElement('div');list.className='cp-photo-list';list.style.cssText='display:flex;gap:10px;flex-wrap:wrap;margin-top:8px';
+ const hint=document.createElement('p');hint.className='progress-note';hint.textContent='Optional • up to 2 photos per defect, 8 per check • automatically compressed';
+ input.onchange=async()=>{const file=input.files?.[0];input.value='';if(!file)return;await cpAddDefectPhoto(idx,file,btn,list);};
+ wrap.append(btn,input,hint,list);row.appendChild(wrap);
+}
+function cpTogglePhotoControl(idx,show){
+ const wrap=document.querySelector('.cp-photo-control[data-idx="'+idx+'"]');if(!wrap)return;
+ wrap.style.display=show?'block':'none';
+ if(!show){cpDefectPhotos.delete(idx);wrap.querySelector('.cp-photo-list')?.replaceChildren();}
+}
+async function cpCompressPhoto(file){
+ if(!file.type.startsWith('image/')||file.size>30*1024*1024)throw Error('Choose an image smaller than 30 MB');
+ const url=URL.createObjectURL(file),img=new Image();
+ try{await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=()=>reject(Error('Image format could not be opened. Try JPEG.'));img.src=url;});
+ let scale=Math.min(1,CP_PHOTO_MAX_EDGE/Math.max(img.naturalWidth,img.naturalHeight));const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');if(!ctx)throw Error('Photo processing unavailable');
+ for(let attempt=0;attempt<8;attempt++){
+  canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);
+  for(const quality of [0.72,0.58,0.45,0.32]){
+   const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',quality));if(!blob)continue;
+   if(blob.size<=CP_PHOTO_LIMIT){const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(blob);});return {data,bytes:blob.size,width:canvas.width,height:canvas.height};}
+  }scale*=0.78;
+ }throw Error('Could not compress photo below 100 KB. Try a different image.');
+ }finally{URL.revokeObjectURL(url);}
+}
+async function cpAddDefectPhoto(idx,file,btn,list){
+ const existing=cpDefectPhotos.get(idx)||[];
+ const total=[...cpDefectPhotos.values()].reduce((a,b)=>a+b.length,0);
+ if(existing.length>=CP_PHOTOS_PER_ITEM||total+cpPhotoPending>=CP_PHOTOS_PER_CHECK)return toast('Photo limit reached');
+ const epoch=cpPhotoEpoch;cpPhotoPending++;btn.disabled=true;btn.textContent='Compressing photo…';
+ try{const photo=await cpCompressPhoto(file);
+ if(epoch!==cpPhotoEpoch||!document.querySelector('#checkItemsList .check-box.active[data-idx="'+idx+'"]')||document.querySelector('#checkItemsList .check-box.active[data-idx="'+idx+'"]').textContent.trim()!=='Defect')return;
+ const arr=cpDefectPhotos.get(idx)||[];if(arr.length>=CP_PHOTOS_PER_ITEM)return;arr.push(photo);cpDefectPhotos.set(idx,arr);cpRenderPhotoPreviews(idx,list);
+ }catch(e){toast(e.message||'Photo could not be processed');}
+ finally{if(epoch===cpPhotoEpoch)cpPhotoPending=Math.max(0,cpPhotoPending-1);btn.disabled=false;btn.textContent='Take / Add Defect Photo';}
+}
+function cpRenderPhotoPreviews(idx,list){
+ list.replaceChildren();(cpDefectPhotos.get(idx)||[]).forEach((p,i)=>{const card=document.createElement('div');card.style.cssText='width:112px';const img=document.createElement('img');img.src=p.data;img.alt='Defect photo preview';img.style.cssText='width:112px;height:78px;object-fit:cover;border-radius:8px';const caption=document.createElement('div');caption.className='progress-note';caption.textContent=Math.ceil(p.bytes/1024)+' KB';const b=document.createElement('button');b.type='button';b.className='btn btn-secondary btn-sm';b.textContent='Remove';b.onclick=()=>{const arr=cpDefectPhotos.get(idx)||[];arr.splice(i,1);cpRenderPhotoPreviews(idx,list);};card.append(img,caption,b);list.appendChild(card);});
+}
+function cpDefectPhotoButton(d){const count=(d.photoRefs||[]).length;return count?'<button type="button" class="btn btn-secondary btn-sm" onclick="cpViewDefectPhotos('+cpEsc(JSON.stringify(d.id))+')">View ('+count+')</button>':'—';}
+async function cpViewDefectPhotos(id){
+ const d=defects.find(x=>x.id===id);if(!d)return;
+ const refs=Array.isArray(d.photoRefs)?d.photoRefs:[];if(!refs.length)return toast('No photos attached');
+ let modal=document.getElementById('cpDefectPhotoViewer');if(modal)modal.remove();modal=document.createElement('div');modal.id='cpDefectPhotoViewer';modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:10001;overflow:auto;padding:18px';
+ const card=document.createElement('div');card.style.cssText='max-width:760px;margin:auto;background:white;border-radius:14px;padding:18px';
+ const close=document.createElement('button');close.type='button';close.className='btn btn-secondary';close.textContent='Close photos';close.onclick=()=>modal.remove();const title=document.createElement('h2');title.textContent=d.machineName+' — '+d.itemName;const list=document.createElement('div');card.append(close,title,list);modal.appendChild(card);document.body.appendChild(modal);
+ // Only fetch a photograph when its individual button is pressed.
+ for(const [i,r] of refs.entries()){const b=document.createElement('button');b.type='button';b.className='btn btn-secondary btn-block';b.style.marginTop='8px';b.textContent='Load photo '+(i+1)+' ('+Math.ceil((r.bytes||0)/1024)+' KB)';b.onclick=async()=>{b.disabled=true;try{const doc=await db.collection('defectPhotos').doc(r.id).get();const p=doc.data();if(!doc.exists||!p?.data?.startsWith('data:image/jpeg;base64,'))throw Error('Photo unavailable');const image=document.createElement('img');image.src=p.data;image.alt='Defect evidence '+(i+1);image.style.cssText='display:block;width:100%;height:auto;margin:10px 0;border-radius:8px';b.replaceWith(image);}catch(e){b.disabled=false;toast('Unable to load photograph: '+e.message);}};list.appendChild(b);}
 }
 function cpStartApplication(){
  try{cpPartsInit();}catch(e){console.error('Parts initialization failed',e);toast('Parts ordering failed to initialize: '+e.message);}
