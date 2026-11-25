@@ -89,3 +89,15 @@
 .asset-status .as-job-meta,.asset-status.as-wall .as-job-meta{margin-top:5px}
 .asset-status .as-progress,.asset-status .as-work-notes{margin-top:6px;padding-top:6px}
 .asset-status .as-progress-entry{margin-top:5px}
+
+/* Compact live purchasing status, readable on the workshop TV. */
+.asset-status .as-parts{border-top:1px solid #355064;margin-top:6px;padding-top:6px}
+.asset-status .as-parts h4{margin:0 0 4px;color:#9fc9e9;font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+.asset-status .as-part-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:3px 0;line-height:1.25;font-size:13px}
+.asset-status .as-part-name{flex:1;min-width:0;overflow-wrap:anywhere}
+.asset-status .as-part-name small{font-size:.85em;color:var(--as-muted)}
+.asset-status .as-part-status{font-weight:700;text-align:right;flex:0 1 auto;font-size:.9em}
+.asset-status .as-part-requested{color:#ffca78}
+.asset-status .as-part-ordered{color:#9ed4ff}
+.asset-status .as-part-received{color:#8ee2ab}
+.asset-status.as-wall .as-part-row{font-size:var(--as-tv-font,16px)}
