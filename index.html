@@ -1154,10 +1154,9 @@ db.collection('machines').orderBy('name').onSnapshot(s=>{
 db.collection('engineers').orderBy('name').onSnapshot(s=>{engineers=s.docs.map(d=>({id:d.id,...d.data()}));renderEngineerAdmin();},e=>console.error("Engineer list error",e));
 db.collection('liveJobs').onSnapshot(s=>{liveJobs=s.docs.map(d=>({id:d.id,...d.data()})).filter(j=>j.status!=='completed'&&j.status!=='cancelled');renderEngineerLiveJobs();renderEngineerActivityOverview();if(currentLiveJob){const fresh=liveJobs.find(j=>j.id===currentLiveJob.id);if(fresh){currentLiveJob=fresh;renderLiveJobState();}}if(currentServiceLiveJob){const freshSvc=liveJobs.find(j=>j.id===currentServiceLiveJob.id);if(freshSvc){currentServiceLiveJob=freshSvc;renderServiceLiveState();}}},e=>console.error("Live jobs error",e));
 db.collection('categories').onSnapshot(async s=>{
-  const seeded = await ensureCategoriesSeeded(s.docs);
-  if(seeded) return;
-  categories={};s.docs.forEach(d=>categories[d.id]=d.data());
+  categories={...DEFAULT_CATEGORIES};s.docs.forEach(d=>categories[d.id]={...(DEFAULT_CATEGORIES[d.id]||{}),...d.data()});
   renderCategoryGrid();renderCategoryList();populateNewMachineCategorySelect();
+  try{await ensureCategoriesSeeded(s.docs);}catch(e){console.warn('Category migration failed; existing templates remain available',e);}
 },e=>setConn(false,"Cat error: "+e.message));
 db.collection('records').orderBy('createdAt','desc').limit(RECENT_RECORD_LIMIT).onSnapshot(applyRecentRecordsSnapshot,e=>setConn(false,"Rec error: "+e.message));
 // Services have their own uncapped subscription: daily checks must not hide old services.
@@ -1234,15 +1233,18 @@ function populateServiceMachineSelect(){const sel=document.getElementById('servi
 machines.forEach(m=>{const o=document.createElement('option');o.value=m.id;o.textContent=m.name+(m.serialNumber?' (S/N: '+m.serialNumber+')':'')+' ('+(m.branch||'no branch')+')';sel.appendChild(o);});sel.value=cv;
 document.getElementById('noMachinesNote').style.display=machines.length?'none':'block';}
 function machineChecklistItems(m){
-      const cat = m.categoryKey ? categories[m.categoryKey] : null;
-      if(cat){
-        const detailed=detailedServiceTemplate(m.categoryKey,cat);
-        if(detailed && Number(cat.serviceTemplateVersion||0)<SERVICE_TEMPLATE_VERSION)return detailed;
-        return (cat.serviceItems && cat.serviceItems.length) ? cat.serviceItems : (detailed||cat.items||[]);
-      }
-      return detailedServiceTemplate(m.categoryKey)||m.items||[];
+      if(!m)return [];
+      const key=m.categoryKey||'';
+      const cat=categories[key]||DEFAULT_CATEGORIES[key]||null;
+      const detailed=detailedServiceTemplate(key,cat||{label:m.category||m.type||m.name});
+      const saved=Array.isArray(cat?.serviceItems)?cat.serviceItems.filter(x=>typeof x==='string'&&x.trim()):[];
+      if(detailed&&(!saved.length||Number(cat?.serviceTemplateVersion||0)<SERVICE_TEMPLATE_VERSION))return detailed;
+      if(saved.length)return saved;
+      const fallback=Array.isArray(cat?.items)&&cat.items.length?cat.items:Array.isArray(m.items)?m.items:[];
+      return fallback.filter(x=>typeof x==='string'&&x.trim());
 }
-function onServiceMachineChosen(){const id=document.getElementById('serviceMachineSelect').value;if(!id)return;currentServiceMachine=machines.find(m=>m.id===id);currentServiceLiveJob=null;stopServiceTimer();
+function onServiceMachineChosen(){const id=document.getElementById('serviceMachineSelect').value;if(!id)return;const selected=machines.find(m=>m.id===id);if(!selected){toast('Machine details are still loading. Please select again.');return;}currentServiceMachine=selected;currentServiceLiveJob=null;stopServiceTimer();
+showScreen('service-form');
 document.getElementById('serviceMachineName').textContent=currentServiceMachine.name+(currentServiceMachine.serialNumber?' (S/N: '+currentServiceMachine.serialNumber+')':'');
 document.getElementById('svcTechName').value=currentEngineer?currentEngineer.name:'';document.getElementById('svcTechName').readOnly=!!currentEngineer;document.getElementById('svcDate').value=todayISO();
 document.getElementById('svcHours').value=currentServiceMachine.currentHours||'';document.getElementById('svcNotes').value='';
@@ -1252,8 +1254,8 @@ pendingLolerStatus='pass';document.querySelectorAll('#svcLolerPanel .check-box')
 const ls=latestServiceRecordForMachine(id);const since=(currentServiceMachine.currentHours||0)-(currentServiceMachine.lastServiceHours||0);
 document.getElementById('lastServiceHint').innerHTML='<p class="progress-note">'+(ls?'Last serviced '+ls.date:'No previous service')+'. Hours since reset: '+since+' (resets to 0 now). Next service due will be set to current hours + 500.</p>';
 renderServiceItems();const ck=currentServiceMachine.categoryKey;const la=ck&&categories[ck]?categories[ck].lolerApplies:true;
-document.getElementById('svcLolerPanel').style.display='block';if(!la){document.querySelector('#svcLolerPanel .check-box[data-loler="na"]').click();}
-renderServiceLiveState();showScreen('service-form');setTimeout(()=>initSigPad('sigPadService'),50);}
+document.getElementById('svcLolerPanel').style.display='block';if(!la){document.querySelector('#svcLolerPanel .check-box[data-loler="na"]')?.click();}
+renderServiceLiveState();setTimeout(()=>initSigPad('sigPadService'),50);}
 function renderServiceItems(){
  const l=document.getElementById('serviceItemsList');l.innerHTML='';
  const items=displayedServiceItems=[...machineChecklistItems(currentServiceMachine)];
@@ -1853,7 +1855,7 @@ function formatDuration(ms){const total=Math.max(0,Math.floor(ms/1000));const h=
 function stopLiveTimer(){if(liveTimerInterval){clearInterval(liveTimerInterval);liveTimerInterval=null;}}
 function startLiveTimer(){stopLiveTimer();const tick=()=>{const el=document.getElementById('adhocTimer');if(el&&currentLiveJob)el.textContent=formatDuration(liveElapsedMs(currentLiveJob));};tick();liveTimerInterval=setInterval(tick,1000);}
 function renderLiveJobState(){
- cpRenderJobParts();
+ try{cpRenderJobParts();}catch(e){console.warn('Parts panel unavailable',e);}
   const live=!!currentLiveJob,panel=document.getElementById('adhocTimerPanel');if(!panel)return;
   panel.style.display=live?'block':'none';document.getElementById('adhocProgressCard').style.display=live?'block':'none';document.getElementById('openAdhocJobBtn').style.display=live?'none':'block';document.getElementById('completeAdhocJobBtn').style.display=live&&engineerIsLead(currentLiveJob)?'block':'none';
   const idBadge=document.getElementById('adhocLiveId');idBadge.style.display=live?'inline-block':'none';idBadge.textContent=live?(currentLiveJob.jobId||'LIVE'):'';
@@ -1971,8 +1973,8 @@ async function submitAdHocJob(markVOR){
 function stopServiceTimer(){if(serviceTimerInterval){clearInterval(serviceTimerInterval);serviceTimerInterval=null;}}
 function startServiceTimer(){stopServiceTimer();const tick=()=>{const el=document.getElementById('serviceTimer');if(el&&currentServiceLiveJob)el.textContent=formatDuration(liveElapsedMs(currentServiceLiveJob));};tick();serviceTimerInterval=setInterval(tick,1000);}
 function renderServiceLiveState(){
- cpRenderJobParts();
-  cpRenderServiceKit();
+ try{cpRenderJobParts();}catch(e){console.warn('Parts panel unavailable',e);}
+ try{cpRenderServiceKit();}catch(e){console.warn('Service kit panel unavailable',e);}
   const svcSign=document.getElementById('svcSignName'),svcDate=document.getElementById('svcSignDate');if(svcSign&&!svcSign.value&&currentEngineer)svcSign.value=currentEngineer.name||'';if(svcDate&&!svcDate.value)svcDate.value=todayISO();
   const live=!!currentServiceLiveJob,panel=document.getElementById('serviceTimerPanel');if(!panel)return;
   panel.style.display=live?'block':'none';document.getElementById('serviceProgressCard').style.display=live?'block':'none';document.getElementById('openServiceJobBtn').style.display=live?'none':'block';document.getElementById('completeServiceJobBtn').style.display=live&&engineerIsLead(currentServiceLiveJob)?'block':'none';
