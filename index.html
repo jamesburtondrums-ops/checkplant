@@ -36,6 +36,17 @@ textarea{min-height:90px;}
 .check-box.serviceable.active{background:#e3f7e8;border-color:var(--green);color:var(--green-dark);}
 .check-box.replaced.active{background:#fee2e2;border-color:var(--red);color:var(--red);}
 .check-box.na.active{background:#f3f4f6;border-color:#9aa1ab;color:#6b7280;}
+#serviceItemsList .service-section{font-size:.85rem;font-weight:800;color:var(--navy);background:#eef0f8;padding:8px 10px;margin:12px 0 2px;border-radius:5px;}
+#serviceItemsList .checklist-item{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;padding:8px 4px;gap:7px;font-size:.89rem;line-height:1.3;}
+#serviceItemsList .check-pair{display:grid;grid-template-columns:repeat(4,minmax(62px,1fr));gap:4px;}
+#serviceItemsList .check-box{width:auto;min-height:38px;padding:6px 5px;font:700 .72rem/1.15 inherit;font-family:inherit;font-size:.72rem;background:#fff;}
+#serviceItemsList .check-box.active.serviceable{background:#e3f7e8;}
+#serviceItemsList .check-box.active.replaced{background:#e3f7e8;border-color:var(--green);color:var(--green-dark);}
+#serviceItemsList .check-box.active.service-defect{background:#fee2e2;border-color:var(--red);color:var(--red);}
+#serviceItemsList .check-box.active.na{background:#f3f4f6;}
+#serviceItemsList .service-defect-note{display:none;grid-column:1/-1;font-size:.85rem;padding:8px;}
+#serviceItemsList .service-defect-note.show{display:block;}
+@media(max-width:600px){#serviceItemsList .checklist-item{grid-template-columns:minmax(0,1fr);padding:8px 0;}#serviceItemsList .check-pair{grid-template-columns:repeat(4,minmax(0,1fr));}#serviceItemsList .check-box{min-height:38px;}}
 .cat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
 @media (max-width:700px){.cat-grid{grid-template-columns:repeat(2,1fr);}}
 .cat-card{background:#fff;border:2px solid #e5e7eb;border-radius:12px;padding:16px 8px;text-align:center;cursor:pointer;}
@@ -191,7 +202,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focu
 <div class="card"><div class="section-title">Service Checklist — <span id="serviceMachineName"></span> <span id="serviceLiveId" class="badge navy" style="display:none"></span></div>
 <div class="row"><div><label>Technician</label><input type="text" id="svcTechName"></div><div><label>Date</label><input type="date" id="svcDate"></div></div>
 <div class="row" style="margin-top:12px"><div><label>Current Hour Meter Reading <span class="required-star">*</span></label><input type="number" id="svcHours" min="0"></div></div></div>
-<div class="card"><div class="section-title">Serviceable Items <span class="badge" id="svcItemCount">0</span></div>
+<div class="card"><div class="section-title">Service checklist <span class="badge" id="svcItemCount">0</span></div><p class="progress-note">Follow the manufacturer’s service schedule and safe isolation procedures. Record Replaced when renewed, Serviceable when checked and satisfactory, N/A only when not fitted or not due. Record defects and isolate unsafe equipment in accordance with site procedure.</p>
 <div id="serviceItemsList"></div><p class="progress-note" id="svcNoItemsNote" style="display:none">No items set.</p></div>
 <button class="btn btn-primary btn-block" id="openServiceJobBtn" onclick="openServiceJob()" style="margin-bottom:16px">Mark Service Live &amp; Start Timer</button>
 <div class="loler-panel" id="svcLolerPanel">
@@ -373,6 +384,486 @@ firebase.initializeApp(firebaseConfig);
 const db=firebase.firestore();
 function setConn(o,t){document.getElementById('connDot').className='conn-dot '+(o?'online':'offline');document.getElementById('connText').textContent=t;}
 function isFireExtinguisherItem(name){return /fire\s*extinguisher/i.test(String(name||''));}
+const SERVICE_TEMPLATE_VERSION=20261125;
+const SERVICE_TEMPLATES={
+  "grab": [
+    "Attachment / magnet / grab — Grab jaws / tines and wear plates",
+    "Attachment / magnet / grab — Grab or magnet body for cracks and damage",
+    "Attachment / magnet / grab — Attachment pins, bushes and locking devices",
+    "Attachment / magnet / grab — Attachment hydraulic pipes, hoses and leaks",
+    "Attachment / magnet / grab — Rotator motor, bearing and mounting bolts",
+    "Attachment / magnet / grab — Magnet cable, plug and mounting where fitted",
+    "Attachment / magnet / grab — Attachment open/close/rotate function",
+    "Boom & dipper — Boom and dipper structure for cracks and damage",
+    "Boom & dipper — Boom, dipper and elevating cab rams for leaks/damage",
+    "Boom & dipper — All pins, bushes and retaining / locking devices",
+    "Boom & dipper — Boom hose routing, protection and clamps",
+    "Boom & dipper — Slew ring play, mounting bolts and lubrication",
+    "Boom & dipper — Slew gearbox oil level and condition",
+    "Boom & dipper — Slew ring grease bath / pinion lubrication",
+    "Chassis — Wheels / tyres or tracks, condition and wear",
+    "Chassis — Wheel nuts or track fasteners",
+    "Chassis — Axle security, damage and hub / axle oil",
+    "Chassis — Service and parking brake operation",
+    "Chassis — Steering, travel motors and final drives",
+    "Chassis — Outriggers / stabilisers and pads where fitted",
+    "Engine & cooling — Engine oil - inspect level and renew if due",
+    "Engine & cooling — Engine oil filter - renew if due",
+    "Engine & cooling — Fuel pre-filter / water separator - drain or renew if due",
+    "Engine & cooling — Main fuel filter - renew if due",
+    "Engine & cooling — Air filter primary element - inspect or renew if due",
+    "Engine & cooling — Air filter safety element - renew if due",
+    "Engine & cooling — Coolant level, condition and antifreeze concentration",
+    "Engine & cooling — Radiator, oil cooler and charge-air cooler - clean and inspect",
+    "Engine & cooling — Drive belts, tensioners and pulleys",
+    "Engine & cooling — Engine mounts, exhaust and intake connections",
+    "Engine & cooling — Fuel, oil and coolant leaks",
+    "Engine & cooling — AdBlue / emissions system where fitted",
+    "Hydraulics & lubrication — Hydraulic oil level and condition",
+    "Hydraulics & lubrication — Hydraulic return / pressure filters - renew if due",
+    "Hydraulics & lubrication — Hydraulic tank breather and suction strainer - service if due",
+    "Hydraulics & lubrication — Hydraulic hoses, pipes, clamps and fittings",
+    "Hydraulics & lubrication — Hydraulic cylinders, rods, seals and mountings",
+    "Hydraulics & lubrication — Pumps, control valves and hydraulic leaks",
+    "Hydraulics & lubrication — Grease nipples and manual lubrication points",
+    "Hydraulics & lubrication — Automatic greaser reservoir, lines and delivery where fitted",
+    "Cab & electrical — Cab mounting, glazing, doors and access steps",
+    "Cab & electrical — Seat, seat belt and operator restraint",
+    "Cab & electrical — Wipers, washers, mirrors and cameras",
+    "Cab & electrical — Warning lights, gauges and audible alarms",
+    "Cab & electrical — Work lights, road lights and beacon",
+    "Cab & electrical — Control operation, neutral lock and safety interlocks",
+    "Cab & electrical — Battery security, terminals and charging system",
+    "Cab & electrical — Cab ventilation / heater and cab filter",
+    "Cab & electrical — Horn and reversing / travel alarm",
+    "Cab & electrical — Electrical wiring, connectors and isolator",
+    "Final checks — Guards, covers, access and safety decals",
+    "Final checks — Functional test in safe controlled area",
+    "Final checks — Recheck fluid levels and leaks after test",
+    "Final checks — Confirm all scheduled manufacturer service tasks completed"
+  ],
+  "forklift": [
+    "Forks & mast — Fork heels, blades, tips and locking pins",
+    "Forks & mast — Fork wear and distortion against manufacturer limits",
+    "Forks & mast — Carriage, backrest and attachment locking",
+    "Forks & mast — Mast channels, rollers and bearings",
+    "Forks & mast — Lift chains, anchors, tension and lubrication",
+    "Forks & mast — Lift, tilt, side-shift and reach cylinders",
+    "Forks & mast — Reach mechanism and wear pads where fitted",
+    "Forks & mast — Hydraulic load holding and lift/tilt function",
+    "Chassis & brakes — Tyres, wheels, wheel nuts and wheel bearings",
+    "Chassis & brakes — Steering axle, joints and steering operation",
+    "Chassis & brakes — Service and parking brake operation",
+    "Chassis & brakes — Drive axle / transmission oil and filters if due",
+    "Chassis & brakes — Overhead guard, counterweight and chassis",
+    "Chassis & brakes — Load capacity plate and attachment rating",
+    "Power unit — Engine oil and oil filter - renew if due",
+    "Power unit — Fuel filters / water separator - service if due",
+    "Power unit — Air filter - inspect or renew if due",
+    "Power unit — Coolant, antifreeze, radiator and drive belts",
+    "Power unit — Battery condition, electrolyte where applicable and terminals",
+    "Power unit — Traction battery connector, cables and restraint",
+    "Power unit — Charger and charging function",
+    "Power unit — LPG system, hose, regulator and cylinder restraint where fitted",
+    "Hydraulics & lubrication — Hydraulic oil level and condition",
+    "Hydraulics & lubrication — Hydraulic return / pressure filters - renew if due",
+    "Hydraulics & lubrication — Hydraulic tank breather and suction strainer - service if due",
+    "Hydraulics & lubrication — Hydraulic hoses, pipes, clamps and fittings",
+    "Hydraulics & lubrication — Hydraulic cylinders, rods, seals and mountings",
+    "Hydraulics & lubrication — Pumps, control valves and hydraulic leaks",
+    "Hydraulics & lubrication — Grease nipples and manual lubrication points",
+    "Hydraulics & lubrication — Automatic greaser reservoir, lines and delivery where fitted",
+    "Cab & electrical — Cab mounting, glazing, doors and access steps",
+    "Cab & electrical — Seat, seat belt and operator restraint",
+    "Cab & electrical — Wipers, washers, mirrors and cameras",
+    "Cab & electrical — Warning lights, gauges and audible alarms",
+    "Cab & electrical — Work lights, road lights and beacon",
+    "Cab & electrical — Control operation, neutral lock and safety interlocks",
+    "Cab & electrical — Battery security, terminals and charging system",
+    "Cab & electrical — Cab ventilation / heater and cab filter",
+    "Cab & electrical — Horn and reversing / travel alarm",
+    "Cab & electrical — Electrical wiring, connectors and isolator",
+    "Final checks — Guards, covers, access and safety decals",
+    "Final checks — Functional test in safe controlled area",
+    "Final checks — Recheck fluid levels and leaks after test",
+    "Final checks — Confirm all scheduled manufacturer service tasks completed"
+  ],
+  "loadingshovel": [
+    "Bucket & loader arms — Bucket shell, cutting edge and teeth",
+    "Bucket & loader arms — Bucket linkage, pins and bushes",
+    "Bucket & loader arms — Loader arms, crossmember and welds",
+    "Bucket & loader arms — Quick hitch, locks and indicator where fitted",
+    "Bucket & loader arms — Lift and tilt rams and mountings",
+    "Bucket & loader arms — Bucket and attachment operation",
+    "Chassis & driveline — Tyres, rims and wheel nuts",
+    "Chassis & driveline — Front and rear axle / differential oil",
+    "Chassis & driveline — Hub oil and leaks",
+    "Chassis & driveline — Transmission oil and filter - service if due",
+    "Chassis & driveline — Propshafts, U-joints and guards",
+    "Chassis & driveline — Articulation joint pins, bushes and steering cylinders",
+    "Chassis & driveline — Chassis, counterweight and access steps",
+    "Chassis & driveline — Service, parking and secondary brakes",
+    "Chassis & driveline — Steering operation and emergency steering where fitted",
+    "Engine & cooling — Engine oil - inspect level and renew if due",
+    "Engine & cooling — Engine oil filter - renew if due",
+    "Engine & cooling — Fuel pre-filter / water separator - drain or renew if due",
+    "Engine & cooling — Main fuel filter - renew if due",
+    "Engine & cooling — Air filter primary element - inspect or renew if due",
+    "Engine & cooling — Air filter safety element - renew if due",
+    "Engine & cooling — Coolant level, condition and antifreeze concentration",
+    "Engine & cooling — Radiator, oil cooler and charge-air cooler - clean and inspect",
+    "Engine & cooling — Drive belts, tensioners and pulleys",
+    "Engine & cooling — Engine mounts, exhaust and intake connections",
+    "Engine & cooling — Fuel, oil and coolant leaks",
+    "Engine & cooling — AdBlue / emissions system where fitted",
+    "Hydraulics & lubrication — Hydraulic oil level and condition",
+    "Hydraulics & lubrication — Hydraulic return / pressure filters - renew if due",
+    "Hydraulics & lubrication — Hydraulic tank breather and suction strainer - service if due",
+    "Hydraulics & lubrication — Hydraulic hoses, pipes, clamps and fittings",
+    "Hydraulics & lubrication — Hydraulic cylinders, rods, seals and mountings",
+    "Hydraulics & lubrication — Pumps, control valves and hydraulic leaks",
+    "Hydraulics & lubrication — Grease nipples and manual lubrication points",
+    "Hydraulics & lubrication — Automatic greaser reservoir, lines and delivery where fitted",
+    "Cab & electrical — Cab mounting, glazing, doors and access steps",
+    "Cab & electrical — Seat, seat belt and operator restraint",
+    "Cab & electrical — Wipers, washers, mirrors and cameras",
+    "Cab & electrical — Warning lights, gauges and audible alarms",
+    "Cab & electrical — Work lights, road lights and beacon",
+    "Cab & electrical — Control operation, neutral lock and safety interlocks",
+    "Cab & electrical — Battery security, terminals and charging system",
+    "Cab & electrical — Cab ventilation / heater and cab filter",
+    "Cab & electrical — Horn and reversing / travel alarm",
+    "Cab & electrical — Electrical wiring, connectors and isolator",
+    "Final checks — Guards, covers, access and safety decals",
+    "Final checks — Functional test in safe controlled area",
+    "Final checks — Recheck fluid levels and leaks after test",
+    "Final checks — Confirm all scheduled manufacturer service tasks completed"
+  ],
+  "excavator": [
+    "Boom, dipper & attachment — Boom and dipper welds, cracks and damage",
+    "Boom, dipper & attachment — Bucket shell, teeth and cutting edge",
+    "Boom, dipper & attachment — Bucket linkage, pins, bushes and retainers",
+    "Boom, dipper & attachment — Quick hitch locking mechanism and indicator",
+    "Boom, dipper & attachment — Boom, dipper and bucket rams",
+    "Boom, dipper & attachment — Auxiliary hydraulic attachment connections",
+    "Boom, dipper & attachment — Slew ring play, bolts and lubrication",
+    "Boom, dipper & attachment — Slew gearbox oil and grease bath where fitted",
+    "Undercarriage & travel — Track shoes, links, pins and fasteners",
+    "Undercarriage & travel — Track tension, idlers and tension adjusters",
+    "Undercarriage & travel — Top and bottom rollers and sprockets",
+    "Undercarriage & travel — Final drive oil levels and seals",
+    "Undercarriage & travel — Track frame condition and guards",
+    "Undercarriage & travel — Travel function, brakes and steering",
+    "Undercarriage & travel — Wheeled axle, tyres and wheel nuts where fitted",
+    "Engine & cooling — Engine oil - inspect level and renew if due",
+    "Engine & cooling — Engine oil filter - renew if due",
+    "Engine & cooling — Fuel pre-filter / water separator - drain or renew if due",
+    "Engine & cooling — Main fuel filter - renew if due",
+    "Engine & cooling — Air filter primary element - inspect or renew if due",
+    "Engine & cooling — Air filter safety element - renew if due",
+    "Engine & cooling — Coolant level, condition and antifreeze concentration",
+    "Engine & cooling — Radiator, oil cooler and charge-air cooler - clean and inspect",
+    "Engine & cooling — Drive belts, tensioners and pulleys",
+    "Engine & cooling — Engine mounts, exhaust and intake connections",
+    "Engine & cooling — Fuel, oil and coolant leaks",
+    "Engine & cooling — AdBlue / emissions system where fitted",
+    "Hydraulics & lubrication — Hydraulic oil level and condition",
+    "Hydraulics & lubrication — Hydraulic return / pressure filters - renew if due",
+    "Hydraulics & lubrication — Hydraulic tank breather and suction strainer - service if due",
+    "Hydraulics & lubrication — Hydraulic hoses, pipes, clamps and fittings",
+    "Hydraulics & lubrication — Hydraulic cylinders, rods, seals and mountings",
+    "Hydraulics & lubrication — Pumps, control valves and hydraulic leaks",
+    "Hydraulics & lubrication — Grease nipples and manual lubrication points",
+    "Hydraulics & lubrication — Automatic greaser reservoir, lines and delivery where fitted",
+    "Cab & electrical — Cab mounting, glazing, doors and access steps",
+    "Cab & electrical — Seat, seat belt and operator restraint",
+    "Cab & electrical — Wipers, washers, mirrors and cameras",
+    "Cab & electrical — Warning lights, gauges and audible alarms",
+    "Cab & electrical — Work lights, road lights and beacon",
+    "Cab & electrical — Control operation, neutral lock and safety interlocks",
+    "Cab & electrical — Battery security, terminals and charging system",
+    "Cab & electrical — Cab ventilation / heater and cab filter",
+    "Cab & electrical — Horn and reversing / travel alarm",
+    "Cab & electrical — Electrical wiring, connectors and isolator",
+    "Final checks — Guards, covers, access and safety decals",
+    "Final checks — Functional test in safe controlled area",
+    "Final checks — Recheck fluid levels and leaks after test",
+    "Final checks — Confirm all scheduled manufacturer service tasks completed"
+  ],
+  "cherrypicker": [
+    "Platform & boom — Platform floor, guard rails and entry gate",
+    "Platform & boom — Harness anchor points and load plate",
+    "Platform & boom — Boom / scissor arms and structural welds",
+    "Platform & boom — Pins, bushes, retainers and wear pads",
+    "Platform & boom — Platform levelling mechanism",
+    "Platform & boom — Extension chains / ropes, guides and anchors where fitted",
+    "Platform & boom — Outriggers, stabilisers and pads",
+    "Platform & boom — Slew bearing and mounting bolts where fitted",
+    "Safety & function — Ground and platform controls",
+    "Safety & function — Emergency stops at both control stations",
+    "Safety & function — Emergency lowering / auxiliary power",
+    "Safety & function — Tilt alarm and operating envelope restrictions",
+    "Safety & function — Overload / load sensing system per manufacturer test",
+    "Safety & function — Limit switches and interlocks",
+    "Safety & function — Travel, steering and brakes",
+    "Safety & function — Tyres, wheels and wheel nuts",
+    "Safety & function — Pothole protection where fitted",
+    "Power unit — Engine oil and oil filter - renew if due",
+    "Power unit — Fuel and air filters - service if due",
+    "Power unit — Coolant, antifreeze, radiators and belts",
+    "Power unit — Battery condition, restraint and connections",
+    "Power unit — Charger and charging function",
+    "Power unit — Electrical cables and connectors",
+    "Hydraulics & lubrication — Hydraulic oil level and condition",
+    "Hydraulics & lubrication — Hydraulic return / pressure filters - renew if due",
+    "Hydraulics & lubrication — Hydraulic tank breather and suction strainer - service if due",
+    "Hydraulics & lubrication — Hydraulic hoses, pipes, clamps and fittings",
+    "Hydraulics & lubrication — Hydraulic cylinders, rods, seals and mountings",
+    "Hydraulics & lubrication — Pumps, control valves and hydraulic leaks",
+    "Hydraulics & lubrication — Grease nipples and manual lubrication points",
+    "Hydraulics & lubrication — Automatic greaser reservoir, lines and delivery where fitted",
+    "Final checks — Guards, covers, access and safety decals",
+    "Final checks — Functional test in safe controlled area",
+    "Final checks — Recheck fluid levels and leaks after test",
+    "Final checks — Confirm all scheduled manufacturer service tasks completed"
+  ],
+  "shredder": [
+    "Cutting chamber & feed — Rotor / shafts, cutters, teeth and counter-knives for wear",
+    "Cutting chamber & feed — Cutter fasteners, clearances and wear limits per manufacturer",
+    "Cutting chamber & feed — Feed hopper, liners and structural condition",
+    "Cutting chamber & feed — Pusher / feed ram guides and wear pads",
+    "Cutting chamber & feed — Rotor bearings, seals and lubrication",
+    "Cutting chamber & feed — Couplings, gearbox mounts and drive alignment",
+    "Cutting chamber & feed — Discharge conveyor belt, rollers, scraper and tracking",
+    "Cutting chamber & feed — Overband magnet and separation equipment where fitted",
+    "Power & hydraulics — Engine oil and oil filter - renew if due",
+    "Power & hydraulics — Fuel pre-filter, fuel filter and air filter - service if due",
+    "Power & hydraulics — Coolant, antifreeze, radiators and drive belts",
+    "Power & hydraulics — Hydraulic oil level, condition and leaks",
+    "Power & hydraulics — Hydraulic filters and breathers - service if due",
+    "Power & hydraulics — Hydraulic hoses, rams, valves and pumps",
+    "Power & hydraulics — Fire / dust suppression system where fitted",
+    "Power & hydraulics — Tracks, travel drive and final drive oil where fitted",
+    "Safety & structure — Isolation points, labels and lock-off provision",
+    "Safety & structure — Emergency stops and pull cords - controlled function test",
+    "Safety & structure — Guarding, access doors and safety interlocks",
+    "Safety & structure — Frame, supports, platforms, ladders and handrails",
+    "Safety & structure — Warning devices, start-up alarms and signage",
+    "Drive & electrical — Motor mounts, coupling condition and guards",
+    "Drive & electrical — Gearbox oil level, condition and renewal if due",
+    "Drive & electrical — Drive belts / chains, tension and alignment",
+    "Drive & electrical — Bearings, seals, lubrication and abnormal play",
+    "Drive & electrical — Electrical enclosures, cables and glands - visual inspection",
+    "Drive & electrical — Control panel indicators and safety circuits - competent person",
+    "Drive & electrical — Grease nipples and automatic lubrication delivery",
+    "Final checks — Remove debris and inspect for loose fixings",
+    "Final checks — Controlled functional test; check noise, vibration and leaks",
+    "Final checks — Confirm manufacturer scheduled tasks completed",
+    "Operational test — Controlled forward / reverse and jam-clear function",
+    "Operational test — Check feed and discharge sequences and abnormal vibration"
+  ],
+  "staticplant": [
+    "Conveyors & picking stations — Belt cover, edges, joints and splices",
+    "Conveyors & picking stations — Head / tail drums, lagging and bearings",
+    "Conveyors & picking stations — Carry and return rollers / idlers",
+    "Conveyors & picking stations — Belt tracking, tension and take-up travel",
+    "Conveyors & picking stations — Scrapers, skirt rubber and seals",
+    "Conveyors & picking stations — Chutes, hoppers, liners and wear plates",
+    "Conveyors & picking stations — Conveyor supports, fixings and alignment",
+    "Conveyors & picking stations — Picking station lighting and extraction",
+    "Conveyors & picking stations — Magnet, separator, trommel or screen elements where fitted",
+    "Conveyors & picking stations — Brushes, screens and fines-cleaning equipment where fitted",
+    "Conveyors & picking stations — Dust suppression, pipework and nozzles",
+    "Conveyors & picking stations — Clean accessible build-up and check drainage",
+    "Safety & structure — Isolation points, labels and lock-off provision",
+    "Safety & structure — Emergency stops and pull cords - controlled function test",
+    "Safety & structure — Guarding, access doors and safety interlocks",
+    "Safety & structure — Frame, supports, platforms, ladders and handrails",
+    "Safety & structure — Warning devices, start-up alarms and signage",
+    "Drive & electrical — Motor mounts, coupling condition and guards",
+    "Drive & electrical — Gearbox oil level, condition and renewal if due",
+    "Drive & electrical — Drive belts / chains, tension and alignment",
+    "Drive & electrical — Bearings, seals, lubrication and abnormal play",
+    "Drive & electrical — Electrical enclosures, cables and glands - visual inspection",
+    "Drive & electrical — Control panel indicators and safety circuits - competent person",
+    "Drive & electrical — Grease nipples and automatic lubrication delivery",
+    "Final checks — Remove debris and inspect for loose fixings",
+    "Final checks — Controlled functional test; check noise, vibration and leaks",
+    "Final checks — Confirm manufacturer scheduled tasks completed"
+  ],
+  "crusher": [
+    "Crushing / screening assembly — Jaw plates / crusher liners / blow bars where fitted",
+    "Crushing / screening assembly — Crushing chamber, feed chute and wear plates",
+    "Crushing / screening assembly — Crusher fasteners, adjustment system and clearances",
+    "Crushing / screening assembly — Screen meshes, decks, tension and fixings",
+    "Crushing / screening assembly — Vibrating screen bearings and mounts",
+    "Crushing / screening assembly — Feeder, hopper, liners and supports",
+    "Crushing / screening assembly — Discharge belts, rollers, tracking and scrapers",
+    "Crushing / screening assembly — Overband magnet and metal detector where fitted",
+    "Crushing / screening assembly — Dust suppression nozzles and pipework",
+    "Power & mobile systems — Engine oil and oil filter - renew if due",
+    "Power & mobile systems — Fuel pre-filter, fuel filter and air filter - service if due",
+    "Power & mobile systems — Coolant, antifreeze, radiators and drive belts",
+    "Power & mobile systems — Hydraulic oil level, condition and leaks",
+    "Power & mobile systems — Hydraulic filters and breathers - service if due",
+    "Power & mobile systems — Hydraulic hoses, pumps, rams and valves",
+    "Power & mobile systems — Tracks, wheels, final drives and stabilisers where fitted",
+    "Safety & structure — Isolation points, labels and lock-off provision",
+    "Safety & structure — Emergency stops and pull cords - controlled function test",
+    "Safety & structure — Guarding, access doors and safety interlocks",
+    "Safety & structure — Frame, supports, platforms, ladders and handrails",
+    "Safety & structure — Warning devices, start-up alarms and signage",
+    "Drive & electrical — Motor mounts, coupling condition and guards",
+    "Drive & electrical — Gearbox oil level, condition and renewal if due",
+    "Drive & electrical — Drive belts / chains, tension and alignment",
+    "Drive & electrical — Bearings, seals, lubrication and abnormal play",
+    "Drive & electrical — Electrical enclosures, cables and glands - visual inspection",
+    "Drive & electrical — Control panel indicators and safety circuits - competent person",
+    "Drive & electrical — Grease nipples and automatic lubrication delivery",
+    "Final checks — Remove debris and inspect for loose fixings",
+    "Final checks — Controlled functional test; check noise, vibration and leaks",
+    "Final checks — Confirm manufacturer scheduled tasks completed",
+    "Operational test — Controlled feed / crushing / screening sequence",
+    "Operational test — Check abnormal noise and vibration"
+  ],
+  "baler": [
+    "Press & chamber — Chamber, platen, frame and welds",
+    "Press & chamber — Wear liners, guides and sliding surfaces",
+    "Press & chamber — Main ram, rod, seals and mountings",
+    "Press & chamber — Door, hinges, latches and locking mechanism",
+    "Press & chamber — Feed hopper / loading conveyor condition",
+    "Press & chamber — Bale ejector, guides and safe operating function",
+    "Press & chamber — Wire / strap feed, tensioners, rollers and cutters where fitted",
+    "Press & chamber — Tie system, needles and drive mechanism where fitted",
+    "Hydraulics & controls — Hydraulic oil level and condition",
+    "Hydraulics & controls — Hydraulic filters and breathers - service if due",
+    "Hydraulics & controls — Pumps, valves, hoses and fittings for leaks",
+    "Hydraulics & controls — Pressure and cycle settings against manufacturer specification",
+    "Hydraulics & controls — Door and chamber interlocks - controlled function test",
+    "Hydraulics & controls — Emergency stop and reset / restart prevention",
+    "Hydraulics & controls — Bale ejection guarding and exclusion controls",
+    "Safety & structure — Isolation points, labels and lock-off provision",
+    "Safety & structure — Emergency stops and pull cords - controlled function test",
+    "Safety & structure — Guarding, access doors and safety interlocks",
+    "Safety & structure — Frame, supports, platforms, ladders and handrails",
+    "Safety & structure — Warning devices, start-up alarms and signage",
+    "Drive & electrical — Motor mounts, coupling condition and guards",
+    "Drive & electrical — Gearbox oil level, condition and renewal if due",
+    "Drive & electrical — Drive belts / chains, tension and alignment",
+    "Drive & electrical — Bearings, seals, lubrication and abnormal play",
+    "Drive & electrical — Electrical enclosures, cables and glands - visual inspection",
+    "Drive & electrical — Control panel indicators and safety circuits - competent person",
+    "Drive & electrical — Grease nipples and automatic lubrication delivery",
+    "Final checks — Remove debris and inspect for loose fixings",
+    "Final checks — Controlled functional test; check noise, vibration and leaks",
+    "Final checks — Confirm manufacturer scheduled tasks completed"
+  ]
+};
+const EXTRA_SERVICE_TEMPLATES={
+  "dumptruck": [
+    "Body & chassis — Dump body, wear plates and hinge pins",
+    "Body & chassis — Tipping rams, mountings and body prop",
+    "Body & chassis — Tailgate, hinges and latches where fitted",
+    "Body & chassis — Chassis, articulation joint and steering cylinders",
+    "Body & chassis — Tyres, rims and wheel nuts",
+    "Body & chassis — Axle, differential and hub oils",
+    "Body & chassis — Transmission oil and filters if due",
+    "Body & chassis — Propshafts and universal joints",
+    "Body & chassis — Service, parking and secondary brakes",
+    "Body & chassis — Retarder and steering operation where fitted",
+    "Engine & cooling — Engine oil - inspect level and renew if due",
+    "Engine & cooling — Engine oil filter - renew if due",
+    "Engine & cooling — Fuel pre-filter / water separator - drain or renew if due",
+    "Engine & cooling — Main fuel filter - renew if due",
+    "Engine & cooling — Air filter primary element - inspect or renew if due",
+    "Engine & cooling — Air filter safety element - renew if due",
+    "Engine & cooling — Coolant level, condition and antifreeze concentration",
+    "Engine & cooling — Radiator, oil cooler and charge-air cooler - clean and inspect",
+    "Engine & cooling — Drive belts, tensioners and pulleys",
+    "Engine & cooling — Engine mounts, exhaust and intake connections",
+    "Engine & cooling — Fuel, oil and coolant leaks",
+    "Engine & cooling — AdBlue / emissions system where fitted",
+    "Hydraulics & lubrication — Hydraulic oil level and condition",
+    "Hydraulics & lubrication — Hydraulic return / pressure filters - renew if due",
+    "Hydraulics & lubrication — Hydraulic tank breather and suction strainer - service if due",
+    "Hydraulics & lubrication — Hydraulic hoses, pipes, clamps and fittings",
+    "Hydraulics & lubrication — Hydraulic cylinders, rods, seals and mountings",
+    "Hydraulics & lubrication — Pumps, control valves and hydraulic leaks",
+    "Hydraulics & lubrication — Grease nipples and manual lubrication points",
+    "Hydraulics & lubrication — Automatic greaser reservoir, lines and delivery where fitted",
+    "Cab & electrical — Cab mounting, glazing, doors and access steps",
+    "Cab & electrical — Seat, seat belt and operator restraint",
+    "Cab & electrical — Wipers, washers, mirrors and cameras",
+    "Cab & electrical — Warning lights, gauges and audible alarms",
+    "Cab & electrical — Work lights, road lights and beacon",
+    "Cab & electrical — Control operation, neutral lock and safety interlocks",
+    "Cab & electrical — Battery security, terminals and charging system",
+    "Cab & electrical — Cab ventilation / heater and cab filter",
+    "Cab & electrical — Horn and reversing / travel alarm",
+    "Cab & electrical — Electrical wiring, connectors and isolator",
+    "Final checks — Guards, covers, access and safety decals",
+    "Final checks — Functional test in safe controlled area",
+    "Final checks — Recheck fluid levels and leaks after test",
+    "Final checks — Confirm all scheduled manufacturer service tasks completed"
+  ],
+  "telehandler": [
+    "Boom & lifting attachment — Boom sections, welds and wear pads",
+    "Boom & lifting attachment — Extension chains / ropes and anchors where fitted",
+    "Boom & lifting attachment — Boom lift, extension and tilt rams",
+    "Boom & lifting attachment — Forks, carriage, quick hitch and locking devices",
+    "Boom & lifting attachment — Stabilisers and pads where fitted",
+    "Boom & lifting attachment — Load chart and load moment indicator function per manufacturer",
+    "Boom & lifting attachment — Boom position and overload interlocks",
+    "Chassis & driveline — Tyres, wheels and wheel nuts",
+    "Chassis & driveline — Axle, hub and transmission oil / filters if due",
+    "Chassis & driveline — Propshafts and universal joints",
+    "Chassis & driveline — Steering modes, linkage and joints",
+    "Chassis & driveline — Service and parking brakes",
+    "Engine & cooling — Engine oil - inspect level and renew if due",
+    "Engine & cooling — Engine oil filter - renew if due",
+    "Engine & cooling — Fuel pre-filter / water separator - drain or renew if due",
+    "Engine & cooling — Main fuel filter - renew if due",
+    "Engine & cooling — Air filter primary element - inspect or renew if due",
+    "Engine & cooling — Air filter safety element - renew if due",
+    "Engine & cooling — Coolant level, condition and antifreeze concentration",
+    "Engine & cooling — Radiator, oil cooler and charge-air cooler - clean and inspect",
+    "Engine & cooling — Drive belts, tensioners and pulleys",
+    "Engine & cooling — Engine mounts, exhaust and intake connections",
+    "Engine & cooling — Fuel, oil and coolant leaks",
+    "Engine & cooling — AdBlue / emissions system where fitted",
+    "Hydraulics & lubrication — Hydraulic oil level and condition",
+    "Hydraulics & lubrication — Hydraulic return / pressure filters - renew if due",
+    "Hydraulics & lubrication — Hydraulic tank breather and suction strainer - service if due",
+    "Hydraulics & lubrication — Hydraulic hoses, pipes, clamps and fittings",
+    "Hydraulics & lubrication — Hydraulic cylinders, rods, seals and mountings",
+    "Hydraulics & lubrication — Pumps, control valves and hydraulic leaks",
+    "Hydraulics & lubrication — Grease nipples and manual lubrication points",
+    "Hydraulics & lubrication — Automatic greaser reservoir, lines and delivery where fitted",
+    "Cab & electrical — Cab mounting, glazing, doors and access steps",
+    "Cab & electrical — Seat, seat belt and operator restraint",
+    "Cab & electrical — Wipers, washers, mirrors and cameras",
+    "Cab & electrical — Warning lights, gauges and audible alarms",
+    "Cab & electrical — Work lights, road lights and beacon",
+    "Cab & electrical — Control operation, neutral lock and safety interlocks",
+    "Cab & electrical — Battery security, terminals and charging system",
+    "Cab & electrical — Cab ventilation / heater and cab filter",
+    "Cab & electrical — Horn and reversing / travel alarm",
+    "Cab & electrical — Electrical wiring, connectors and isolator",
+    "Final checks — Guards, covers, access and safety decals",
+    "Final checks — Functional test in safe controlled area",
+    "Final checks — Recheck fluid levels and leaks after test",
+    "Final checks — Confirm all scheduled manufacturer service tasks completed"
+  ]
+};
+function detailedServiceTemplate(key,cat){
+ const label=String((cat&&cat.label)||key||'').toLowerCase();
+ if(SERVICE_TEMPLATES[key])return SERVICE_TEMPLATES[key];
+ if(/telehandler|telescopic|tele.?truck/.test(label))return EXTRA_SERVICE_TEMPLATES.telehandler;
+ if(/dump.?truck|dumper|articulated hauler/.test(label))return EXTRA_SERVICE_TEMPLATES.dumptruck;
+ return null;
+}
+function splitServiceItem(item){const parts=String(item||'').split(' — ');return parts.length>1?{section:parts.shift(),label:parts.join(' — ')}:{section:'General service',label:String(item||'')};}
+let displayedServiceItems=[];
 const REQUIRED_SERVICE_ITEMS=["Filters Changed","Oils Topped up/ Changed"];
 function serviceItemsWithRequired(categoryKey,items){
   const list=Array.isArray(items)?[...items]:[];
@@ -502,7 +993,8 @@ async function ensureCategoriesSeeded(existingDocs){
     if(!existingKeys.has(key)){
       batch.set(db.collection('categories').doc(key), {
         ...defaultCat,
-        serviceItems:serviceItemsWithRequired(key,defaultCat.items)
+        serviceItems:detailedServiceTemplate(key,defaultCat)||serviceItemsWithRequired(key,defaultCat.items),
+        serviceTemplateVersion:SERVICE_TEMPLATE_VERSION
       });
       needsCommit = true;
       logSync('Seeded missing category: '+key);
@@ -526,8 +1018,15 @@ async function ensureCategoriesSeeded(existingDocs){
     const serviceBase=(Array.isArray(data.serviceItems)&&data.serviceItems.length)
       ? data.serviceItems
       : (Array.isArray(data.items)?data.items:(defaultCat?defaultCat.items:[]));
-    const requiredServiceItems=serviceItemsWithRequired(key,serviceBase);
-    if(JSON.stringify(requiredServiceItems)!==JSON.stringify(serviceBase)) patch.serviceItems=requiredServiceItems;
+    const detailed=detailedServiceTemplate(key,data);
+    if(detailed && Number(data.serviceTemplateVersion||0)<SERVICE_TEMPLATE_VERSION){
+      patch.serviceItems=[...detailed];
+      patch.serviceTemplateVersion=SERVICE_TEMPLATE_VERSION;
+      if(!data.previousServiceItems)patch.previousServiceItems=[...serviceBase];
+    }else if(!detailed){
+      const requiredServiceItems=serviceItemsWithRequired(key,serviceBase);
+      if(JSON.stringify(requiredServiceItems)!==JSON.stringify(serviceBase))patch.serviceItems=requiredServiceItems;
+    }
     if(Object.keys(patch).length){
       batch.update(db.collection('categories').doc(key), patch);
       needsCommit = true;
@@ -719,8 +1218,12 @@ machines.forEach(m=>{const o=document.createElement('option');o.value=m.id;o.tex
 document.getElementById('noMachinesNote').style.display=machines.length?'none':'block';}
 function machineChecklistItems(m){
       const cat = m.categoryKey ? categories[m.categoryKey] : null;
-      if(cat) return (cat.serviceItems && cat.serviceItems.length) ? cat.serviceItems : cat.items;
-      return m.items;
+      if(cat){
+        const detailed=detailedServiceTemplate(m.categoryKey,cat);
+        if(detailed && Number(cat.serviceTemplateVersion||0)<SERVICE_TEMPLATE_VERSION)return detailed;
+        return (cat.serviceItems && cat.serviceItems.length) ? cat.serviceItems : (detailed||cat.items||[]);
+      }
+      return detailedServiceTemplate(m.categoryKey)||m.items||[];
 }
 function onServiceMachineChosen(){const id=document.getElementById('serviceMachineSelect').value;if(!id)return;currentServiceMachine=machines.find(m=>m.id===id);currentServiceLiveJob=null;stopServiceTimer();
 document.getElementById('serviceMachineName').textContent=currentServiceMachine.name+(currentServiceMachine.serialNumber?' (S/N: '+currentServiceMachine.serialNumber+')':'');
@@ -734,11 +1237,24 @@ document.getElementById('lastServiceHint').innerHTML='<p class="progress-note">'
 renderServiceItems();const ck=currentServiceMachine.categoryKey;const la=ck&&categories[ck]?categories[ck].lolerApplies:true;
 document.getElementById('svcLolerPanel').style.display='block';if(!la){document.querySelector('#svcLolerPanel .check-box[data-loler="na"]').click();}
 renderServiceLiveState();showScreen('service-form');setTimeout(()=>initSigPad('sigPadService'),50);}
-function renderServiceItems(){const l=document.getElementById('serviceItemsList');l.innerHTML='';const items=machineChecklistItems(currentServiceMachine);
-document.getElementById('svcItemCount').textContent=items.length;document.getElementById('svcNoItemsNote').style.display=items.length?'none':'block';
-items.forEach((item,idx)=>{const row=document.createElement('div');row.className='checklist-item';
-row.innerHTML='<div>'+escapeHtml(item)+'</div><div class="check-pair"><div class="check-box serviceable" data-idx="'+idx+'" onclick="toggleCheck(this,\'service\')">Serviceable</div><div class="check-box replaced" data-idx="'+idx+'" onclick="toggleCheck(this,\'service\')">Replaced</div></div>';
-l.appendChild(row);});}
+function renderServiceItems(){
+ const l=document.getElementById('serviceItemsList');l.innerHTML='';
+ const items=displayedServiceItems=[...machineChecklistItems(currentServiceMachine)];
+ document.getElementById('svcItemCount').textContent=items.length;document.getElementById('svcNoItemsNote').style.display=items.length?'none':'block';
+ let section='';
+ items.forEach((item,idx)=>{
+  const parts=splitServiceItem(item);
+  if(parts.section!==section){section=parts.section;const h=document.createElement('div');h.className='service-section';h.textContent=section;l.appendChild(h);}
+  const row=document.createElement('div');row.className='checklist-item';
+  const name=document.createElement('div');name.textContent=parts.label;row.appendChild(name);
+  const pair=document.createElement('div');pair.className='check-pair';
+  [['Serviceable','serviceable'],['Replaced','replaced'],['Defect','service-defect'],['N/A','na']].forEach(([label,cls])=>{
+    const b=document.createElement('button');b.type='button';b.className='check-box '+cls;b.dataset.idx=idx;b.textContent=label;b.onclick=()=>{toggleCheck(b,'service');const show=b.textContent==='Defect'&&b.classList.contains('active');note.classList.toggle('show',show);if(!show)note.value='';};pair.appendChild(b);
+  });
+  const note=document.createElement('input');note.type='text';note.className='service-defect-note';note.dataset.idx=idx;note.placeholder='Describe defect / action required';note.maxLength=500;
+  row.appendChild(pair);row.appendChild(note);l.appendChild(row);
+ });
+}
 function toggleCheck(el,mode){const idx=el.dataset.idx;const c=mode==='service'?document.getElementById('serviceItemsList'):document.getElementById('checkItemsList');
 const pair=c.querySelectorAll('.check-box[data-idx="'+idx+'"]');pair.forEach(b=>{if(b===el)b.classList.toggle('active');else if(el.classList.contains('active'))b.classList.remove('active');});
 if(mode==='check'){const note=c.querySelector('.defect-note-inline[data-idx="'+idx+'"]');const isDefect=el.textContent.trim()==='Defect'&&el.classList.contains('active');if(note){note.classList.toggle('show',isDefect);if(isDefect)setTimeout(()=>note.focus(),50);else note.value='';}}}
@@ -844,9 +1360,11 @@ const hours=document.getElementById('svcHours').value;
 const sig=sigPads['sigPadService'];
 if(!signName){fail('Enter engineer name');return;}
 if(hours===''){fail('Enter machine hours');return;}
-const items=collectItems('serviceItemsList',machineChecklistItems(currentServiceMachine));
+const items=collectItems('serviceItemsList',displayedServiceItems).map((item,idx)=>({...item,defectNote:document.querySelector('#serviceItemsList .service-defect-note[data-idx="'+idx+'"]')?.value.trim()||''}));
 const incomplete=items.filter(i=>i.status==='Not checked');
+if(!items.length){fail('No service checklist is available for this machine');return;}
 if(incomplete.length){fail(incomplete.length+' service checklist item'+(incomplete.length===1?' is':'s are')+' still unanswered');return;}
+if(items.some(i=>i.status==='Defect'&&!i.defectNote)){fail('Describe every outstanding service defect before completing');return;}
 if(completeBtn){completeBtn.disabled=true;completeBtn.textContent='Completing Service…';}
 if(completeStatus)completeStatus.textContent='Saving completed service…';
 const lolerCertDate=document.getElementById('lolerCertDate').value,lolerNextDue=document.getElementById('lolerNextDue').value,lolerExaminer=document.getElementById('lolerExaminer').value.trim();
@@ -873,13 +1391,15 @@ try{
   fail('Could not save completed service. Please try again.');
   return;
 }
+let serviceDefectFailures=0;
+for(const item of items.filter(i=>i.status==='Defect')){try{await createOrLinkCheckDefect(item,record,signName);}catch(err){serviceDefectFailures++;console.error('Service defect logging failed',err);}}
 stopServiceTimer();currentServiceLiveJob=null;lastGeneratedRecord=record;lastGeneratedDoc=null;
 if(completeStatus)completeStatus.textContent='Service completed successfully.';
 showScreen('pdf-ready');
 try{generatePDF(record);}catch(pdfErr){console.error('Service PDF generation error',pdfErr);}
 try{afterRecordCreated(record);}catch(syncErr){console.error('Service post-save sync error',syncErr);}
 if(completeBtn){completeBtn.disabled=false;completeBtn.textContent='Complete Service';}
-toast('Service completed successfully');
+toast(serviceDefectFailures?'Service saved — '+serviceDefectFailures+' defect record(s) could not be created; report these manually':'Service completed successfully');
 }else if(mode==='check'){
 if(!currentCheckCategory){toast('Select a category');return;}if(!currentCheckMachine){toast('Select a machine');return;}if(!checkStartedAtMs){toast('Start the machine check first');return;}
 const signName=document.getElementById('chkSignName').value.trim(),signDate=document.getElementById('chkSignDate').value||todayISO(),hours=document.getElementById('chkHours').value,sig=sigPads['sigPadCheck'];
@@ -941,7 +1461,42 @@ function defectPDFLine(doc,text,state){const pageW=doc.internal.pageSize.getWidt
 function buildDefectPDF(defect){const jsPDF=window.jspdf&&window.jspdf.jsPDF;if(!jsPDF)throw new Error('PDF library is unavailable');const doc=new jsPDF({unit:'pt',format:'a4'}),pageW=doc.internal.pageSize.getWidth(),margin=40,state={y:50};doc.setFillColor(46,46,143);doc.rect(0,0,pageW,74,'F');doc.setFillColor(47,174,78);doc.rect(0,70,pageW,4,'F');doc.setTextColor(255,255,255);doc.setFontSize(20);doc.setFont(undefined,'bold');doc.text('CheckPlant',margin,33);doc.setFontSize(10);doc.text('KCM WASTE MANAGEMENT',margin,50);doc.setFont(undefined,'normal');doc.text('Open Defect Record',margin,64);doc.setTextColor(28,31,38);state.y=100;doc.setFontSize(14);doc.setFont(undefined,'bold');doc.text((defect.defectId||defect.id)+' — '+(defect.itemName||'Defect'),margin,state.y);state.y+=24;defectPDFLine(doc,'Machine: '+(defect.machineName||'-'),state);defectPDFLine(doc,'Date raised: '+(defect.dateRaised||'-'),state);defectPDFLine(doc,'Status: '+(defect.status||'open'),state);defectPDFLine(doc,'Severity: '+(defect.severity||'routine'),state);defectPDFLine(doc,'Reports logged: '+(defect.reportCount||1),state);if(defect.lastReportedDate)defectPDFLine(doc,'Last reported: '+defect.lastReportedDate+(defect.lastReportedBy?' by '+defect.lastReportedBy:''),state);state.y+=8;doc.setFontSize(12);doc.setFont(undefined,'bold');doc.setTextColor(46,46,143);doc.text('Defect Notes and Repeat Reports',margin,state.y);doc.setTextColor(28,31,38);state.y+=18;const reports=Array.isArray(defect.repeatReports)?defect.repeatReports:[];if(reports.length){reports.sort((a,b)=>String(a.reportedAt||'').localeCompare(String(b.reportedAt||''))).forEach((r,i)=>defectPDFLine(doc,(i+1)+'. '+(r.reportedDate||'')+(r.reportedBy?' — '+r.reportedBy:'')+(r.condition?' — '+r.condition:''),state));}else defectPDFLine(doc,'Original report: '+(defect.lastObservedCondition||'No operator notes recorded.'),state);if(defect.resolutionNotes){state.y+=8;doc.setFontSize(12);doc.setFont(undefined,'bold');doc.setTextColor(46,46,143);doc.text('Resolution Notes',margin,state.y);doc.setTextColor(28,31,38);state.y+=18;defectPDFLine(doc,defect.resolutionNotes,state);}doc.setFontSize(8);doc.setTextColor(150,150,150);doc.text('CheckPlant KCM — Generated '+new Date().toLocaleString('en-GB'),margin,800);return doc;}
 function viewDefectPDF(id){try{const d=defects.find(x=>x.id===id);if(!d)return toast('Defect no longer available');const url=buildDefectPDF(d).output('bloburl');window.open(url,'_blank','noopener');}catch(e){console.error(e);toast('Could not open defect PDF');}}
 function viewCurrentDefectPDF(){if(!currentDefect){toast('Select a defect first');return;}viewDefectPDF(currentDefect.id);}
-function generatePDF(record){const jsPDF=window.jspdf.jsPDF;const doc=new jsPDF({unit:'pt',format:'a4'});const pageW=doc.internal.pageSize.getWidth();const margin=40;let y=50;
+function buildDetailedServicePDF(record){
+ const doc=new window.jspdf.jsPDF({unit:'pt',format:'a4'}),w=doc.internal.pageSize.getWidth(),h=doc.internal.pageSize.getHeight(),m=30,right=w-m,limit=h-48,statusX=right-98;
+ let y=0;
+ function header(first){
+  doc.setFillColor(46,46,143);doc.rect(0,0,w,first?55:39,'F');doc.setTextColor(255,255,255);doc.setFont(undefined,'bold');doc.setFontSize(first?17:12);doc.text('CheckPlant | KCM Waste Management',m,first?23:16);
+  doc.setFont(undefined,'normal');doc.setFontSize(10);doc.text(first?'Machine Service Report':'Service Report - continued',m,first?41:30);doc.setTextColor(28,31,38);y=first?72:52;
+ }
+ function page(){doc.addPage();header(false);}
+ function ensure(n){if(y+n>limit)page();}
+ function paragraph(value,size=10.5){doc.setFontSize(size);doc.setFont(undefined,'normal');const lines=doc.splitTextToSize(String(value||'-'),right-m);for(const line of lines){ensure(14);doc.text(line,m,y+11);y+=14;}}
+ function heading(label){ensure(31);doc.setFillColor(236,238,246);doc.rect(m,y,right-m,18,'F');doc.setFontSize(10.5);doc.setFont(undefined,'bold');doc.setTextColor(46,46,143);doc.text(label,m+5,y+12);doc.setTextColor(28,31,38);y+=22;}
+ header(true);doc.setFont(undefined,'bold');doc.setFontSize(14);const subject=doc.splitTextToSize(String(record.subject||record.machineName||'Machine'),right-m);doc.text(subject,m,y+12);y+=subject.length*17+4;
+ paragraph('Record: '+(record.recordId||record.id||'-')+'   |   Date: '+(record.date||'-')+'   |   Branch: '+(record.branch||'-'));
+ paragraph('Serial number: '+(record.serialNumber||'-')+'   |   Technician: '+(record.technician||record.signName||'-'));
+ paragraph('Current hours: '+(record.hoursReading??'-')+'   |   Next service: '+(record.nextServiceDueHours??'-')+' hrs'+(record.jobDurationFormatted?'   |   Duration: '+record.jobDurationFormatted:''));
+ y+=7;let section='';
+ for(const it of record.items||[]){
+   const p=splitServiceItem(it.name);
+   doc.setFontSize(10.5);doc.setFont(undefined,'normal');
+   const lines=doc.splitTextToSize(p.label,statusX-m-12);
+   const notes=it.defectNote?doc.splitTextToSize('Defect: '+it.defectNote,statusX-m-12):[];
+   const rowH=Math.max(17,lines.length*13+notes.length*13+5);
+   if(p.section!==section||y+rowH>limit){if(y+rowH+22>limit)page();section=p.section;heading(section);}
+   ensure(rowH);doc.setFont(undefined,'normal');doc.setFontSize(10.5);doc.text(lines,m+5,y+11);
+   if(notes.length){doc.setTextColor(170,30,30);doc.text(notes,m+5,y+11+lines.length*13);doc.setTextColor(28,31,38);}
+   doc.setFont(undefined,'bold');doc.setTextColor(...(it.status==='Defect'?[185,28,28]:['Serviceable','Replaced'].includes(it.status)?[29,112,54]:[95,101,110]));doc.text(String(it.status||'-'),statusX,y+11);doc.setTextColor(28,31,38);
+   y+=rowH;doc.setDrawColor(219,222,229);doc.line(m,y,right,y);
+ }
+ y+=9;if(record.lolerSection){heading('LOLER certificate verification (separate from service)');const ls=record.lolerSection;paragraph('Status: '+(ls.status==='pass'?'PASS':ls.status==='defect'?'DEFECT':'N/A')+'   |   Certificate: '+(ls.certDate||'-')+'   |   Next due: '+(ls.nextDueDate||'-'));paragraph('Examiner: '+(ls.examinerName||'-'));y+=6;}
+ heading('Service comments');paragraph(record.notes||'No notes.');y+=8;
+ ensure(108);heading('Engineer sign-off');paragraph('Name: '+(record.signName||'-')+'   |   Date: '+(record.signDate||'-'));
+ if(record.signatureData){try{doc.addImage(record.signatureData,'PNG',m,y,175,58);}catch(e){paragraph('Signature image unavailable');}}else paragraph('No signature image recorded');y+=62;
+ const total=doc.getNumberOfPages();for(let i=1;i<=total;i++){doc.setPage(i);doc.setDrawColor(220,223,230);doc.line(m,h-36,right,h-36);doc.setFont(undefined,'normal');doc.setFontSize(8);doc.setTextColor(100,105,115);doc.text('CheckPlant KCM | '+String(record.subject||'Machine').slice(0,65),m,h-22);doc.text('Page '+i+' of '+total,right,h-22,{align:'right'});}
+ return doc;
+}
+function generatePDF(record){if(record.type==='service'){lastGeneratedDoc=buildDetailedServicePDF(record);lastGeneratedRecord=record;const backBtn=document.getElementById('backToEngineerJobsBtn');if(backBtn)backBtn.style.display=currentEngineer?'block':'none';showScreen('pdf-ready');return;}const jsPDF=window.jspdf.jsPDF;const doc=new jsPDF({unit:'pt',format:'a4'});const pageW=doc.internal.pageSize.getWidth();const margin=40;let y=50;
 doc.setFillColor(46,46,143);doc.rect(0,0,pageW,74,'F');doc.setFillColor(47,174,78);doc.rect(0,70,pageW,4,'F');
 doc.setTextColor(255,255,255);doc.setFontSize(20);doc.setFont(undefined,'bold');doc.text('CheckPlant',margin,33);
 doc.setFontSize(10);doc.text('KCM WASTE MANAGEMENT',margin,50);
