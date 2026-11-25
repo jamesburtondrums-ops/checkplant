@@ -4,18 +4,19 @@ const assetCostReport = (() => {
   const dayMs = 86400000;
   const chartLimit = 10;
   const dateLabel = new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', dateStyle: 'medium' });
+  const londonDate = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/London' });
   const sterling = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' });
   const decimals = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 2 });
   const cash = pennies => sterling.format(pennies / 100);
   const hours = value => decimals.format(value) + ' h';
   const byId = id => document.getElementById(id);
-  const state = { machines: 'loading', costs: 'loading', history: 'loading' };
+  const state = { machines: 'loading', costs: 'loading', history: 'loading', records: 'loading' };
   let history = [];
   let listening = false;
   let report;
 
   function today() {
-    return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/London' }).format(new Date());
+    return londonDate.format(new Date());
   }
 
   function day(value) {
@@ -45,7 +46,24 @@ const assetCostReport = (() => {
     return total;
   }
 
-  function build(assets, entries, register, { from, to, asOf }) {
+  function completionDate(record) {
+    const timestamp = record.completedAt?.toDate?.() ?? record.completedAt;
+    const completed = timestamp == null ? NaN : new Date(timestamp).getTime();
+    return Number.isFinite(completed) ? londonDate.format(completed) : record.date;
+  }
+
+  function partsSummary(entry) {
+    const lines = Array.isArray(entry.parts) ? entry.parts.filter(part => part?.name).map(part => {
+      const price = number(part.price);
+      return part.name + (price ? ' (' + cash(Math.round(price * 100)) + ')' : '');
+    }) : [];
+    if (lines.length) return lines.join(', ');
+    if (entry.partsDesc?.trim()) return entry.partsDesc.trim();
+    if (number(entry.partsCost)) return 'Parts cost recorded (' + cash(Math.round(entry.partsCost * 100)) + '), names unavailable';
+    return 'No parts recorded';
+  }
+
+  function build(assets, entries, register, completedRecords, { from, to, asOf }) {
     const first = from ? day(from) : -Infinity;
     const afterLast = to ? day(to) + 1 : Infinity;
     const tomorrow = day(asOf) + 1;
@@ -55,7 +73,7 @@ const assetCostReport = (() => {
     function addRow(key, name, branch) {
       if (!rows.has(key)) {
         rows.set(key, { key, name, branch, spend: 0, loggedHours: 0, missing: 0,
-          pending: 0, entries: 0, intervals: [] });
+          pending: 0, entries: 0, intervals: [], jobs: [] });
       }
       return rows.get(key);
     }
@@ -83,11 +101,66 @@ const assetCostReport = (() => {
         name ? name + ' (unmatched)' : 'Unassigned asset', branch || '');
     }
 
-    for (const entry of entries) {
-      if (entry.workSource === 'external') continue;
-      const date = day(entry.date);
-      if (!Number.isFinite(date) || date < first || date >= afterLast) continue;
+    const inRange = value => {
+      const date = day(value);
+      return Number.isFinite(date) && date >= first && date < afterLast;
+    };
+    const internalEntries = entries.filter(entry => entry.workSource !== 'external');
+    const byCostId = new Map(internalEntries.filter(entry => entry.id).map(entry => [entry.id, entry]));
+    const jobKeys = (recordId, liveJobId, machineId, reference) => [
+      recordId && 'record:' + recordId,
+      liveJobId && 'live:' + liveJobId,
+      machineId && reference && 'reference:' + JSON.stringify([machineId, reference]),
+    ].filter(Boolean);
+    const entryKeys = entry => jobKeys(entry.linkedRecordId, entry.liveJobId, entry.machineId, entry.jobCardId);
+    const primaryCosts = new Map();
+    for (const entry of internalEntries) {
+      for (const key of entryKeys(entry)) {
+        const previous = primaryCosts.get(key);
+        if (!previous || (entry.costStatus === 'fully_signed_off' && previous.costStatus !== 'fully_signed_off')) {
+          primaryCosts.set(key, entry);
+        }
+      }
+    }
+
+    function addJob(row, date, record, entry) {
+      if (!inRange(date)) return;
+      const type = { service: 'Service', defect: 'Defect resolution', adhoc: 'Ad-hoc job' }[record?.type];
+      const title = record?.jobCategory || type || entry.workType || 'Maintenance';
+      row.jobs.push({
+        date,
+        title: title.charAt(0).toUpperCase() + title.slice(1),
+        reference: record?.recordId || entry.jobCardId || '',
+        person: record?.technician || record?.signName || '',
+        outcome: record?.outcome || (record?.type === 'defect' ? 'Resolved' : ''),
+        description: record?.jobDescription || '',
+        work: record?.notes?.trim() || entry.notes?.trim() || '',
+        parts: partsSummary(entry),
+        manual: !record && entryKeys(entry).length === 0,
+      });
+    }
+
+    const completedKeys = new Set();
+    const attachedEntries = new Set();
+    for (const record of completedRecords) {
+      if (!['service', 'adhoc', 'defect'].includes(record.type)) continue;
+      const keys = jobKeys(record.id, record.liveJobId, record.machineId, record.recordId);
+      keys.forEach(key => completedKeys.add(key));
+      const entry = byCostId.get(record.costEntryId) || keys.map(key => primaryCosts.get(key)).find(Boolean);
+      if (entry) attachedEntries.add(entry);
+      const asset = entry || {};
+      const date = completionDate(record);
+      if (!inRange(date)) continue;
+      const row = findRow(record.machineId || asset.machineId, record.machineName || asset.machineName, record.branch || asset.branch);
+      addJob(row, date, record, asset);
+    }
+
+    for (const entry of internalEntries) {
+      if (!inRange(entry.date)) continue;
       const row = findRow(entry.machineId, entry.machineName, entry.branch);
+      if (!attachedEntries.has(entry) && !entryKeys(entry).some(key => completedKeys.has(key))) {
+        addJob(row, entry.date, null, entry);
+      }
       const duration = costEntryDowntime(entry);
       row.entries++;
       if (duration === null) row.missing++;
@@ -119,7 +192,10 @@ const assetCostReport = (() => {
       }
     }
 
-    return [...rows.values()].map(row => ({ ...row, days: downtimeDays(row.intervals) }))
+    return [...rows.values()].map(row => ({
+      ...row, days: downtimeDays(row.intervals),
+      jobs: row.jobs.sort((a, b) => b.date.localeCompare(a.date) || a.reference.localeCompare(b.reference))
+    }))
       .sort((a, b) => b.spend - a.spend || a.name.localeCompare(b.name, 'en', { numeric: true }));
   }
 
@@ -148,6 +224,7 @@ const assetCostReport = (() => {
   function status(message) {
     byId('assetCostStatus').textContent = message;
     byId('assetCostPrint').disabled = !report;
+    byId('assetCostJobs').disabled = !report;
     byId('assetCostPdf').disabled = !report;
     byId('assetCostResults').hidden = !report;
   }
@@ -168,7 +245,7 @@ const assetCostReport = (() => {
     }
 
     const asOf = today();
-    const rows = build(machines, costEntries, history, { from, to, asOf });
+    const rows = build(machines, costEntries, history, state.records === 'ready' ? records : [], { from, to, asOf });
     const select = byId('assetCostAsset');
     const selected = select.value;
     select.replaceChildren(new Option('All assets', ''), ...[...rows]
@@ -188,7 +265,9 @@ const assetCostReport = (() => {
       'Spend includes recorded labour, parts and other costs on company assets, including servicing. Customer work and costs awaiting final sign-off are excluded.',
       'Completed job downtime uses authorised hours plus any extra time entered for other resolved defects. Manual cost entries use the downtime entered. Out-of-service days come from the register and count calendar days up to the return date, excluding that date. The two measures may overlap.',
       'A dash means downtime was not entered. Older entries saved with zero hours can include blank downtime fields.',
+      'Job summaries use the completion date when available. Spend uses the date on the cost entry.',
     ];
+    if (state.records === 'error') notes.push('Completed job cards could not load. The job summary only includes work recorded in CostLog.');
     if (state.history === 'error') notes.push('Out-of-service history could not load. Register figures only cover currently out-of-service assets.');
     if (totals.pending || totals.missing) notes.push(
       `${totals.pending} cost entries awaiting sign-off. ${totals.missing} entries without a downtime value.`);
@@ -204,7 +283,9 @@ const assetCostReport = (() => {
     const downtimeChart = totals.loggedHours
       ? ['Most logged downtime', 'loggedHours', hours]
       : ['Most out-of-service days', 'days', value => decimals.format(value) + ' d'];
-    report = { visible, scope, notes, metrics, columns, cells, from, to, downtimeChart };
+    const jobAssets = visible.filter(row => row.jobs.length)
+      .sort((a, b) => a.name.localeCompare(b.name, 'en', { numeric: true }) || a.branch.localeCompare(b.branch));
+    report = { visible, scope, notes, metrics, columns, cells, from, to, downtimeChart, jobAssets };
 
     byId('assetCostResults').innerHTML = `
       <p class="asset-report-scope">KCM Waste Management · ${escapeHtml(scope)}</p>
@@ -221,8 +302,36 @@ const assetCostReport = (() => {
           `<td class="${i >= 2 ? 'num' : ''}">${escapeHtml(cell)}</td>`).join('')}</tr>`).join('')
           || '<tr><td colspan="6" class="empty-state">No assets found.</td></tr>'}
       </tbody></table></div>
-      ${notes.map(note => `<p class="progress-note">${escapeHtml(note)}</p>`).join('')}`;
+      ${notes.map(note => `<p class="progress-note">${escapeHtml(note)}</p>`).join('')}
+      <section class="asset-job-summary" id="assetJobSummary">
+        <h2>Jobs carried out and parts used</h2>
+        ${jobAssets.map(row => `<section class="asset-job-group">
+          <h3>${escapeHtml(jobAssetLabel(row))}</h3>
+          ${row.jobs.map(job => `<article class="asset-job-entry">
+            <h4>${escapeHtml(jobLabel(job))}</h4>
+            ${jobDetails(job).map(line => `<p>${escapeHtml(line)}</p>`).join('')}
+          </article>`).join('')}
+        </section>`).join('') || '<p>No jobs recorded for the selected assets and dates.</p>'}
+      </section>`;
     status('');
+  }
+
+  function jobAssetLabel(row) {
+    return [row.name, row.branch, row.jobs.length + (row.jobs.length === 1 ? ' job' : ' jobs')].filter(Boolean).join(' · ');
+  }
+
+  function jobLabel(job) {
+    return [displayDate(job.date), job.title, job.reference, job.manual ? 'Manual cost entry' : ''].filter(Boolean).join(' · ');
+  }
+
+  function jobDetails(job) {
+    return [
+      [job.person, job.outcome].filter(Boolean).join(' · '),
+      job.work ? 'Work carried out: ' + job.work : '',
+      !job.work && job.description ? 'Job description: ' + job.description : '',
+      !job.work && !job.description ? 'No work notes recorded' : '',
+      'Parts used: ' + job.parts,
+    ].filter(Boolean);
   }
 
   function makePdf(data, JsPDF) {
@@ -325,7 +434,50 @@ const assetCostReport = (() => {
       doc.setDrawColor(224, 229, 237);
       doc.line(margin, y, width - margin, y);
     }
-    if (!data.visible.length) doc.text('No assets found.', margin + 5, y + 14);
+    if (!data.visible.length) {
+      doc.text('No assets found.', margin + 5, y + 14);
+      y += 20;
+    }
+
+    function newPageIfNeeded(space) {
+      if (y + space <= height - margin) return false;
+      doc.addPage();
+      heading();
+      return true;
+    }
+
+    function jobText(value, size, style, context = '') {
+      doc.setFont('helvetica', style);
+      doc.setFontSize(size);
+      const lines = doc.splitTextToSize(value, content);
+      for (const line of lines) {
+        if (newPageIfNeeded(size + 5)) {
+          if (context) jobText(context + ' (continued)', 10, 'bold');
+          doc.setFont('helvetica', style);
+          doc.setFontSize(size);
+        }
+        y += size + 4;
+        doc.text(line, margin, y);
+      }
+    }
+
+    y += 12;
+    newPageIfNeeded(85);
+    jobText('Jobs carried out and parts used', 13, 'bold');
+    if (!data.jobAssets.length) jobText('No jobs recorded for the selected assets and dates.', 9, 'normal');
+    for (const row of data.jobAssets) {
+      const assetLabel = jobAssetLabel(row);
+      y += 10;
+      newPageIfNeeded(63);
+      jobText(assetLabel, 11, 'bold');
+      for (const job of row.jobs) {
+        const label = jobLabel(job);
+        y += 5;
+        if (newPageIfNeeded(45)) jobText(assetLabel + ' (continued)', 10, 'bold');
+        jobText(label, 9, 'bold', row.name);
+        for (const detail of jobDetails(job)) jobText(detail, 9, 'normal', row.name + ' · ' + label);
+      }
+    }
     for (let page = 1; page <= doc.getNumberOfPages(); page++) {
       doc.setPage(page);
       doc.setFontSize(8);
@@ -344,6 +496,7 @@ const assetCostReport = (() => {
       byId('assetCostTo').value = '';
       render();
     });
+    byId('assetCostJobs').addEventListener('click', () => byId('assetJobSummary').scrollIntoView());
     byId('assetCostPrint').addEventListener('click', () => {
       render();
       if (report) window.print();

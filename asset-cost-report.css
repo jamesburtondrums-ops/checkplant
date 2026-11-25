@@ -44,3 +44,14 @@
   #assetCostResults tr, .asset-report-charts, #assetCostResults .stat-row { break-inside: avoid; }
   #assetCostResults h2 { break-after: avoid; }
 }
+
+.asset-job-summary { margin-top: 24px; scroll-margin-top: 95px; }
+.asset-job-group { margin-top: 14px; border-top: 2px solid #e1e5ef; }
+.asset-job-group h3 { margin: 12px 0 2px; font-size: 1rem; color: var(--navy); }
+.asset-job-entry { padding: 9px 0; border-bottom: 1px solid #eceef1; overflow-wrap: anywhere; }
+.asset-job-entry h4 { margin: 0 0 4px; font-size: .9rem; }
+.asset-job-entry p { margin: 3px 0; font-size: .87rem; white-space: pre-wrap; }
+@media print {
+  .asset-job-group h3, .asset-job-entry h4 { break-after: avoid; }
+  .asset-job-entry { break-inside: avoid; }
+}
