@@ -295,6 +295,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focu
 <div class="tabs">
 <button class="active" data-tab="daily" onclick="switchOfficeTab('daily')">Daily Checks</button>
 <button data-tab="assetstatus" onclick="switchOfficeTab('assetstatus')">Asset Status</button>
+<button data-tab="externalwork" onclick="switchOfficeTab('externalwork')">External Work</button>
 <button data-tab="machines" onclick="switchOfficeTab('machines')">Machines</button>
 <button data-tab="categories" onclick="switchOfficeTab('categories')">Check Categories</button>
 <button data-tab="defects" onclick="switchOfficeTab('defects')">Outstanding Defects</button>
@@ -309,6 +310,16 @@ button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focu
 <div class="card"><div class="section-title">📋 Daily Checks — Today</div>
 <p class="progress-note">Shows every machine with a Service, Check, or Defect Resolution logged today (resets at midnight). Live — no refresh needed.</p></div>
 <div id="dailyChecksWrap"></div></div>
+<div id="office-externalwork" class="office-tab" style="display:none">
+<div class="card">
+<div class="section-title">External Work Assignment</div>
+<p class="progress-note">Assign an asset to a contractor or off-site workshop. These jobs are marked EXTERNAL on the live asset job list.</p>
+<form id="externalWorkForm">
+<div class="row"><div><label for="externalWorkMachine">Asset <span class="required-star">*</span></label><select id="externalWorkMachine" required><option value="">Select asset...</option></select></div><div><label for="externalWorkDate">Planned date</label><input type="date" id="externalWorkDate"></div></div>
+<div class="row" style="margin-top:12px"><div><label for="externalWorkLocation">External location <span class="required-star">*</span></label><input type="text" id="externalWorkLocation" required maxlength="250" placeholder="Workshop, address or site"></div><div><label for="externalWorkContractor">Contractor / company (optional)</label><input type="text" id="externalWorkContractor" maxlength="150" placeholder="External repairer"></div></div>
+<div style="margin-top:12px"><label for="externalWorkDescription">Work description <span class="required-star">*</span></label><textarea id="externalWorkDescription" required maxlength="4000" placeholder="Describe the work being carried out externally"></textarea></div>
+<button type="submit" id="externalWorkSubmit" class="btn btn-primary btn-block" style="margin-top:14px">Assign External Work</button>
+</form></div></div>
 <div id="office-assetstatus" class="office-tab" style="display:none"><div id="assetStatusBoard"></div><p class="progress-note">For another screen, pop out the display, move the window to that screen, then choose Full screen. The pop-out keeps its own live connection, so you can continue using CheckPlant in this tab.</p></div>
 <div id="office-machines" class="office-tab" style="display:none"><div class="card"><div class="section-title">Add New Machine</div>
 <div class="row"><label class="asset-field">Machine name<input type="text" id="newMachineName" placeholder="e.g. JCB 3CX"></label>
@@ -2094,7 +2105,7 @@ document.getElementById('defResolvedDate').value=todayISO();document.getElementB
 document.getElementById('bookingDate').value=todayISO();
 document.getElementById('adhocDate').value=todayISO();populateAdHocCategories();
 </script>
-<script src="asset-status.js?v=20261125-order-lines"></script>
+<script src="asset-status.js?v=20261126-external"></script>
 <script>
 /* Parts ordering and cost ledger — shared Firestore */
 let cpPartRequests=[],cpSuppliers=[],cpStockParts=[];
@@ -2352,5 +2363,6 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 
 
 </script>
+<script src="external-work.js?v=20261126"></script>
 </body>
 </html>
