@@ -147,12 +147,14 @@ th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;}
       <option value="adhoc">Ad-Hoc Job</option>
       <option value="service">Service</option>
       <option value="defect">Outstanding Defect</option>
+      <option value="external">External Work</option>
     </select>
     <select id="assignMachine" onchange="updateDefectOptions()"><option value="">-- Select asset --</option></select>
     <select id="assignJobCategory"><option value="">-- Job category --</option></select>
     <select id="assignDefect" style="display:none"><option value="">-- Select defect --</option></select>
     <select id="assignEngineer"><option value="">-- Select engineer --</option></select>
   </div>
+  <div id="externalAssignmentDetails" style="display:none;margin-top:10px"><label for="assignExternalLocation">External location</label><input id="assignExternalLocation" maxlength="250" placeholder="Workshop, site or address"><label for="assignExternalDescription" style="margin-top:10px">Work description</label><textarea id="assignExternalDescription" rows="4" class="job-large-textarea" placeholder="Describe the external work"></textarea></div>
   <div id="adhocAssignmentDetails" style="margin-top:10px">
     <label>Job Description / Work Requested</label>
     <textarea id="assignJobDescription" class="job-large-textarea" rows="6" placeholder="Describe exactly what needs doing."></textarea>
@@ -320,11 +322,13 @@ function renderAssignmentSelectors(){
  updateAssignmentForm();
 }
 function updateAssignmentForm(){
- const type=document.getElementById('assignJobType').value,isDefect=type==='defect',isAdHoc=type==='adhoc';
+ const type=document.getElementById('assignJobType').value,isDefect=type==='defect',isAdHoc=type==='adhoc',isExternal=type==='external';
+ document.getElementById('externalAssignmentDetails').style.display=isExternal?'block':'none';
+ document.getElementById('assignEngineer').style.display=isExternal?'none':'block';
  document.getElementById('assignDefect').style.display=isDefect?'block':'none';
  document.getElementById('assignMachine').style.display='block';
  const cat=document.getElementById('assignJobCategory');
- if(cat){cat.style.display=type==='service'?'none':'block';if(type==='service')cat.value='';}
+ if(cat){cat.style.display=type==='service'||isExternal?'none':'block';if(type==='service'||isExternal)cat.value='';}
  const adh=document.getElementById('adhocAssignmentDetails');if(adh)adh.style.display=isAdHoc?'block':'none';
  updateDefectOptions();
 }
@@ -350,13 +354,16 @@ async function createAssignedJob(statusOverride){
  const statusEl=document.getElementById('assignJobStatus'),assignBtn=document.getElementById('assignNowBtn'),planBtn=document.getElementById('planJobBtn');
  const setBusy=(busy,msg)=>{if(assignBtn)assignBtn.disabled=busy;if(planBtn)planBtn.disabled=busy;if(assignBtn)assignBtn.textContent=busy?'Assigning…':'Assign Now';if(planBtn)planBtn.textContent=busy?'Saving…':'Plan For Date';if(statusEl)statusEl.textContent=msg||'';};
  const engineerId=document.getElementById('assignEngineer').value,jobType=document.getElementById('assignJobType').value,e=engineers.find(x=>x.id===engineerId);
- if(!e){if(statusEl)statusEl.textContent='Choose an engineer.';return toast('Choose an engineer');}
+ const isExternal=jobType==='external';
+ if(!e&&!isExternal){if(statusEl)statusEl.textContent='Choose an engineer.';return toast('Choose an engineer');}
  const status=statusOverride==='planned'?'planned':'assigned',plannedDate=status==='planned'?document.getElementById('plannedJobDate').value:'';
  if(status==='planned'&&!plannedDate){if(statusEl)statusEl.textContent='Choose a planned work date.';return toast('Choose a planned work date');}
  const machineId=document.getElementById('assignMachine').value,m=machines.find(x=>x.id===machineId);
  if(!m){if(statusEl)statusEl.textContent='Choose a machine.';return toast('Choose a machine');}
- const jobDescription=jobType==='adhoc'?(document.getElementById('assignJobDescription').value||'').trim():'';
- const selectedCategory=jobType==='service'?'Service':(document.getElementById('assignJobCategory').value||'').trim();
+ const externalLocation=isExternal?document.getElementById('assignExternalLocation').value.trim():'';
+ const jobDescription=isExternal?document.getElementById('assignExternalDescription').value.trim():jobType==='adhoc'?(document.getElementById('assignJobDescription').value||'').trim():'';
+ if(isExternal&&(!externalLocation||!jobDescription)){if(statusEl)statusEl.textContent='Enter external location and work description.';return toast('Enter external location and work description');}
+ const selectedCategory=isExternal?'External work':jobType==='service'?'Service':(document.getElementById('assignJobCategory').value||'').trim();
  const isDamage=jobType==='adhoc'&&document.getElementById('assignDamageStatus').value==='yes';
  if((jobType==='adhoc'||jobType==='defect')&&!selectedCategory){if(statusEl)statusEl.textContent='Choose a job category.';return toast('Choose a job category');}
  if(jobType==='adhoc'&&!jobDescription){if(statusEl)statusEl.textContent='Add an Ad-Hoc job description.';return toast('Add an Ad-Hoc job description');}
@@ -372,12 +379,12 @@ async function createAssignedJob(statusOverride){
  try{
    const liveRef=db.collection('liveJobs').doc();
    const suffix=liveRef.id.slice(0,6).toUpperCase();
-   const prefix=jobType==='service'?'SVC':'AHJ';
+   const prefix=isExternal?'EXT':jobType==='service'?'SVC':'AHJ';
    const jobId='CP-'+prefix+'-M'+suffix;
    const base={
      jobId,status,machineId:m.id,machineName:m.name,serialNumber:m.serialNumber||'',branch:m.branch||'',hoursReading:Number(m.currentHours)||0,
      date:status==='planned'?plannedDate:todayISO(),plannedDate:plannedDate||null,
-     engineerId:e.id,engineerName:e.name,accumulatedMs:0,progressNotes:[],supportEngineerIds:[],supportEngineerNames:[],
+     engineerId:isExternal?'':e.id,engineerName:isExternal?'External contractor':e.name,accumulatedMs:0,progressNotes:[],supportEngineerIds:[],supportEngineerNames:[],
      assignedAt:firebase.firestore.Timestamp.now(),createdAt:firebase.firestore.Timestamp.now(),updatedAt:firebase.firestore.Timestamp.now()
    };
    if(jobType==='defect'){
@@ -386,12 +393,14 @@ async function createAssignedJob(statusOverride){
        await db.collection('defects').doc(defect.id).set({assignedEngineerId:e.id,assignedEngineerName:e.name,assignedJobId:jobId,assignedAt:firebase.firestore.Timestamp.now(),assignmentStatus:status},{merge:true});
      }catch(defErr){console.error('Defect assignment metadata update failed',defErr);}
    }else{
-     await liveRef.set({...base,jobType,jobCategory:selectedCategory,jobDescription,isDamage,damageDriver:'',damageIncident:'',source:'managerdash_assignment'});
+     await liveRef.set({...base,jobType,jobCategory:selectedCategory,jobDescription,isDamage,damageDriver:'',damageIncident:'',source:'managerdash_assignment',...(isExternal?{externalWork:true,assignmentType:'external',externalLocation}:{})});
    }
+   if(isExternal){document.getElementById('assignExternalLocation').value='';document.getElementById('assignExternalDescription').value='';}
    if(jobType==='adhoc'){document.getElementById('assignJobDescription').value='';document.getElementById('assignDamageStatus').value='no';}
    if(jobType!=='service')document.getElementById('assignJobCategory').value='';
-   setBusy(false,status==='planned'?'Planned work added for '+e.name+'.':'Job assigned to '+e.name+'.');
-   toast(status==='planned'?'Planned work added for '+e.name:'Job assigned to '+e.name);
+   const assignee=isExternal?'external contractor':e.name;
+   setBusy(false,status==='planned'?'Planned work added for '+assignee+'.':'Job assigned to '+assignee+'.');
+   toast(status==='planned'?'Planned work added for '+assignee:'Job assigned to '+assignee);
  }catch(err){
    console.error('Manager job assignment failed',err);
    setBusy(false,'Could not assign job. Please try again.');
@@ -514,12 +523,13 @@ async function completeJobOnBehalf(id){
  }
 }
 function jobCardHtml(j){
- const type=j.jobType==='service'?'Service':j.defectRefId?'Defect Job':'Ad-Hoc';
+ const external=j.externalWork===true||j.jobType==='external';
+ const type=external?'EXTERNAL':j.jobType==='service'?'Service':j.defectRefId?'Defect Job':'Ad-Hoc';
  const status=(j.status||'').toUpperCase(),time=(j.status==='active'||j.status==='paused')?jobDuration(jobElapsedMs(j)):'';
  const supportIds=Array.isArray(j.supportEngineerIds)?j.supportEngineerIds:[],supportNames=Array.isArray(j.supportEngineerNames)?j.supportEngineerNames:[];
  const support=supportIds.length?supportIds.map((id,i)=>'<span class="badge" style="margin:3px">'+escapeHtml(supportNames[i]||'Support')+' <button type="button" title="Remove support" style="border:0;background:transparent;cursor:pointer" onclick="removeSupportEngineer(\''+j.id+'\',\''+id+'\')">×</button></span>').join(''):'<span class="job-meta">No supporting engineers</span>';
  const supportOptions=engineers.filter(e=>e.active!==false&&e.id!==j.engineerId&&!supportIds.includes(e.id)).map(e=>'<option value="'+e.id+'">'+escapeHtml(e.name)+'</option>').join('');
- return '<div class="job-card '+escapeHtml(j.status||'assigned')+'"><div class="job-main"><div><div class="job-title">'+escapeHtml(j.jobId||'Job')+' · '+escapeHtml(j.machineName||'Asset')+'</div><div class="job-meta">'+type+' · Lead: '+escapeHtml(j.engineerName||'Unassigned')+(j.isDamage?' · DAMAGE':'')+(j.plannedDate?' · '+escapeHtml(j.plannedDate):'')+'</div>'+(j.jobDescription?'<div style="margin-top:8px">'+escapeHtml(j.jobDescription)+'</div>':'')+'</div><div class="job-actions">'+(time?'<strong data-manager-job-time="'+j.id+'">'+time+'</strong>':'')+(j.status==='active'?'<button class="btn btn-secondary btn-sm" onclick="pauseJobFromManager(\''+j.id+'\')">Pause</button>':'')+'<select id="reassign-'+j.id+'" title="Lead engineer" onchange="reassignJob(\''+j.id+'\')">'+engineers.filter(e=>e.active!==false).map(e=>'<option value="'+e.id+'" '+(e.id===j.engineerId?'selected':'')+'>'+escapeHtml(e.name)+'</option>').join('')+'</select></div></div><div class="job-edit-grid"><div><label>Work Date</label><input type="date" id="jobdate-'+j.id+'" value="'+escapeHtml(j.plannedDate||j.date||todayISO())+'"></div><div style="align-self:end"><button class="btn btn-secondary btn-sm" onclick="rescheduleJob(\''+j.id+'\')">Change Date</button> <button class="btn btn-danger btn-sm" onclick="cancelJobFromManager(\''+j.id+'\')">Cancel</button></div><div class="full"><label>Job Description / Instructions</label><textarea class="job-large-textarea" rows="6" id="jobdesc-'+j.id+'">'+escapeHtml(j.jobDescription||'')+'</textarea></div><div class="full"><label>Add Manager Note</label><textarea class="job-large-textarea" rows="6" id="jobnote-'+j.id+'" placeholder="Add instruction or update"></textarea><button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="saveManagerJobEdits(\''+j.id+'\')">Save Update</button></div><div class="full"><details class="manager-complete-panel"><summary>Complete on Behalf of Engineer</summary><div class="row"><div><label>Reason</label><select id="mgrcomplete-reason-'+j.id+'"><option value="">-- Select reason --</option><option>Environment</option><option>Hazard / Unsafe to Use Device</option><option>No Signal / Connectivity</option><option>Other</option></select></div><div><label>Outcome</label><select id="mgrcomplete-outcome-'+j.id+'"><option value="">-- Select outcome --</option><option>Repaired</option><option>Ordered</option><option>Temporary Repair</option><option>Inspected / No Fault Found</option><option>Completed</option><option>Further Work Required</option></select></div></div><label style="margin-top:10px">Final Work Carried Out / Completion Notes</label><textarea class="job-large-textarea" rows="6" id="mgrcomplete-notes-'+j.id+'" placeholder="Enter the engineer\'s final work notes and anything needed for sign-off."></textarea><button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="completeJobOnBehalf(\''+j.id+'\')">Complete Job on Behalf</button></details></div><div class="full"><label>Supporting Engineers</label><div style="margin-bottom:6px">'+support+'</div><div class="row"><select id="support-'+j.id+'"><option value="">-- Add supporting engineer --</option>'+supportOptions+'</select><button class="btn btn-secondary btn-sm" onclick="addSupportEngineer(\''+j.id+'\')">Add Support</button></div></div></div></div>';
+ return '<div class="job-card '+escapeHtml(j.status||'assigned')+'"><div class="job-main"><div><div class="job-title">'+escapeHtml(j.jobId||'Job')+' · '+escapeHtml(j.machineName||'Asset')+'</div><div class="job-meta">'+type+' · Lead: '+escapeHtml(j.engineerName||'Unassigned')+(j.isDamage?' · DAMAGE':'')+(j.plannedDate?' · '+escapeHtml(j.plannedDate):'')+'</div>'+(external&&j.externalLocation?'<div style="margin-top:8px;color:#6d28d9;font-weight:700">External location: '+escapeHtml(j.externalLocation)+'</div>':'')+(j.jobDescription?'<div style="margin-top:8px">'+escapeHtml(j.jobDescription)+'</div>':'')+'</div><div class="job-actions">'+(time?'<strong data-manager-job-time="'+j.id+'">'+time+'</strong>':'')+(j.status==='active'?'<button class="btn btn-secondary btn-sm" onclick="pauseJobFromManager(\''+j.id+'\')">Pause</button>':'')+'<select id="reassign-'+j.id+'" title="Lead engineer" onchange="reassignJob(\''+j.id+'\')">'+engineers.filter(e=>e.active!==false).map(e=>'<option value="'+e.id+'" '+(e.id===j.engineerId?'selected':'')+'>'+escapeHtml(e.name)+'</option>').join('')+'</select></div></div><div class="job-edit-grid"><div><label>Work Date</label><input type="date" id="jobdate-'+j.id+'" value="'+escapeHtml(j.plannedDate||j.date||todayISO())+'"></div><div style="align-self:end"><button class="btn btn-secondary btn-sm" onclick="rescheduleJob(\''+j.id+'\')">Change Date</button> <button class="btn btn-danger btn-sm" onclick="cancelJobFromManager(\''+j.id+'\')">Cancel</button></div><div class="full"><label>Job Description / Instructions</label><textarea class="job-large-textarea" rows="6" id="jobdesc-'+j.id+'">'+escapeHtml(j.jobDescription||'')+'</textarea></div><div class="full"><label>Add Manager Note</label><textarea class="job-large-textarea" rows="6" id="jobnote-'+j.id+'" placeholder="Add instruction or update"></textarea><button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="saveManagerJobEdits(\''+j.id+'\')">Save Update</button></div><div class="full"><details class="manager-complete-panel"><summary>Complete on Behalf of Engineer</summary><div class="row"><div><label>Reason</label><select id="mgrcomplete-reason-'+j.id+'"><option value="">-- Select reason --</option><option>Environment</option><option>Hazard / Unsafe to Use Device</option><option>No Signal / Connectivity</option><option>Other</option></select></div><div><label>Outcome</label><select id="mgrcomplete-outcome-'+j.id+'"><option value="">-- Select outcome --</option><option>Repaired</option><option>Ordered</option><option>Temporary Repair</option><option>Inspected / No Fault Found</option><option>Completed</option><option>Further Work Required</option></select></div></div><label style="margin-top:10px">Final Work Carried Out / Completion Notes</label><textarea class="job-large-textarea" rows="6" id="mgrcomplete-notes-'+j.id+'" placeholder="Enter the engineer\'s final work notes and anything needed for sign-off."></textarea><button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="completeJobOnBehalf(\''+j.id+'\')">Complete Job on Behalf</button></details></div><div class="full"><label>Supporting Engineers</label><div style="margin-bottom:6px">'+support+'</div><div class="row"><select id="support-'+j.id+'"><option value="">-- Add supporting engineer --</option>'+supportOptions+'</select><button class="btn btn-secondary btn-sm" onclick="addSupportEngineer(\''+j.id+'\')">Add Support</button></div></div></div></div>';
 }
 function renderAssignmentBoard(){
  const liveWrap=document.getElementById('liveJobsBoard'),plannedWrap=document.getElementById('plannedJobsBoard');if(!liveWrap||!plannedWrap)return;
