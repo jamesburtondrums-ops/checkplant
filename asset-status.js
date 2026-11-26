@@ -97,16 +97,31 @@
       return '<article class="as-job ' + (job.status === 'active' ? 'active' : 'waiting') + '"><div class="as-job-head"><strong>' + h(machine ? machine.name : job.machineName || 'Unassigned asset') + '</strong>' + externalBadge + '<span class="as-badge ' + (job.status === 'active' ? 'blue' : 'warning') + '">' + jobStates[job.status] + '</span></div><div class="as-job-title" title="' + h(description) + '">' + h(description) + '</div>' + externalLocation + '<div class="as-job-meta">' + h([job.jobId || job.id, job.jobCategory || '', job.engineerName || 'Unassigned engineer', job.plannedDate || job.date || ''].filter(Boolean).join(' · ')) + '</div>' + ((job.notes || job.finalNotes) ? '<div class="as-work-notes"><h4>Work notes</h4>' + h(job.finalNotes || job.notes) + '</div>' : '') + orderedPartsHTML(job, parts) + progressNotesHTML(job, expanded) + '</article>';
     }).join('') || '<div class="as-empty">No current or outstanding jobs.</div>';
   }
-  function shell(popout) {
-    return '<div class="as-canvas" data-as-canvas><div class="as-head"><div><div class="as-eyebrow">CheckPlant / KCM Waste Management</div><h2>Asset Status</h2></div><div class="as-clock"><strong data-as-time>--:--:--</strong><span data-as-date></span></div></div><div class="as-controls"><button type="button" data-as-mode="assets" aria-pressed="true">Assets</button><button type="button" data-as-mode="jobs" aria-pressed="false">Jobs</button><button type="button" data-as-fullscreen>Full screen</button>' + (popout ? '' : '<button type="button" data-as-popout>Pop out to another screen</button>') + '</div><p class="as-message" data-as-message role="status"></p><div class="as-stats" data-as-stats></div><div class="as-sync" data-as-sync data-state="warning" role="status"><span class="as-dot"></span><span data-as-sync-text>Loading asset status…</span></div><div class="as-content"><section class="as-assets-panel"><h3>All assets</h3><div class="as-grid" data-as-grid><div class="as-empty">Loading all assets…</div></div></section><aside class="as-jobs-panel"><h3>Current &amp; outstanding jobs</h3><div data-as-jobs></div></aside></div><div class="as-footer"><span data-as-count>All assets</span><span>Live jobs: in progress, paused, assigned and planned · Amber: due within 50 hours · Red: due / overdue · Check hours: invalid reading</span></div></div>';
+  const requestStates = {requested:['Requested','warning'],ordered:['On order','blue'],received:['Received','good'],cancelled:['Cancelled','danger']};
+  function requestRows(parts, filter = 'open') {
+    const rank = {requested:0,ordered:1,received:2,cancelled:3};
+    const filtered = parts.filter(p => filter === 'all' || (filter === 'open' ? !['received','cancelled'].includes(p.status) : p.status === filter));
+    const sorted = filtered.slice().sort((a,b)=>(rank[a.status]??4)-(rank[b.status]??4)||noteTime(b.createdAt)-noteTime(a.createdAt));
+    const date = value => { const t=noteTime(value); return t ? new Date(t).toLocaleDateString('en-GB',{timeZone:'Europe/London',day:'2-digit',month:'short',year:'2-digit'}) : '—'; };
+    return '<table aria-label="Live parts requests"><colgroup><col style="width:22%"><col style="width:32%"><col style="width:15%"><col style="width:16%"><col style="width:15%"></colgroup><thead><tr><th>Asset / job</th><th>Parts requested</th><th>Status</th><th>Supplier</th><th>Requested / updated</th></tr></thead><tbody>'+sorted.map(p=>{
+      const status=requestStates[p.status]||[p.status||'Unknown','warning'];
+      const lines=Array.isArray(p.lines)&&p.lines.length?p.lines:[p];
+      const asset=p.machineName||(p.requestType==='stock_replenishment'?'Stock replenishment':p.requestType==='consumables_tools'?'Consumables & tools':'—');
+      return '<tr><td><strong>'+h(asset)+'</strong><div class="as-job-meta">'+h([p.jobId,p.engineerName].filter(Boolean).join(' · '))+'</div></td><td>'+lines.map(l=>'<div class="as-request-line">'+h(l.partName||'Part')+(Number(l.quantity)>0?' × '+h(l.quantity):'')+(l.partNumber?' <small>('+h(l.partNumber)+')</small>':'')+'</div>').join('')+'</td><td><span class="as-badge '+status[1]+'">'+h(status[0])+'</span></td><td>'+h(p.supplierName||'Pending')+'</td><td>'+date(p.createdAt)+'<div class="as-job-meta">'+date(p.receivedAt||p.updatedAt)+'</div></td></tr>';
+    }).join('')+'</tbody></table>'+(sorted.length?'':'<div class="as-empty">No matching parts requests.</div>');
   }
-  if (typeof module !== 'undefined' && module.exports) { module.exports = { buildRows, table, shell, jobList, eligibleJobs, tvLayout, serviceAlert }; return; }
+  function shell(popout) {
+    return '<div class="as-canvas" data-as-canvas><div class="as-head"><div><div class="as-eyebrow">CheckPlant / KCM Waste Management</div><h2>Asset Status</h2></div><div class="as-clock"><strong data-as-time>--:--:--</strong><span data-as-date></span></div></div><div class="as-controls"><button type="button" data-as-mode="assets" aria-pressed="true">Assets</button><button type="button" data-as-mode="jobs" aria-pressed="false">Jobs</button><button type="button" data-as-mode="parts" aria-pressed="false">Parts Requests</button><button type="button" data-as-fullscreen>Full screen</button>' + (popout ? '' : '<button type="button" data-as-popout>Pop out to another screen</button>') + '</div><p class="as-message" data-as-message role="status"></p><div class="as-stats" data-as-stats></div><div class="as-sync" data-as-sync data-state="warning" role="status"><span class="as-dot"></span><span data-as-sync-text>Loading asset status…</span></div><div class="as-content"><section class="as-assets-panel"><h3>All assets</h3><div class="as-grid" data-as-grid><div class="as-empty">Loading all assets…</div></div></section><aside class="as-jobs-panel"><h3>Current &amp; outstanding jobs</h3><div data-as-jobs></div></aside><section class="as-requests-panel"><h3>Parts request status</h3><div class="as-controls as-request-filters"><button type="button" data-as-part-filter="open" aria-pressed="true">Outstanding</button><button type="button" data-as-part-filter="requested" aria-pressed="false">Requested</button><button type="button" data-as-part-filter="ordered" aria-pressed="false">On order</button><button type="button" data-as-part-filter="received" aria-pressed="false">Received</button><button type="button" data-as-part-filter="cancelled" aria-pressed="false">Cancelled</button><button type="button" data-as-part-filter="all" aria-pressed="false">All</button></div><div data-as-requests></div></section></div><div class="as-footer"><span data-as-count>All assets</span><span>Live jobs: in progress, paused, assigned and planned · Amber: due within 50 hours · Red: due / overdue · Check hours: invalid reading</span></div></div>';
+  }
+  if (typeof module !== 'undefined' && module.exports) { module.exports = { buildRows, table, shell, jobList, eligibleJobs, tvLayout, serviceAlert, requestRows }; return; }
   function installDisplay(root, displayWindow) {
     let timer, lastFitKey = '';
     const full = root.querySelector('[data-as-fullscreen]');
     let mode = 'assets';
-    try { if (displayWindow.localStorage.getItem('checkplantAssetDisplayMode') === 'jobs') mode = 'jobs'; } catch (_) {}
+    try { const saved=displayWindow.localStorage.getItem('checkplantAssetDisplayMode'); if (['assets','jobs','parts'].includes(saved)) mode=saved; } catch (_) {}
     root.dataset.mode = mode;
+    root.dataset.partFilter='open';
+    root.querySelectorAll('[data-as-part-filter]').forEach(button=>button.addEventListener('click',()=>{root.dataset.partFilter=button.dataset.asPartFilter;root.querySelectorAll('[data-as-part-filter]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));root.dispatchEvent(new displayWindow.Event('asset-layout'));}));
     function setMode(next) {
       root.dataset.mode = next;
       root.querySelectorAll('[data-as-mode]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.asMode === next)));
@@ -189,7 +204,7 @@
   let root, popup = null, access, database, started = false, subscriptions = [];
   let data = { machines: [], liveJobs: [], services: [], partRequests: [] }, loaded = new Set(), cached = new Set(), failed = new Set();
   const scriptURL = document.currentScript.src;
-  const cssURL = new URL('asset-status.css?v=20261125-parts-status', scriptURL).href;
+  const cssURL = new URL('asset-status.css?v=20261126-requests', scriptURL).href;
   function paint(target, rows) {
     target.dataset.layoutRevision = String((Number(target.dataset.layoutRevision) || 0) + 1);
     const stats = [
@@ -198,6 +213,8 @@
       [eligibleJobs(data.liveJobs).filter(j=>j.status==='active').length, 'Jobs in progress', 'blue'],
       [eligibleJobs(data.liveJobs).filter(j=>j.status!=='active').length, 'Outstanding jobs', 'warning']
     ];
+    const displayStats=target.dataset.mode==='parts' ? ['requested','ordered','received','cancelled'].map(k=>[data.partRequests.filter(p=>p.status===k).length,requestStates[k][0],requestStates[k][1]]) : stats;
+    target.querySelector('[data-as-stats]').innerHTML=displayStats.map(([n,label,cls])=>'<div class="as-stat '+cls+'"><strong>'+n+'</strong><span>'+label+'</span></div>').join('');
     const wall = target.classList.contains('as-wall'), view = target.ownerDocument.defaultView;
     const plan = tvLayout(rows.length, eligibleJobs(data.liveJobs).length, view.innerWidth, view.innerHeight, target.dataset.mode);
     const columns = wall ? plan.columns : 1;
@@ -210,7 +227,8 @@
     grid.innerHTML = rows.length ? tables.join('') : '<div class="as-empty">' + (loaded.size === Object.keys(data).length ? 'No assets recorded.' : 'Loading all assets…') + '</div>';
     const expandedNotes = new Set(Array.from(target.querySelectorAll('[data-note-history][open]')).map(detail => detail.getAttribute('data-note-history')));
     target.querySelector('[data-as-jobs]').innerHTML = jobList(rows, data.liveJobs, expandedNotes, data.partRequests);
-    target.querySelector('[data-as-count]').textContent = 'Showing all ' + rows.length + ' assets · No pagination';
+    target.querySelector('[data-as-requests]').innerHTML = loaded.has('partRequests') ? requestRows(data.partRequests,target.dataset.partFilter||'open') : '<div class="as-empty">'+(failed.has('partRequests')?'Parts requests unavailable.':'Loading parts requests…')+'</div>';
+    target.querySelector('[data-as-count]').textContent = target.dataset.mode==='parts' ? data.partRequests.length+' total parts requests · Live status' : 'Showing all ' + rows.length + ' assets · No pagination';
     const live = loaded.size === Object.keys(data).length && !cached.size && !failed.size && navigator.onLine;
     target.dataset.live = String(live);
     target.dataset.connection = failed.size ? 'Updates unavailable for ' + [...failed].join(', ') + ' — showing last received data. Reopen Asset Status to retry.' : !navigator.onLine ? 'Offline — showing last received data' : loaded.size < Object.keys(data).length ? 'Loading assets, jobs, parts and service history…' : cached.size ? 'Cached data — waiting for a live connection' : 'Live updates · Assets, jobs, parts and service history synced';
