@@ -154,7 +154,7 @@ th{color:var(--grey);font-weight:700;font-size:.72rem;text-transform:uppercase;}
     <select id="assignDefect" style="display:none"><option value="">-- Select defect --</option></select>
     <select id="assignEngineer"><option value="">-- Select engineer --</option></select>
   </div>
-  <div id="externalAssignmentDetails" style="display:none;margin-top:10px"><label for="assignExternalLocation">External location</label><input id="assignExternalLocation" maxlength="250" placeholder="Workshop, site or address"><label for="assignExternalDescription" style="margin-top:10px">Work description</label><textarea id="assignExternalDescription" rows="4" class="job-large-textarea" placeholder="Describe the external work"></textarea></div>
+  <div id="externalAssignmentDetails" style="display:none;margin-top:10px"><label for="assignExternalMachineId">External machine ID</label><input id="assignExternalMachineId" maxlength="150" placeholder="Enter machine ID, fleet number or serial number"><label for="assignExternalLocation" style="margin-top:10px">External location</label><input id="assignExternalLocation" maxlength="250" placeholder="Workshop, site or address"><label for="assignExternalDescription" style="margin-top:10px">Work description</label><textarea id="assignExternalDescription" rows="4" class="job-large-textarea" placeholder="Describe the external work"></textarea></div>
   <div id="adhocAssignmentDetails" style="margin-top:10px">
     <label>Job Description / Work Requested</label>
     <textarea id="assignJobDescription" class="job-large-textarea" rows="6" placeholder="Describe exactly what needs doing."></textarea>
@@ -326,7 +326,7 @@ function updateAssignmentForm(){
  document.getElementById('externalAssignmentDetails').style.display=isExternal?'block':'none';
  document.getElementById('assignEngineer').style.display=isExternal?'none':'block';
  document.getElementById('assignDefect').style.display=isDefect?'block':'none';
- document.getElementById('assignMachine').style.display='block';
+ document.getElementById('assignMachine').style.display=isExternal?'none':'block';
  const cat=document.getElementById('assignJobCategory');
  if(cat){cat.style.display=type==='service'||isExternal?'none':'block';if(type==='service'||isExternal)cat.value='';}
  const adh=document.getElementById('adhocAssignmentDetails');if(adh)adh.style.display=isAdHoc?'block':'none';
@@ -358,7 +358,10 @@ async function createAssignedJob(statusOverride){
  if(!e&&!isExternal){if(statusEl)statusEl.textContent='Choose an engineer.';return toast('Choose an engineer');}
  const status=statusOverride==='planned'?'planned':'assigned',plannedDate=status==='planned'?document.getElementById('plannedJobDate').value:'';
  if(status==='planned'&&!plannedDate){if(statusEl)statusEl.textContent='Choose a planned work date.';return toast('Choose a planned work date');}
- const machineId=document.getElementById('assignMachine').value,m=machines.find(x=>x.id===machineId);
+ const externalMachineId=isExternal?document.getElementById('assignExternalMachineId').value.trim():'';
+ const machineId=isExternal?'':document.getElementById('assignMachine').value;
+ if(isExternal&&!externalMachineId){if(statusEl)statusEl.textContent='Enter the external machine ID.';return toast('Enter the external machine ID');}
+ const m=isExternal?{id:'',name:externalMachineId}:machines.find(x=>x.id===machineId);
  if(!m){if(statusEl)statusEl.textContent='Choose a machine.';return toast('Choose a machine');}
  const externalLocation=isExternal?document.getElementById('assignExternalLocation').value.trim():'';
  const jobDescription=isExternal?document.getElementById('assignExternalDescription').value.trim():jobType==='adhoc'?(document.getElementById('assignJobDescription').value||'').trim():'';
@@ -393,9 +396,9 @@ async function createAssignedJob(statusOverride){
        await db.collection('defects').doc(defect.id).set({assignedEngineerId:e.id,assignedEngineerName:e.name,assignedJobId:jobId,assignedAt:firebase.firestore.Timestamp.now(),assignmentStatus:status},{merge:true});
      }catch(defErr){console.error('Defect assignment metadata update failed',defErr);}
    }else{
-     await liveRef.set({...base,jobType,jobCategory:selectedCategory,jobDescription,isDamage,damageDriver:'',damageIncident:'',source:'managerdash_assignment',...(isExternal?{externalWork:true,assignmentType:'external',externalLocation}:{})});
+     await liveRef.set({...base,jobType,jobCategory:selectedCategory,jobDescription,isDamage,damageDriver:'',damageIncident:'',source:'managerdash_assignment',...(isExternal?{externalWork:true,assignmentType:'external',externalMachineId,externalMachineDescription:externalMachineId,externalLocation}:{})});
    }
-   if(isExternal){document.getElementById('assignExternalLocation').value='';document.getElementById('assignExternalDescription').value='';}
+   if(isExternal){document.getElementById('assignExternalMachineId').value='';document.getElementById('assignExternalLocation').value='';document.getElementById('assignExternalDescription').value='';}
    if(jobType==='adhoc'){document.getElementById('assignJobDescription').value='';document.getElementById('assignDamageStatus').value='no';}
    if(jobType!=='service')document.getElementById('assignJobCategory').value='';
    const assignee=isExternal?'external contractor':e.name;
@@ -498,6 +501,7 @@ async function completeJobOnBehalf(id){
    serialNumber:j.serialNumber||'',branch:j.branch||'',technician:j.engineerName||'Engineer',engineerId:j.engineerId||'',
    date:j.date||todayISO(),jobCategory:j.jobCategory||(j.jobType==='service'?'Service':'Ad-Hoc Job'),
    jobDescription:j.jobDescription||'',jobSource:j.source||'managerdash_assignment',outcome,
+   ...(j.externalWork===true||j.jobType==='external'?{externalWork:true,workSource:'external',externalMachineId:j.externalMachineId||j.machineName||'',externalMachineDescription:j.externalMachineDescription||j.machineName||'',externalLocation:j.externalLocation||''}:{}),
    items:[{name:j.jobCategory||(j.jobType==='service'?'Service':'Job'),status:outcome}],notes,progressNotes,
    signName:j.engineerName||'Engineer',signDate:todayISO(),signatureData:'',hoursReading:Number(j.hoursReading)||0,
    startedAt:j.startedAt||j.assignedAt||null,completedAt,jobDurationMs:durationMs,jobDurationFormatted:jobDuration(durationMs),
@@ -507,7 +511,7 @@ async function completeJobOnBehalf(id){
  try{
    await recordRef.set(record);
    try{
-     if(j.machineId){
+     if(j.machineId&&j.externalWork!==true&&j.jobType!=='external'){
        const hrs=Number(j.hoursReading)||0;
        const machineUpdate=j.jobType==='service'
          ? {currentHours:hrs,lastServiceHours:hrs,nextServiceDueHours:hrs+500}
