@@ -101,3 +101,15 @@
 .asset-status .as-part-ordered{color:#9ed4ff}
 .asset-status .as-part-received{color:#8ee2ab}
 .asset-status.as-wall .as-part-row{font-size:var(--as-tv-font,16px)}
+
+/* Dedicated read-only parts requests view, including TV/remote navigation. */
+.asset-status .as-requests-panel{display:none;min-width:0;width:100%}
+.asset-status[data-mode="parts"] .as-assets-panel,.asset-status[data-mode="parts"] .as-jobs-panel{display:none}
+.asset-status[data-mode="parts"] .as-requests-panel{display:block}
+.asset-status .as-request-filters,.asset-status.as-wall .as-request-filters{position:static;opacity:1;margin:0 0 10px;gap:6px}
+.asset-status .as-request-line{line-height:1.35;margin:2px 0;overflow-wrap:anywhere}
+.asset-status .as-request-line small{color:var(--as-muted)}
+.asset-status .as-requests-panel td{padding:8px 6px;vertical-align:top}
+.asset-status.as-wall .as-requests-panel td{padding:5px 6px}
+.asset-status .as-requests-panel .as-job-meta{white-space:normal}
+@media(max-width:600px){.asset-status:not(.as-wall) .as-requests-panel{overflow-x:auto}.asset-status:not(.as-wall) .as-requests-panel table{min-width:620px}}
