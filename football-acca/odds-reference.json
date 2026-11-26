@@ -1,49 +1,9 @@
 {
-  "asOf": "2026-11-25",
+  "asOf": "2026-11-26",
   "source": "football-data.co.uk/fixtures.csv",
   "nonLive": true,
   "status": "Fixed-interval snapshot, not live prices",
   "matches": [
-    {
-      "league": "ENG_2_championship",
-      "date": "2026-11-25",
-      "home": "Bolton",
-      "away": "West Brom",
-      "homeP": 0.2673,
-      "drawP": 0.2577,
-      "awayP": 0.4749,
-      "overround": 0.0688
-    },
-    {
-      "league": "ENG_2_championship",
-      "date": "2026-11-25",
-      "home": "Burnley",
-      "away": "Birmingham",
-      "homeP": 0.3562,
-      "drawP": 0.2646,
-      "awayP": 0.3792,
-      "overround": 0.0676
-    },
-    {
-      "league": "ENG_2_championship",
-      "date": "2026-11-25",
-      "home": "Watford",
-      "away": "Blackburn",
-      "homeP": 0.3749,
-      "drawP": 0.2729,
-      "awayP": 0.3522,
-      "overround": 0.0714
-    },
-    {
-      "league": "ENG_2_championship",
-      "date": "2026-11-25",
-      "home": "Stoke",
-      "away": "Millwall",
-      "homeP": 0.4254,
-      "drawP": 0.2802,
-      "awayP": 0.2943,
-      "overround": 0.0684
-    },
     {
       "league": "ENG_3_league-one",
       "date": "2026-11-26",
@@ -55,5 +15,5 @@
       "overround": 0.0759
     }
   ],
-  "total": 5
+  "total": 1
 }

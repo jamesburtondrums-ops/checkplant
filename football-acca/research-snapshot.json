@@ -1,12 +1,12 @@
 {
-  "asOf": "2026-11-25",
+  "asOf": "2026-11-26",
   "sourceBuild": "2026-11-25T07:50:20Z",
   "version": "3",
   "historicalMatches": 6421,
   "market": {
     "status": "historical 1X2 statistics ready",
     "source": "football-data.co.uk",
-    "asOf": "2026-11-25",
+    "asOf": "2026-11-26",
     "sampleWithOdds": 6771
   },
   "leagues": {
