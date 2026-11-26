@@ -20,6 +20,24 @@
         "athleteId": "265653"
       }
     },
+    "ENG_2_championship": {
+      "southampton": {
+        "team": "Southampton",
+        "player": "Cyle Larin",
+        "goals": 8,
+        "source": "ESPN scoreboard competitor top scorer",
+        "asOf": "2026-11-26",
+        "athleteId": "205024"
+      },
+      "middlesbrough": {
+        "team": "Middlesbrough",
+        "player": "Will Lankshear",
+        "goals": 14,
+        "source": "ESPN scoreboard competitor top scorer",
+        "asOf": "2026-11-26",
+        "athleteId": "349181"
+      }
+    },
     "ENG_3_league-one": {
       "doncaster rovers": {
         "team": "Doncaster Rovers",

@@ -1,13 +1,13 @@
 {
   "asOf": "2026-11-26",
-  "sourceBuild": "2026-11-25T07:50:20Z",
+  "sourceBuild": "2026-11-26T07:40:37Z",
   "version": "3",
   "historicalMatches": 6421,
   "market": {
     "status": "historical 1X2 statistics ready",
     "source": "football-data.co.uk",
     "asOf": "2026-11-26",
-    "sampleWithOdds": 6771
+    "sampleWithOdds": 6789
   },
   "leagues": {
     "ENG_1_premier-league": {
@@ -86,20 +86,20 @@
     },
     "ENG_2_championship": {
       "source": "open-matchday 2026/27",
-      "results": 200,
+      "results": 204,
       "shot_matches": 192,
-      "shot_coverage_pct": 96.0,
-      "home_win_rate": 0.4399,
-      "away_win_rate": 0.295,
-      "draw_rate": 0.265,
-      "btts_rate": 0.54,
-      "goals_per_game": 2.91,
-      "goals_home_per_game": 1.65,
-      "goals_away_per_game": 1.26,
-      "latest": "2026-11-24",
-      "market_matches": 1848,
-      "odds_matches": 1848,
-      "average_overround": 0.0572,
+      "shot_coverage_pct": 94.1,
+      "home_win_rate": 0.4398,
+      "away_win_rate": 0.3039,
+      "draw_rate": 0.2598,
+      "btts_rate": 0.5398,
+      "goals_per_game": 2.9,
+      "goals_home_per_game": 1.63,
+      "goals_away_per_game": 1.27,
+      "latest": "2026-11-25",
+      "market_matches": 1860,
+      "odds_matches": 1860,
+      "average_overround": 0.0573,
       "home_win_calibration_buckets": [
         {
           "range": "10-20%",
@@ -109,21 +109,21 @@
         },
         {
           "range": "20-30%",
-          "n": 221,
-          "expected": 0.2604,
-          "actual": 0.2443
+          "n": 223,
+          "expected": 0.2602,
+          "actual": 0.2466
         },
         {
           "range": "30-40%",
-          "n": 487,
+          "n": 490,
           "expected": 0.3544,
-          "actual": 0.3614
+          "actual": 0.3612
         },
         {
           "range": "40-50%",
-          "n": 532,
+          "n": 536,
           "expected": 0.4473,
-          "actual": 0.4492
+          "actual": 0.4478
         },
         {
           "range": "50-60%",
@@ -133,15 +133,15 @@
         },
         {
           "range": "60-70%",
-          "n": 139,
-          "expected": 0.6408,
-          "actual": 0.6475
+          "n": 141,
+          "expected": 0.6409,
+          "actual": 0.6454
         },
         {
           "range": "70-80%",
-          "n": 58,
-          "expected": 0.7396,
-          "actual": 0.7931
+          "n": 59,
+          "expected": 0.7398,
+          "actual": 0.7966
         }
       ],
       "note": "Past bookmaker prices, not current prices. Closing odds preferred where available; no identical settlement guarantee."
@@ -151,29 +151,29 @@
       "results": 179,
       "shot_matches": 175,
       "shot_coverage_pct": 97.8,
-      "home_win_rate": 0.4364,
+      "home_win_rate": 0.436,
       "away_win_rate": 0.2961,
       "draw_rate": 0.2905,
-      "btts_rate": 0.5227,
+      "btts_rate": 0.5226,
       "goals_per_game": 2.8,
       "goals_home_per_game": 1.54,
       "goals_away_per_game": 1.27,
       "latest": "2026-11-24",
-      "market_matches": 1831,
-      "odds_matches": 1831,
+      "market_matches": 1835,
+      "odds_matches": 1835,
       "average_overround": 0.0686,
       "home_win_calibration_buckets": [
         {
           "range": "10-20%",
-          "n": 35,
-          "expected": 0.1702,
-          "actual": 0.0857
+          "n": 36,
+          "expected": 0.1706,
+          "actual": 0.0833
         },
         {
           "range": "20-30%",
-          "n": 284,
+          "n": 286,
           "expected": 0.2568,
-          "actual": 0.2606
+          "actual": 0.2587
         },
         {
           "range": "30-40%",
@@ -189,9 +189,9 @@
         },
         {
           "range": "50-60%",
-          "n": 336,
+          "n": 337,
           "expected": 0.5466,
-          "actual": 0.5952
+          "actual": 0.5964
         },
         {
           "range": "60-70%",
@@ -213,7 +213,7 @@
       "results": 188,
       "shot_matches": 186,
       "shot_coverage_pct": 98.9,
-      "home_win_rate": 0.4349,
+      "home_win_rate": 0.4344,
       "away_win_rate": 0.1915,
       "draw_rate": 0.3351,
       "btts_rate": 0.5396,
@@ -221,8 +221,8 @@
       "goals_home_per_game": 1.56,
       "goals_away_per_game": 1.11,
       "latest": "2026-11-24",
-      "market_matches": 1842,
-      "odds_matches": 1842,
+      "market_matches": 1844,
+      "odds_matches": 1844,
       "average_overround": 0.0703,
       "home_win_calibration_buckets": [
         {
@@ -233,9 +233,9 @@
         },
         {
           "range": "20-30%",
-          "n": 253,
+          "n": 254,
           "expected": 0.2625,
-          "actual": 0.2846
+          "actual": 0.2835
         },
         {
           "range": "30-40%",
@@ -245,9 +245,9 @@
         },
         {
           "range": "40-50%",
-          "n": 574,
+          "n": 575,
           "expected": 0.4466,
-          "actual": 0.4774
+          "actual": 0.4765
         },
         {
           "range": "50-60%",
