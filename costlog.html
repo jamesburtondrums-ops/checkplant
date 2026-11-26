@@ -60,7 +60,7 @@
 <script src="cost-report-values.js?v=1"></script>
 <script src="asset-cost-report.js?v=4"></script>
 <script>
-const firebaseConfig={apiKey:"AIzaSyD60Z04IRIvv-EaSyPzoA33fEQ3yT6wsQQ",authDomain:"checkplant-kcm.firebaseapp.com",projectId:"checkplant-kcm",storageBucket:"checkplant-kcm.firebasestorage.app",messagingSenderId:"492245064396",appId:"1:492245064396:web:c79e64b32b9856766bc069"};firebase.initializeApp(firebaseConfig);const db=firebase.firestore();function setConn(o,t){document.getElementById('connDot').className='conn-dot '+(o?'online':'offline');document.getElementById('connText').textContent=t;}let machines=[],defects=[],costEntries=[],records=[],reportPeriod='daily',reportBranchFilter='all',reportSourceFilter='all',currentEntryMode='internal';const BRANCHES=['Rotherham','Shires','Sheffield'];function todayISO(){return new Date().toISOString().slice(0,10)}function escapeHtml(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600)}function money(n){return '£'+(Number(n)||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}function value(id){return document.getElementById(id).value.trim()}function number(id){return Number(document.getElementById(id).value)||0}function showScreen(name){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById('screen-'+name).classList.add('active');document.getElementById('navReports').classList.toggle('active',name==='reports');document.getElementById('navAssetCosts').classList.toggle('active',name==='asset-costs');document.body.classList.toggle('asset-cost-report-open',name==='asset-costs');if(name==='reports')renderReports();if(name==='asset-costs')assetCostReport.open();window.scrollTo(0,0)}function startEntry(mode){currentEntryMode=mode;document.getElementById('entryModeLabel').textContent=mode==='internal'?'Internal':'External Work Record';document.getElementById('internalEntry').style.display=mode==='internal'?'block':'none';document.getElementById('externalEntry').style.display=mode==='external'?'block':'none';document.getElementById('entryTotalBlock').style.display=mode==='internal'?'block':'none';document.getElementById('entryDate').value=todayISO();document.getElementById('extDate').value=todayISO();updateEntryTotalPreview();updateExternalTotals();showScreen('entry')}function initListeners(){setConn(true,'Connecting...');db.collection('machines').orderBy('name').onSnapshot(s=>{machines=s.docs.map(d=>({id:d.id,...d.data()}));populateEntryMachineSelect();assetCostReport.loaded('machines')},e=>{setConn(false,'Machines error: '+e.message);assetCostReport.failed('machines')});db.collection('defects').orderBy('dateRaised','desc').onSnapshot(s=>{defects=s.docs.map(d=>({id:d.id,...d.data()}))},e=>setConn(false,'Defects error: '+e.message));db.collection('costEntries').orderBy('date','desc').onSnapshot(s=>{costEntries=s.docs.map(d=>({id:d.id,...d.data()}));renderRecentEntries();renderPendingJobCards();renderFinalSignoffCards();if(document.getElementById('screen-reports').classList.contains('active'))renderReports();setConn(true,'Connected');assetCostReport.loaded('costs')},e=>{setConn(false,'Cost entries error: '+e.message);assetCostReport.failed('costs')});db.collection('records').onSnapshot(s=>{records=s.docs.map(d=>({...d.data(),id:d.id})).sort((a,b)=>recordCreatedMs(b)-recordCreatedMs(a));renderPendingJobCards();renderFinalSignoffCards();assetCostReport.loaded('records')},()=>assetCostReport.failed('records'));const t=todayISO();document.getElementById('entryDate').value=t;document.getElementById('extDate').value=t;document.getElementById('reportFrom').value=t.slice(0,8)+'01';document.getElementById('reportTo').value=t;renderReportBranchFilter();renderReportSourceFilter();['entryLabourHours','entryLabourRate','entryPartsCost','entryOtherCost'].forEach(id=>document.getElementById(id).addEventListener('input',updateEntryTotalPreview));['extLabourHours','extLabourRate','extSupplierCost','extInternalOtherCost','extPartsCharge','extCalloutCharge','extOtherCharge'].forEach(id=>document.getElementById(id).addEventListener('input',updateExternalTotals))}
+const firebaseConfig={apiKey:"AIzaSyD60Z04IRIvv-EaSyPzoA33fEQ3yT6wsQQ",authDomain:"checkplant-kcm.firebaseapp.com",projectId:"checkplant-kcm",storageBucket:"checkplant-kcm.firebasestorage.app",messagingSenderId:"492245064396",appId:"1:492245064396:web:c79e64b32b9856766bc069"};firebase.initializeApp(firebaseConfig);const db=firebase.firestore();function setConn(o,t){document.getElementById('connDot').className='conn-dot '+(o?'online':'offline');document.getElementById('connText').textContent=t;}let machines=[],defects=[],costEntries=[],records=[],reportPeriod='daily',reportBranchFilter='all',reportSourceFilter='all',currentEntryMode='internal';const BRANCHES=['Rotherham','Shires','Sheffield'];function todayISO(){return new Date().toISOString().slice(0,10)}function escapeHtml(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600)}function money(n){return '£'+(Number(n)||0).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2})}function value(id){return document.getElementById(id).value.trim()}function number(id){return Number(document.getElementById(id).value)||0}function showScreen(name){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById('screen-'+name).classList.add('active');document.getElementById('navReports').classList.toggle('active',name==='reports');document.getElementById('navAssetCosts').classList.toggle('active',name==='asset-costs');document.body.classList.toggle('asset-cost-report-open',name==='asset-costs');if(name==='reports')renderReports();if(name==='asset-costs')assetCostReport.open();window.scrollTo(0,0)}function startEntry(mode){currentEntryMode=mode;document.getElementById('entryModeLabel').textContent=mode==='internal'?'Internal':'External Work Record';document.getElementById('internalEntry').style.display=mode==='internal'?'block':'none';document.getElementById('externalEntry').style.display=mode==='external'?'block':'none';document.getElementById('entryTotalBlock').style.display=mode==='internal'?'block':'none';document.getElementById('entryDate').value=todayISO();document.getElementById('extDate').value=todayISO();updateEntryTotalPreview();updateExternalTotals();showScreen('entry')}function initListeners(){initSignoffRequests();setConn(true,'Connecting...');db.collection('machines').orderBy('name').onSnapshot(s=>{machines=s.docs.map(d=>({id:d.id,...d.data()}));populateEntryMachineSelect();assetCostReport.loaded('machines')},e=>{setConn(false,'Machines error: '+e.message);assetCostReport.failed('machines')});db.collection('defects').orderBy('dateRaised','desc').onSnapshot(s=>{defects=s.docs.map(d=>({id:d.id,...d.data()}))},e=>setConn(false,'Defects error: '+e.message));db.collection('costEntries').orderBy('date','desc').onSnapshot(s=>{costEntries=s.docs.map(d=>({id:d.id,...d.data()}));renderRecentEntries();renderPendingJobCards();renderFinalSignoffCards();if(document.getElementById('screen-reports').classList.contains('active'))renderReports();setConn(true,'Connected');assetCostReport.loaded('costs')},e=>{setConn(false,'Cost entries error: '+e.message);assetCostReport.failed('costs')});db.collection('records').onSnapshot(s=>{records=s.docs.map(d=>({...d.data(),id:d.id})).sort((a,b)=>recordCreatedMs(b)-recordCreatedMs(a));renderPendingJobCards();renderFinalSignoffCards();assetCostReport.loaded('records')},()=>assetCostReport.failed('records'));const t=todayISO();document.getElementById('entryDate').value=t;document.getElementById('extDate').value=t;document.getElementById('reportFrom').value=t.slice(0,8)+'01';document.getElementById('reportTo').value=t;renderReportBranchFilter();renderReportSourceFilter();['entryLabourHours','entryLabourRate','entryPartsCost','entryOtherCost'].forEach(id=>document.getElementById(id).addEventListener('input',updateEntryTotalPreview));['extLabourHours','extLabourRate','extSupplierCost','extInternalOtherCost','extPartsCharge','extCalloutCharge','extOtherCharge'].forEach(id=>document.getElementById(id).addEventListener('input',updateExternalTotals))}
 function validDowntimeHours(value) {
  const hours=typeof value==='number'||(typeof value==='string'&&value.trim())?Number(value):NaN;
  return Number.isFinite(hours)&&hours>=0?hours:null;
@@ -107,6 +107,41 @@ async function authoriseJobCard(id){
  await db.collection('records').doc(r.id).set({billingStatus:'authorised',authorisedHours:hours,billingAuthorisedBy:auth,billingAuthorisedAt:firebase.firestore.Timestamp.now(),costEntryId:ref.id},{merge:true});
  toast('Hours authorised — job moved to final cost sign-off');
 }
+let signoffRequests=[],signoffLedger=[],signoffPartsReady=false,signoffLedgerReady=false;
+const signoffSelected=new Map();
+function requestEligibleForEntry(p,e,ledger=signoffLedger.find(l=>l.id===p.id)){
+ if(!p||!['requested','ordered','received'].includes(p.status)||p.jobCostAlreadyPosted||['service_kit_replenishment','consumables_tools','stock_replenishment'].includes(p.requestType))return false;
+ if(p.costEntryId||p.signoffCostEntryId||costEntries.some(c=>(c.partRequestIds||[]).includes(p.id)||(c.parts||[]).some(x=>x.requestId===p.id)))return false;
+ const sameJob=p.jobDocId?!!e.liveJobId&&p.jobDocId===e.liveJobId:p.jobId?p.jobId===e.jobCardId:!!e.machineId&&p.machineId===e.machineId;
+ if(!sameJob||ledger&&ledger.jobDocId!==e.liveJobId)return false;
+ return true;
+}
+function requestPrice(p,ledger=signoffLedger.find(l=>l.id===p.id)){
+ const total=ledger?.totalCost??p.totalCost;
+ return total!==null&&total!==undefined&&total!==''&&Number.isFinite(Number(total))&&Number(total)>=0?Math.round(Number(total)*100)/100:null;
+}
+function requestPart(p,ledger=signoffLedger.find(l=>l.id===p.id)){
+ const lines=Array.isArray(p.lines)&&p.lines.length?p.lines:[p];
+ return {name:lines.map(l=>(l.partName||'Part')+' × '+(l.quantity||1)+(l.partNumber?' ('+l.partNumber+')':'')).join('; '),price:requestPrice(p,ledger),requestId:p.id,source:'parts_request',requestStatus:p.status};
+}
+function selectedRequestParts(e){return [...(signoffSelected.get(e.id)||[])].map(id=>signoffRequests.find(p=>p.id===id)).filter(p=>p&&requestEligibleForEntry(p,e)&&requestPrice(p)!==null).map(p=>requestPart(p));}
+function renderSignoffRequests(){
+ costEntries.filter(e=>e.linkedRecordId&&e.costStatus!=='fully_signed_off').forEach(e=>{
+ const host=document.getElementById('finalrequests-'+e.id);if(!host)return;
+ if(!signoffPartsReady||!signoffLedgerReady){host.textContent='Loading parts requests or connection unavailable. Manual entry remains available.';return;}
+ const selected=signoffSelected.get(e.id)||new Set(),available=signoffRequests.filter(p=>requestEligibleForEntry(p,e));
+ host.innerHTML=available.length?available.map(p=>{
+ const part=requestPart(p),priced=part.price!==null,checked=priced&&selected.has(p.id);
+ return '<label style="display:flex;align-items:flex-start;gap:8px;padding:9px 0;border-bottom:1px solid #e5e7eb"><input type="checkbox" style="width:auto;margin-top:3px" data-request-id="'+escapeHtml(p.id)+'" '+(checked?'checked ':'')+(!priced?'disabled':'')+'><span>'+escapeHtml(part.name)+' — '+escapeHtml(p.status)+' · '+(priced?money(part.price):'Price pending — enter price in Parts Hub first')+(p.supplierName?' · '+escapeHtml(p.supplierName):'')+'</span></label>';
+ }).join(''):'<p class="progress-note">No eligible uncharged parts requests for this job.</p>';
+ host.querySelectorAll('input[data-request-id]').forEach(box=>box.onchange=()=>{const set=signoffSelected.get(e.id)||new Set();if(box.checked)set.add(box.dataset.requestId);else set.delete(box.dataset.requestId);signoffSelected.set(e.id,set);updateFinalCostPreview(e.id);});
+ updateFinalCostPreview(e.id);
+ });
+}
+function initSignoffRequests(){
+ db.collection('partRequests').onSnapshot(s=>{signoffRequests=s.docs.map(d=>({...d.data(),id:d.id}));signoffPartsReady=true;renderSignoffRequests();},err=>{console.error(err);signoffPartsReady=false;renderSignoffRequests();});
+ db.collection('partCostLedger').onSnapshot(s=>{signoffLedger=s.docs.map(d=>({...d.data(),id:d.id}));signoffLedgerReady=true;renderSignoffRequests();},err=>{console.error(err);signoffLedgerReady=false;renderSignoffRequests();});
+}
 function partsToText(parts){return Array.isArray(parts)?parts.map(p=>(p.name||'Part')+' | '+(Number(p.price)||0).toFixed(2)).join('\n'):''}
 function updateFinalCostPreview(id){
  const entry=costEntries.find(e=>e.id===id);if(!entry)return;
@@ -117,7 +152,7 @@ function updateFinalCostPreview(id){
  downtime.textContent=hours===null||extraInput.validity.badInput||(extraInput.value!==''&&extra===null)
    ? '—' : jobDowntimeTotal(hours,extra).toFixed(2)+' h';
  const rate=Number(document.getElementById('finalrate-'+id)?.value)||0;
- const parts=parseParts(document.getElementById('finalparts-'+id)?.value||'');
+ const parts=[...parseParts(document.getElementById('finalparts-'+id)?.value||''),...selectedRequestParts(entry)];
  const partsCost=parts.reduce((s,p)=>s+p.price,0),labourCost=(hours??0)*rate,total=labourCost+partsCost+(Number(entry.otherCost)||0);
  const el=document.getElementById('finaltotal-'+id);if(el)el.textContent=(hours??0).toFixed(2)+'h × '+money(rate)+'/hr = '+money(labourCost)+' labour · '+money(partsCost)+' parts · Total '+money(total);
 }
@@ -126,17 +161,24 @@ function renderFinalSignoffCards(){
  const awaiting=costEntries.filter(e=>e.workSource==='internal'&&e.linkedRecordId&&e.costStatus!=='fully_signed_off');
  document.getElementById('finalSignoffCount').textContent=awaiting.length;
  if(!awaiting.length){w.innerHTML='<div class="empty-state">No jobs awaiting final cost sign-off.</div>';return;}
+ const drafts=new Map(awaiting.map(e=>[e.id,['finalhours','finalrate','finalauth','finalextra','finalparts'].map(k=>document.getElementById(k+'-'+e.id)?.value)]));
  w.innerHTML=awaiting.map(e=>{
    const r=records.find(x=>x.id===e.linkedRecordId)||{},hours=Number(e.authorisedHours!=null?e.authorisedHours:e.labourHours)||0;
-   return '<div class="card" style="border-left:4px solid '+(e.isDamage?'#b91c1c':'#2e2e8f')+'"><div class="section-title">'+(e.isDamage?'⚠ Damage · ':'')+escapeHtml(e.jobCardId||e.id)+' — '+escapeHtml(e.machineName||'Asset')+'</div><div class="mmeta">Hours authorised: <strong>'+hours.toFixed(2)+'</strong> by '+escapeHtml(e.authorisedBy||'-')+'</div><div class="job-review"><div class="job-review-grid"><div class="job-review-item full"><span class="job-review-label">Job Description / Work Requested</span><div class="job-review-value">'+escapeHtml(r.jobDescription||'No job description recorded.')+'</div></div><div class="job-review-item"><span class="job-review-label">Outcome</span><div class="job-review-value">'+escapeHtml(r.outcome||'-')+'</div></div><div class="job-review-item"><span class="job-review-label">Engineer</span><div class="job-review-value">'+escapeHtml(r.signName||r.technician||'-')+'</div></div><div class="job-review-item full"><span class="job-review-label">Job Notes / Work Carried Out</span><div class="job-review-value">'+escapeHtml(r.notes||e.notes||'No job notes recorded.')+'</div></div></div></div><div class="row" style="margin-top:10px"><div><label>Authorised Labour Hours</label><input type="number" min="0" step="0.01" id="finalhours-'+e.id+'" value="'+hours.toFixed(2)+'" oninput="updateFinalCostPreview(\''+e.id+'\')"></div><div><label>Labour Rate (£/hr)</label><input type="number" min="0" step="0.01" id="finalrate-'+e.id+'" value="'+(Number(e.labourRate)||0).toFixed(2)+'" oninput="updateFinalCostPreview(\''+e.id+'\')"></div><div><label>Final sign-off by</label><input type="text" id="finalauth-'+e.id+'" placeholder="Manager name"></div><div><label for="finalextra-'+e.id+'">Extra downtime (hours, optional)</label><input type="number" min="0" step="0.01" id="finalextra-'+e.id+'" value="'+escapeHtml(extraDefectDowntimeHours(e,e.downtimeHours??r.downtimeHours)??'')+'" oninput="updateFinalCostPreview(\''+e.id+'\')"><small>Add time for other defects resolved on this asset if it is outside these authorised hours and has not been logged on another job.</small></div></div><div class="calc-panel"><span>Downtime · authorised hours plus any extra</span><strong id="finaldowntime-'+e.id+'"></strong></div><label style="margin-top:10px">Parts used — one per line as: Part name | price</label><textarea id="finalparts-'+e.id+'" oninput="updateFinalCostPreview(\''+e.id+'\')" placeholder="Hydraulic hose | 42.50\nOil filter | 18.20">'+escapeHtml(partsToText(e.parts))+'</textarea><div class="total-panel"><span>Final job cost</span><strong id="finaltotal-'+e.id+'"></strong></div><button class="btn btn-primary btn-block" style="margin-top:10px" onclick="fullySignOffJob(\''+e.id+'\')">Fully Sign Off Job</button></div>';
+   return '<div class="card" style="border-left:4px solid '+(e.isDamage?'#b91c1c':'#2e2e8f')+'"><div class="section-title">'+(e.isDamage?'⚠ Damage · ':'')+escapeHtml(e.jobCardId||e.id)+' — '+escapeHtml(e.machineName||'Asset')+'</div><div class="mmeta">Hours authorised: <strong>'+hours.toFixed(2)+'</strong> by '+escapeHtml(e.authorisedBy||'-')+'</div><div class="job-review"><div class="job-review-grid"><div class="job-review-item full"><span class="job-review-label">Job Description / Work Requested</span><div class="job-review-value">'+escapeHtml(r.jobDescription||'No job description recorded.')+'</div></div><div class="job-review-item"><span class="job-review-label">Outcome</span><div class="job-review-value">'+escapeHtml(r.outcome||'-')+'</div></div><div class="job-review-item"><span class="job-review-label">Engineer</span><div class="job-review-value">'+escapeHtml(r.signName||r.technician||'-')+'</div></div><div class="job-review-item full"><span class="job-review-label">Job Notes / Work Carried Out</span><div class="job-review-value">'+escapeHtml(r.notes||e.notes||'No job notes recorded.')+'</div></div></div></div><div class="row" style="margin-top:10px"><div><label>Authorised Labour Hours</label><input type="number" min="0" step="0.01" id="finalhours-'+e.id+'" value="'+hours.toFixed(2)+'" oninput="updateFinalCostPreview(\''+e.id+'\')"></div><div><label>Labour Rate (£/hr)</label><input type="number" min="0" step="0.01" id="finalrate-'+e.id+'" value="'+(Number(e.labourRate)||0).toFixed(2)+'" oninput="updateFinalCostPreview(\''+e.id+'\')"></div><div><label>Final sign-off by</label><input type="text" id="finalauth-'+e.id+'" placeholder="Manager name"></div><div><label for="finalextra-'+e.id+'">Extra downtime (hours, optional)</label><input type="number" min="0" step="0.01" id="finalextra-'+e.id+'" value="'+escapeHtml(extraDefectDowntimeHours(e,e.downtimeHours??r.downtimeHours)??'')+'" oninput="updateFinalCostPreview(\''+e.id+'\')"><small>Add time for other defects resolved on this asset if it is outside these authorised hours and has not been logged on another job.</small></div></div><div class="calc-panel"><span>Downtime · authorised hours plus any extra</span><strong id="finaldowntime-'+e.id+'"></strong></div><label style="margin-top:10px">Attach existing parts requests</label><p class="progress-note">Select priced requests for this job that have not been included in a final cost entry. Requested or ordered prices are recorded at the current amount; confirm them before signing off.</p><div id="finalrequests-'+e.id+'"></div><label style="margin-top:10px">Additional manual parts — one per line as: Part name | price</label><textarea id="finalparts-'+e.id+'" oninput="updateFinalCostPreview(\''+e.id+'\')" placeholder="Hydraulic hose | 42.50\nOil filter | 18.20">'+escapeHtml(partsToText((e.parts||[]).filter(p=>!p.requestId)))+'</textarea><div class="total-panel"><span>Final job cost</span><strong id="finaltotal-'+e.id+'"></strong></div><button class="btn btn-primary btn-block" style="margin-top:10px" onclick="fullySignOffJob(\''+e.id+'\')">Fully Sign Off Job</button></div>';
  }).join('');
- awaiting.forEach(e=>updateFinalCostPreview(e.id));
+ awaiting.forEach(e=>{const d=drafts.get(e.id);['finalhours','finalrate','finalauth','finalextra','finalparts'].forEach((k,i)=>{if(d?.[i]!==undefined)document.getElementById(k+'-'+e.id).value=d[i];});updateFinalCostPreview(e.id);});
+ renderSignoffRequests();
 }
 async function fullySignOffJob(costEntryId){
  const e=costEntries.find(x=>x.id===costEntryId);if(!e)return;
  const signedBy=document.getElementById('finalauth-'+costEntryId).value.trim();if(!signedBy)return toast('Enter who is fully signing off the job');
  const rate=Number(document.getElementById('finalrate-'+costEntryId).value);if(!Number.isFinite(rate)||rate<0)return toast('Enter a valid labour rate');
- const parts=parseParts(document.getElementById('finalparts-'+costEntryId).value),partsCost=parts.reduce((s,p)=>s+p.price,0);
+ const manualParts=parseParts(document.getElementById('finalparts-'+costEntryId).value);
+ const selectedIds=[...(signoffSelected.get(costEntryId)||[])];
+ const requestedParts=selectedRequestParts(e);
+ if(selectedIds.length!==requestedParts.length)return toast('A selected request has changed or is no longer eligible. Review the parts selection.');
+ if(selectedIds.length&&(!signoffPartsReady||!signoffLedgerReady))return toast('Parts requests are not connected');
+ const parts=[...manualParts,...requestedParts],partsCost=Math.round(parts.reduce((s,p)=>s+p.price,0)*100)/100;
  const hours=validDowntimeHours(document.getElementById('finalhours-'+costEntryId).value);
  if(hours===null)return toast('Enter valid authorised hours');
  const extraInput=document.getElementById('finalextra-'+costEntryId);
@@ -148,13 +190,31 @@ async function fullySignOffJob(costEntryId){
  const signedOffAt=firebase.firestore.Timestamp.now();
  const signoff={authorisedHours:hours,fullySignedOffBy:signedBy,fullySignedOffAt:signedOffAt,
    labourRate:rate,labourCost,partsCost,totalCost,downtimeHours,extraDefectDowntimeHours:extra};
- const batch=db.batch();
- batch.update(db.collection('costEntries').doc(costEntryId),{...signoff,labourHours:hours,parts,
-   costStatus:'fully_signed_off',updatedAt:signedOffAt});
- if(e.linkedRecordId)batch.set(db.collection('records').doc(e.linkedRecordId),
-   {...signoff,billingStatus:'fully_signed_off'},{merge:true});
- try{await batch.commit();}
- catch(error){console.error(error);return toast('Could not sign off the job. Please try again.');}
+ try{
+ await db.runTransaction(async tx=>{
+   const costRef=db.collection('costEntries').doc(costEntryId);
+   const current=await tx.get(costRef);
+   if(!current.exists||current.data().costStatus==='fully_signed_off')throw Error('Job already signed off');
+   const snapshots=await Promise.all(selectedIds.map(async id=>{
+     const ref=db.collection('partRequests').doc(id),ledgerRef=db.collection('partCostLedger').doc(id);
+     const [req,ledger]=await Promise.all([tx.get(ref),tx.get(ledgerRef)]);
+     return {id,ref,req,ledger};
+   }));
+   for(const x of snapshots){
+     const p=x.req.exists?{...x.req.data(),id:x.id}:null;
+     const l=x.ledger.exists?{...x.ledger.data(),id:x.id}:null;
+     if(!p||!requestEligibleForEntry(p,e,l)||requestPrice(p,l)!==requestedParts.find(v=>v.requestId===x.id)?.price)throw Error('Parts request changed or was already attached. Review selection.');
+   }
+   for(const x of snapshots){
+     const update={signoffCostEntryId:costEntryId,signoffRecordId:e.linkedRecordId||'',signoffAttachedAt:signedOffAt};
+     if(!x.req.data().jobDocId&&e.liveJobId){update.jobDocId=e.liveJobId;update.jobId=e.jobCardId||'';}
+     tx.update(x.ref,update);
+   }
+   tx.update(costRef,{...signoff,labourHours:hours,parts,partRequestIds:selectedIds,costStatus:'fully_signed_off',updatedAt:signedOffAt});
+   if(e.linkedRecordId)tx.set(db.collection('records').doc(e.linkedRecordId),{...signoff,parts,partRequestIds:selectedIds,billingStatus:'fully_signed_off'},{merge:true});
+ });
+ }catch(error){console.error(error);return toast(error.message||'Could not sign off the job. Please try again.');}
+ signoffSelected.delete(costEntryId);
  toast('Job fully signed off');
 }
 
