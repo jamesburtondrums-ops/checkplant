@@ -1,19 +1,8 @@
 {
-  "asOf": "2026-11-26",
+  "asOf": "2026-11-27",
   "source": "football-data.co.uk/fixtures.csv",
   "nonLive": true,
   "status": "Fixed-interval snapshot, not live prices",
-  "matches": [
-    {
-      "league": "ENG_3_league-one",
-      "date": "2026-11-26",
-      "home": "Doncaster",
-      "away": "Huddersfield",
-      "homeP": 0.2278,
-      "drawP": 0.2318,
-      "awayP": 0.5404,
-      "overround": 0.0759
-    }
-  ],
-  "total": 1
+  "matches": [],
+  "total": 0
 }
