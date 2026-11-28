@@ -1,19 +1,9 @@
 {
-  "asOf": "2026-11-27",
+  "asOf": "2026-11-28",
   "source": "football-data.co.uk/fixtures.csv",
   "nonLive": true,
   "status": "Fixed-interval snapshot, not live prices",
   "matches": [
-    {
-      "league": "ENG_1_premier-league",
-      "date": "2026-11-27",
-      "home": "Nott'm Forest",
-      "away": "Chelsea",
-      "homeP": 0.3909,
-      "drawP": 0.282,
-      "awayP": 0.3271,
-      "overround": 0.0616
-    },
     {
       "league": "ENG_1_premier-league",
       "date": "2026-11-28",
@@ -103,16 +93,6 @@
       "drawP": 0.2577,
       "awayP": 0.2649,
       "overround": 0.0633
-    },
-    {
-      "league": "ENG_2_championship",
-      "date": "2026-11-27",
-      "home": "Southampton",
-      "away": "Middlesbrough",
-      "homeP": 0.3155,
-      "drawP": 0.2567,
-      "awayP": 0.4278,
-      "overround": 0.0673
     },
     {
       "league": "ENG_2_championship",
@@ -455,5 +435,5 @@
       "overround": 0.0816
     }
   ],
-  "total": 45
+  "total": 43
 }

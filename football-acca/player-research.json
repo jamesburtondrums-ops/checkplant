@@ -1,50 +1,14 @@
 {
-  "asOf": "2026-11-27",
+  "asOf": "2026-11-28",
   "source": "ESPN public soccer scoreboard goal leaders; partial competition-day coverage",
   "leagues": {
-    "ENG_1_premier-league": {
-      "nottingham forest": {
-        "team": "Nottingham Forest",
-        "player": "Liam Delap",
-        "goals": 3,
-        "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
-        "athleteId": "307114"
-      },
-      "chelsea": {
-        "team": "Chelsea",
-        "player": "Morgan Rogers",
-        "goals": 5,
-        "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
-        "athleteId": "265653"
-      }
-    },
-    "ENG_2_championship": {
-      "southampton": {
-        "team": "Southampton",
-        "player": "Cyle Larin",
-        "goals": 8,
-        "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
-        "athleteId": "205024"
-      },
-      "middlesbrough": {
-        "team": "Middlesbrough",
-        "player": "Will Lankshear",
-        "goals": 14,
-        "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
-        "athleteId": "349181"
-      }
-    },
     "ENG_3_league-one": {
       "milton keynes dons": {
         "team": "Milton Keynes Dons",
         "player": "Aaron Collins",
         "goals": 13,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "212351"
       },
       "notts county": {
@@ -52,7 +16,7 @@
         "player": "Oliver Cooper",
         "goals": 3,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "279144"
       },
       "peterborough united": {
@@ -60,7 +24,7 @@
         "player": "Harry Leonard",
         "goals": 4,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "345631"
       },
       "cambridge united": {
@@ -68,7 +32,7 @@
         "player": "Ben Knight",
         "goals": 4,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "281120"
       },
       "wimbledon": {
@@ -76,7 +40,7 @@
         "player": "Jayden Stockley",
         "goals": 6,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "141329"
       },
       "barnsley": {
@@ -84,7 +48,7 @@
         "player": "Cameron McGeehan",
         "goals": 4,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "199824"
       },
       "bromley": {
@@ -92,7 +56,7 @@
         "player": "Victor Adeboyejo",
         "goals": 5,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "213187"
       },
       "burton albion": {
@@ -100,7 +64,7 @@
         "player": "Jack Armer",
         "goals": 3,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "290868"
       },
       "leicester city": {
@@ -108,7 +72,7 @@
         "player": "Emil Riis Jakobsen",
         "goals": 6,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "243406"
       },
       "mansfield town": {
@@ -116,7 +80,7 @@
         "player": "Michael Smith",
         "goals": 7,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "180496"
       },
       "luton town": {
@@ -124,7 +88,7 @@
         "player": "Nahki Wells",
         "goals": 9,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "155228"
       },
       "oxford united": {
@@ -132,7 +96,7 @@
         "player": "Mark Harris",
         "goals": 7,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "68601"
       },
       "sheffield wednesday": {
@@ -140,7 +104,7 @@
         "player": "Jamal Lowe",
         "goals": 7,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "178089"
       },
       "reading": {
@@ -148,7 +112,7 @@
         "player": "Jack Marriott",
         "goals": 9,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "186160"
       },
       "stevenage": {
@@ -156,7 +120,7 @@
         "player": "Josh Magennis",
         "goals": 4,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "112423"
       },
       "blackpool": {
@@ -164,7 +128,7 @@
         "player": "Jerry Yates",
         "goals": 3,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "214801"
       },
       "stockport county": {
@@ -172,7 +136,7 @@
         "player": "Kyle Wootton",
         "goals": 10,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "207796"
       },
       "leyton orient": {
@@ -180,7 +144,7 @@
         "player": "Jaze Kabia",
         "goals": 5,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "312533"
       },
       "wigan athletic": {
@@ -188,7 +152,7 @@
         "player": "Jensen Weir",
         "goals": 3,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "267880"
       },
       "plymouth argyle": {
@@ -196,7 +160,7 @@
         "player": "Aribim Pepple",
         "goals": 5,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "346807"
       },
       "wycombe wanderers": {
@@ -204,7 +168,7 @@
         "player": "Jayden Wareham",
         "goals": 8,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "301058"
       },
       "bradford city": {
@@ -212,7 +176,7 @@
         "player": "Stephen Humphrys",
         "goals": 3,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "251071"
       }
     },
@@ -222,7 +186,7 @@
         "player": "Tom James",
         "goals": 3,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "165262"
       },
       "tranmere rovers": {
@@ -230,7 +194,7 @@
         "player": "Dylan Jones",
         "goals": 6,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "179945"
       },
       "exeter city": {
@@ -238,7 +202,7 @@
         "player": "Jack Fitzwater",
         "goals": 2,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "227016"
       },
       "crawley town": {
@@ -246,7 +210,7 @@
         "player": "Dylan Morgan",
         "goals": 4,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "352878"
       },
       "colchester united": {
@@ -254,7 +218,7 @@
         "player": "Moses Sesay",
         "goals": 3,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "408883"
       },
       "york city": {
@@ -262,7 +226,7 @@
         "player": "Ollie Pearce",
         "goals": 7,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "374666"
       },
       "crewe alexandra": {
@@ -270,7 +234,7 @@
         "player": "Jordan Gibson",
         "goals": 5,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "128917"
       },
       "grimsby town": {
@@ -278,7 +242,7 @@
         "player": "Iwan Morgan",
         "goals": 5,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "387784"
       },
       "fleetwood town": {
@@ -286,7 +250,7 @@
         "player": "Ronan Coughlan",
         "goals": 5,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "221993"
       },
       "accrington stanley": {
@@ -294,7 +258,7 @@
         "player": "Josh Woods",
         "goals": 7,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "324308"
       },
       "port vale": {
@@ -302,7 +266,7 @@
         "player": "Onel Hernández",
         "goals": 3,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "152754"
       },
       "newport county": {
@@ -310,7 +274,7 @@
         "player": "Shaquille Gwengwe",
         "goals": 5,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "3098716"
       },
       "rochdale": {
@@ -318,7 +282,7 @@
         "player": "Dajaune Brown",
         "goals": 4,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "358408"
       },
       "barnet": {
@@ -326,7 +290,7 @@
         "player": "Kabongo Tshimanga",
         "goals": 10,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "213526"
       },
       "rotherham united": {
@@ -334,7 +298,7 @@
         "player": "Paul Mullin",
         "goals": 8,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "11547"
       },
       "oldham athletic": {
@@ -342,7 +306,7 @@
         "player": "Calum Kavanagh",
         "goals": 5,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "334798"
       },
       "salford city": {
@@ -350,7 +314,7 @@
         "player": "Macaulay Langstaff",
         "goals": 5,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "252773"
       },
       "gillingham": {
@@ -358,7 +322,7 @@
         "player": "Ronan Hale",
         "goals": 8,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "274645"
       },
       "shrewsbury town": {
@@ -366,7 +330,7 @@
         "player": "George Lloyd",
         "goals": 5,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "261433"
       },
       "cheltenham town": {
@@ -374,7 +338,7 @@
         "player": "Charlie Mccann",
         "goals": 9,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "296625"
       },
       "swindon town": {
@@ -382,7 +346,7 @@
         "player": "Aaron Drinan",
         "goals": 9,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "258483"
       },
       "chesterfield": {
@@ -390,7 +354,7 @@
         "player": "Louie Marsh",
         "goals": 6,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "356953"
       },
       "walsall": {
@@ -398,7 +362,7 @@
         "player": "Aaron Pressley",
         "goals": 9,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "294316"
       },
       "northampton town": {
@@ -406,7 +370,7 @@
         "player": "Jon Guthrie",
         "goals": 2,
         "source": "ESPN scoreboard competitor top scorer",
-        "asOf": "2026-11-27",
+        "asOf": "2026-11-28",
         "athleteId": "177000"
       }
     }
